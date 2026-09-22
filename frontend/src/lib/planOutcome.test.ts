@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 
 import {
-  formatR, gambaChiudente, raccontaPiano, sedute, sequenzaGambe, stopTroppoStretto,
-  tracciaGara,
+  formatPL, formatR, gambaChiudente, plPercentuale, raccontaPiano, sedute, sequenzaGambe,
+  stopTroppoStretto, tracciaGara,
 } from "./planOutcome";
 
 function riga(p: Partial<PlanOutcomeRow> = {}): PlanOutcomeRow {
@@ -210,5 +210,37 @@ describe("tracciaGara", () => {
     }));
     expect(t.chiusura).toBe(1);
     expect(t.punti).toEqual([]);
+  });
+});
+
+describe("plPercentuale", () => {
+  it("long a target: il guadagno sul prezzo d'ingresso", () => {
+    // Ingresso 100, stop a 96 (R = 4), target a 2,0R: uscita a 108 = +8%.
+    expect(plPercentuale({ r_multiple: 2, r: 4, entry: 100 })).toBeCloseTo(8, 9);
+  });
+
+  it("allo stop: meno la distanza dello stop, per entrambi i versi", () => {
+    expect(plPercentuale({ r_multiple: -1, r: 4, entry: 100 })).toBeCloseTo(-4, 9);
+    // Short: ingresso 50, stop a 52 (R = 2), preso: la perdita e' −4%.
+    expect(plPercentuale({ r_multiple: -1, r: 2, entry: 50 })).toBeCloseTo(-4, 9);
+  });
+
+  it("short a target: il prezzo e' sceso e il P/L e' POSITIVO", () => {
+    // Ingresso 50, R = 2, target a 3R: uscita a 44 = +12% per chi e' short.
+    expect(plPercentuale({ r_multiple: 3, r: 2, entry: 50 })).toBeCloseTo(12, 9);
+  });
+
+  it("un ingresso inservibile rende null, non infinito", () => {
+    expect(plPercentuale({ r_multiple: 1, r: 4, entry: 0 })).toBeNull();
+    expect(plPercentuale({ r_multiple: Number.NaN, r: 4, entry: 100 })).toBeNull();
+  });
+});
+
+describe("formatPL", () => {
+  it("il segno sempre, e il meno tipografico", () => {
+    expect(formatPL(8.44)).toBe("+8.4%");
+    expect(formatPL(-2.06)).toBe("\u22122.1%");
+    expect(formatPL(0)).toBe("0.0%");
+    expect(formatPL(null)).toBe("—");
   });
 });

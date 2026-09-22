@@ -30,6 +30,7 @@ const DATI: Fundamentals = {
   next_revenue_estimate: 4.1e9,
   curr_fy_eps_estimate: 8.1234,
   curr_fy_revenue_estimate: 16e9,
+  financial_currency: "EUR",
 } as Fundamentals;
 
 /* Il dato che la scheda riceve: un test lo sostituisce, `afterEach` lo
@@ -47,11 +48,11 @@ vi.mock("@/hooks/useStockFundamentals", () => ({
 vi.mock("./MiniTrendChart", () => ({ default: () => null }));
 vi.mock("@/components/stock/SourceDegradedNote", () => ({ SourceDegradedNote: () => null }));
 
-function monta(currency = "EUR") {
+function monta() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <FundamentalsCard ticker="OMC" currency={currency} />
+      <FundamentalsCard ticker="OMC" />
     </QueryClientProvider>,
   ).container;
 }
@@ -140,32 +141,35 @@ describe("FundamentalsCard — la data della trimestrale", () => {
 });
 
 describe("FundamentalsCard — la prossima trimestrale nell'intestazione", () => {
-  it("l'EPS atteso porta la valuta del titolo, non un dollaro scritto a mano", () => {
-    const c = monta("EUR");
+  it("l'EPS atteso porta la valuta dei rendiconti, non un dollaro scritto a mano", () => {
+    const c = monta();
     expect(c.textContent).toContain("est €0.31");
     expect(c.textContent).not.toMatch(/est \$/);
   });
 });
 
-/* Le cifre del BILANCIO nella valuta dei rendiconti (2026-09-22). Il caso che
- * conta e' quello di SHEL.L: quota a Londra, rendiconta in dollari. */
+/* TUTTE le cifre nella valuta dei rendiconti (2026-09-22), EPS del calendario
+ * compreso. Il caso che conta e' quello di SHEL.L: quota a Londra, rendiconta
+ * in dollari, e il suo consensus e' in dollari anch'esso. */
 describe("FundamentalsCard — la valuta dei rendiconti", () => {
   function celle(tr: Element): string[] {
     return Array.from(tr.children).map((td) => td.textContent ?? "");
   }
 
-  it("ricavi, utile ed EPS di bilancio in dollari; EPS adjusted e stime nella valuta del titolo", () => {
+  it("ricavi, utile, EPS di bilancio ed EPS del calendario: tutti in dollari", () => {
     corrente = { ...DATI, financial_currency: "USD" };
-    const c = monta("GBP");
+    const c = monta();
 
     // Trimestrale: [data, Rev, Est Rev, EPS GAAP, EPS adj., Est EPS, Surp].
     const [prossima, trimestre] = Array.from(tabella(c).querySelectorAll("tbody tr")).map(celle);
     expect(prossima[2]).toBe("$4.10B");
-    expect(prossima[5]).toBe("£0.31");
+    expect(prossima[5]).toBe("$0.31");
     expect(trimestre[1]).toBe("$4.00B");
     expect(trimestre[2]).toBe("$3.90B");
-    expect(trimestre[4]).toBe("£0.23");
-    expect(trimestre[5]).toBe("£0.22");
+    expect(trimestre[4]).toBe("$0.23");
+    expect(trimestre[5]).toBe("$0.22");
+    // L'intestazione della scheda, idem.
+    expect(c.textContent).toContain("est $0.31");
 
     // Annuale: [FY, Rev, YoY, Net Inc, EPS GAAP, EPS adj., Est EPS, Surp].
     fireEvent.click(screen.getByRole("button", { name: "Annuale" }));
@@ -177,9 +181,11 @@ describe("FundamentalsCard — la valuta dei rendiconti", () => {
   });
 
   it("valuta dei rendiconti ignota: le cifre di bilancio restano NUDE, mai dollari", () => {
-    // DATI non porta `financial_currency`: e' anche la forma di una risposta
-    // servita da una riga di cache scritta prima del campo.
-    const c = monta("GBP");
+    // Senza `financial_currency`: e' anche la forma di una risposta servita
+    // da una riga di cache scritta prima del campo.
+    const { financial_currency: _tolta, ...senza } = DATI;
+    corrente = senza as Fundamentals;
+    const c = monta();
     const trimestre = celle(tabella(c).querySelectorAll("tbody tr")[1]);
     expect(trimestre[1]).toBe("4.00B");
     fireEvent.click(screen.getByRole("button", { name: "Annuale" }));

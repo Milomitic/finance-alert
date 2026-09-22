@@ -230,6 +230,31 @@ export function formatR(v: number): string {
   return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}R`;
 }
 
+/** Il P/L della posizione alla chiusura, in PERCENTUALE del prezzo d'ingresso.
+ *
+ *  `r_multiple × r / entry`: R e' la distanza dello stop in prezzo, e
+ *  `r_multiple` porta gia' il segno del GUADAGNO — positivo per uno short il
+ *  cui prezzo e' sceso — quindi la stessa formula vale per entrambi i versi.
+ *  Coincide con `(uscita − ingresso) / ingresso` sul target, sullo stop e
+ *  sulla chiusura a orizzonte, perche' la gara calcola R proprio cosi'.
+ *
+ *  ⚠️ Una percentuale SENZA leva e senza costi: il piano dimensiona la
+ *  posizione sullo stop, quindi due righe a +8% possono valere guadagni
+ *  diversi in conto. E' la ragione per cui R resta accanto.
+ *
+ *  null quando l'ingresso non e' un prezzo usabile: meglio «—» di un infinito. */
+export function plPercentuale(riga: { r_multiple: number; r: number; entry: number }): number | null {
+  const { r_multiple: rm, r, entry } = riga;
+  if (!(entry > 0) || !Number.isFinite(r) || !Number.isFinite(rm)) return null;
+  return ((rm * r) / entry) * 100;
+}
+
+/** «+8.4%», «−2.1%», «—». Il segno meno tipografico, come `formatR`. */
+export function formatPL(pct: number | null): string {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  return `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${Math.abs(pct).toFixed(1)}%`;
+}
+
 /** Una data ISO in «5 mar». `—` su un valore assente o illeggibile. */
 export function giornoBreve(iso: string | null | undefined): string {
   if (!iso) return "—";

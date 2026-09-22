@@ -88,6 +88,38 @@ describe("SignalOutcomeList", () => {
     expect(celle[celle.length - 2]).toHaveAttribute("role", "img");
   });
 
+  it("il P/L percentuale sta fra Chiusa ed R, col colore del conto", () => {
+    // riga(): ingresso 100, R = 4, +2,4R → +9,6%.
+    monta([riga(), riga({ alert_id: 8, ticker: "BBB", esito: "stop", r_multiple: -1 })]);
+    const intestazione = Array.from(
+      screen.getByRole("button", { name: "Sequenza" }).closest("li")!.children,
+    ).map((c) => c.textContent);
+    const i = intestazione.indexOf("P/L");
+    expect(intestazione[i - 1]).toBe("Chiusa");
+    expect(intestazione[i + 1]).toBe("R");
+
+    const vinta = screen.getByText("+9.6%");
+    expect(vinta.className).toMatch(/emerald/);
+    const persa = screen.getByText("−4.0%");
+    expect(persa.className).toMatch(/rose/);
+    // E nella riga sta subito prima di R, come in intestazione.
+    expect(vinta.nextElementSibling?.textContent).toBe("+2.4R");
+  });
+
+  it("la condizione e' la pastiglia della home: breve, con l'icona e il verso", () => {
+    monta([
+      riga({ detector: "high52_momentum", tone: "bull" }),
+      riga({ alert_id: 8, ticker: "BBB", detector: "trend_pullback", tone: "bear" }),
+    ]);
+    const rialzo = screen.getByText("Max. 52 sett.").closest("span[title]")!;
+    expect(rialzo.className).toMatch(/emerald/);
+    expect(rialzo.querySelector("svg")).not.toBeNull();
+    // Il nome intero resta quello che si sente.
+    expect(screen.getByText("Massimo 52 settimane")).toHaveClass("sr-only");
+    const ribasso = screen.getByText("Trend + Pull").closest("span[title]")!;
+    expect(ribasso.className).toMatch(/rose/);
+  });
+
   it("non annuncia uno stop troppo stretto quando l'ordine e' l'altro", () => {
     // Controllo negativo: senza, la diagnosi comparirebbe ogni volta che
     // entrambe le gambe sono state toccate — e «entrambe toccate» non e' una

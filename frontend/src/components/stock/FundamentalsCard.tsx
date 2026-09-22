@@ -72,32 +72,28 @@ const SOLO_DA_SM = "hidden sm:table-cell";
    allineata. */
 const EPS = { decimals: 2 } as const;
 
-/* ─── DUE valute nella stessa scheda (2026-09-22) ─────────────────────────── *
+/* ─── UNA valuta per tutta la scheda: quella dei rendiconti (2026-09-22) ──── *
  *
- * ⚠️ Ricavi, utile ed EPS del conto economico sono nella valuta dei
- * RENDICONTI (`financial_currency`), non in quella di quotazione. Misurato
- * sulla cache dei fondamentali: SHEL.L, AZN.L, HSBA.L e BP.L quotano a Londra
- * e rendicontano in dollari; TSM quota in dollari e rendiconta in dollari
- * taiwanesi. Prima ogni ricavo portava un `$` fisso (`fmtBig`), cioe' giusto
- * per caso sui titoli americani e sbagliato su un titolo su tre.
+ * ⚠️ Ricavi, utile ed EPS sono nella valuta dei RENDICONTI
+ * (`financial_currency`), non in quella di quotazione. Misurato sulla cache
+ * dei fondamentali: SHEL.L, AZN.L, HSBA.L e BP.L quotano a Londra e
+ * rendicontano in dollari; TSM quota in dollari e rendiconta in dollari
+ * taiwanesi. Prima ogni ricavo portava un `$` fisso (`fmtBig`) e ogni EPS la
+ * valuta del titolo, cioe' giusti per caso sui titoli americani.
  *
- *   valuta dei rendiconti   Rev, Net Inc, Est Rev, EPS GAAP (conto economico)
- *   valuta di quotazione    EPS adj., Est EPS (dal calendario utili)
- *
- * ⚠️ La seconda riga e' l'ipotesi PRECEDENTE, lasciata com'era, e la misura
- * non la conferma per tutti: per SHEL.L l'EPS del calendario (0,83 nel
- * 4° trimestre 2021) e' in dollari come il bilancio, per TSM (1,07) e' in
- * dollari per ADR mentre il bilancio e' in dollari taiwanesi. Nessuna delle
- * due valute e' giusta per entrambi, e yfinance non dichiara quella del
- * consensus: si e' cambiato solo cio' che la misura decide.
+ * Anche l'EPS del CALENDARIO utili (EPS adj., Est EPS, le stime) segue la
+ * valuta dei rendiconti, per scelta dell'utente sulla misura: per SHEL.L
+ * (0,83 nel 4° trimestre 2021), AZN.L, HSBA.L, ASML e Novo e' in quella
+ * valuta. ⚠️ L'eccezione nota sono gli ADR che pubblicano l'EPS per ADR in
+ * dollari — TSM (1,07) — dove questa etichetta dice dollari taiwanesi su una
+ * cifra in dollari. yfinance non dichiara la valuta del consensus, quindi
+ * nessuna regola e' giusta per entrambi; questa e' giusta piu' spesso.
  *
  * `financial_currency` assente — ignota, o riga di cache piu' vecchia del
  * campo — rende le cifre NUDE, mai in dollari. */
 
 interface Props {
   ticker: string;
-  /** Valuta di quotazione: l'utile per azione e denaro come il prezzo. */
-  currency?: string | null;
 }
 
 /* ─── Formatting helpers ────────────────────────────────────────────────── */
@@ -206,15 +202,14 @@ function aggregateAnnualEarnings(
 }
 
 function AnnualTabBody({
-  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate, currency, valutaBilancio,
+  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate, valutaBilancio,
 }: {
   annual: FundamentalsAnnual[];
   earnings: FundamentalsEarnings[];
   /** Consensus full-year EPS/revenue for the FY in progress (yfinance
    *  estimate tables, `0y` avg). Null on thin-coverage tickers. */
   currFyEpsEstimate: number | null;
-  currency: string | null;
-  /** Valuta dei rendiconti — vedi `VALUTE` in cima al file. */
+  /** Valuta dei rendiconti — vedi la nota sulle valute in cima al file. */
   valutaBilancio: string | null;
   currFyRevenueEstimate: number | null;
 }) {
@@ -274,15 +269,7 @@ function AnnualTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          {/* Nell'annuale la linea «EPS» e' quella del CONTO ECONOMICO (GAAP),
-              quindi nella valuta dei rendiconti; «EPS est» e' il consensus. */}
-          <MiniTrendChart
-            data={chartData}
-            hasEstimate={hasEstimate}
-            currency={currency}
-            epsCurrency={valutaBilancio}
-            revenueCurrency={valutaBilancio}
-          />
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={valutaBilancio} />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -342,7 +329,7 @@ function AnnualTabBody({
                     <td className={cn("px-1.5 py-1 text-right", SOLO_DA_SM)}>—</td>
                     <td className="px-1.5 py-1 text-right">—</td>
                     <td className="px-1.5 py-1 text-right font-semibold not-italic">
-                      {formatMoney(currFyEpsEstimate, currency, EPS)}
+                      {formatMoney(currFyEpsEstimate, valutaBilancio, EPS)}
                     </td>
                     <td className="px-1.5 py-1 text-right">—</td>
                   </tr>
@@ -379,10 +366,10 @@ function AnnualTabBody({
                     {formatMoney(a.eps, valutaBilancio, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsAdjTone)}>
-                    {formatMoney(epsAdj, currency, EPS)}
+                    {formatMoney(epsAdj, valutaBilancio, EPS)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {formatMoney(agg?.eps_est ?? null, currency, EPS)}
+                    {formatMoney(agg?.eps_est ?? null, valutaBilancio, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -402,7 +389,7 @@ function AnnualTabBody({
 
 function QuarterlyTabBody({
   quarterly, earnings, nextEarningsDate, nextEarningsWhen, nextEpsEstimate, nextRevenueEstimate,
-  currency, valutaBilancio,
+  valutaBilancio,
 }: {
   quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
@@ -411,8 +398,7 @@ function QuarterlyTabBody({
   nextEarningsWhen: "pre" | "after" | null;
   nextEpsEstimate: number | null;
   nextRevenueEstimate: number | null;
-  currency: string | null;
-  /** Valuta dei rendiconti — vedi `VALUTE` in cima al file. */
+  /** Valuta dei rendiconti — vedi la nota sulle valute in cima al file. */
   valutaBilancio: string | null;
 }) {
   // **Dedup earnings by fiscal quarter**, keeping the most recent release per
@@ -487,12 +473,7 @@ function QuarterlyTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          <MiniTrendChart
-            data={chartData}
-            hasEstimate={hasEstimate}
-            currency={currency}
-            revenueCurrency={valutaBilancio}
-          />
+          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={valutaBilancio} />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -567,7 +548,7 @@ function QuarterlyTabBody({
                 <td className={cn("px-1.5 py-1 text-right text-muted-foreground italic", SOLO_DA_SM)}>—</td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
-                  {formatMoney(nextEpsEstimate, currency, EPS)}
+                  {formatMoney(nextEpsEstimate, valutaBilancio, EPS)}
                 </td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
               </tr>
@@ -610,10 +591,10 @@ function QuarterlyTabBody({
                     })()}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
-                    {formatMoney(e.eps_reported, currency, EPS)}
+                    {formatMoney(e.eps_reported, valutaBilancio, EPS)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {formatMoney(e.eps_estimate, currency, EPS)}
+                    {formatMoney(e.eps_estimate, valutaBilancio, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -635,7 +616,7 @@ function QuarterlyTabBody({
 
 type TabKey = "annual" | "quarterly";
 
-export function FundamentalsCard({ ticker, currency = null }: Props) {
+export function FundamentalsCard({ ticker }: Props) {
   const q = useStockFundamentals(ticker);
   const { refresh, isRefreshing, refreshError } = useCardRefresh({
     queryKey: ["stocks", ticker, "fundamentals"],
@@ -738,14 +719,14 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
               {f.next_earnings_date ? (
                 <span
                   className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
-                  title={`Prossima earnings — EPS atteso: ${formatMoney(f.next_eps_estimate, currency, EPS)}`}
+                  title={`Prossima earnings — EPS atteso: ${formatMoney(f.next_eps_estimate, f.financial_currency, EPS)}`}
                 >
                   <CalendarClock className="h-3 w-3" />
                   {shortDate(f.next_earnings_date)}
                   {/* ⚠️ Era `est ${...}` in JSX, cioe' un DOLLARO letterale
                       davanti alla cifra: un titolo in euro leggeva «est $1.23».
                       Il simbolo viene da `formatMoney`, mai scritto a mano. */}
-                  {f.next_eps_estimate != null && <> · est {formatMoney(f.next_eps_estimate, currency, EPS)}</>}
+                  {f.next_eps_estimate != null && <> · est {formatMoney(f.next_eps_estimate, f.financial_currency, EPS)}</>}
                 </span>
               ) : null}
               <CardUpdatedAt updatedAt={q.data?.fetched_at} />
@@ -797,7 +778,6 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
             <div className="flex-1 min-h-0 flex flex-col">
               {effective === "annual" && hasAnnual && (
                 <AnnualTabBody
-                  currency={currency}
                   valutaBilancio={f.financial_currency ?? null}
                   annual={f.annual}
                   earnings={f.earnings}
@@ -807,7 +787,6 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
               )}
               {effective === "quarterly" && hasQuarterly && (
                 <QuarterlyTabBody
-                  currency={currency}
                   valutaBilancio={f.financial_currency ?? null}
                   quarterly={f.quarterly}
                   earnings={f.earnings}

@@ -476,7 +476,7 @@ export default function StockDetailPage() {
             `relative h-full` + absolute-inset child, so a fixed-height
             wrapper is exactly the containing block it needs. */}
         <div className="lg:h-full lg:min-h-0">
-          <FundamentalsCard ticker={ticker} currency={d.stock.currency} />
+          <FundamentalsCard ticker={ticker} />
         </div>
         <div className="lg:h-full lg:min-h-0">
           <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />

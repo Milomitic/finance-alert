@@ -2,14 +2,14 @@ import { ArrowRight, CircleSlash, Target, TrendingDown, XCircle } from "lucide-r
 import type { CSSProperties } from "react";
 
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
+import { DetectorChip } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { HintLabel } from "@/components/ui/info-hint";
 import {
-  ESITO_META, formatR, giornoBreve, raccontaPiano, sequenzaGambe, stopTroppoStretto,
-  tracciaGara, type Gamba,
+  ESITO_META, formatPL, formatR, giornoBreve, plPercentuale, raccontaPiano, sequenzaGambe,
+  stopTroppoStretto, tracciaGara, type Gamba,
 } from "@/lib/planOutcome";
-import { detectorLabel } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 
 /* ─── Che cosa e' successo al piano di ogni segnale ───────────────────────
@@ -55,13 +55,18 @@ const PASTIGLIA: Record<string, string> = {
   neutro: "border-border bg-muted/50 text-muted-foreground",
 };
 
-/* ⚠️ I tre template sono LETTERALI, e il numero di colonne segue quante celle
- * sono VISIBILI a quella larghezza: una cella `hidden` e' `display:none` e non
- * occupa una traccia. Stessa forma della tabella dei setup.
+/* ⚠️ I quattro template sono LETTERALI, e il numero di colonne segue quante
+ * celle sono VISIBILI a quella larghezza: una cella `hidden` e' `display:none`
+ * e non occupa una traccia. Stessa forma della tabella dei setup.
  *
- *   < sm    titolo · esito · R · sequenza
- *   >= sm   + chiusa, e «dopo chiusura» in fondo
+ *   < sm    titolo · esito · P/L · R · sequenza
+ *   >= sm   + chiusa
+ *   >= lg   + «dopo chiusura» in fondo
  *   >= xl   + condizione, sedute
+ *
+ * ⚠️ «Dopo chiusura» da `lg` e non piu' da `sm` dal 2026-09-22, quando e'
+ * arrivato il P/L: a 640px le colonne fisse avrebbero lasciato al TITOLO
+ * ventotto pixel. Lo stesso conto che ha spostato condizione e sedute a `xl`.
  *
  * «Dopo chiusura» sta DOPO la sequenza dal 2026-09-22, su richiesta
  * dell'utente: e' il testo che dice in date cio' che il disegno accanto
@@ -73,9 +78,10 @@ const PASTIGLIA: Record<string, string> = {
  * pixel — cioe' l'identita' della riga cedeva per far posto alla
  * decorazione, l'errore che questo repo ha gia' pagato tre volte. */
 const COLONNE =
-  "grid grid-cols-[minmax(0,1fr)_auto_auto_64px] items-center gap-x-2 " +
-  "sm:grid-cols-[minmax(0,1fr)_116px_68px_64px_96px_112px] sm:gap-x-3 " +
-  "xl:grid-cols-[minmax(0,1fr)_124px_116px_68px_64px_60px_120px_112px]";
+  "grid grid-cols-[minmax(0,1fr)_auto_auto_auto_64px] items-center gap-x-2 " +
+  "sm:grid-cols-[minmax(0,1fr)_116px_68px_60px_64px_96px] sm:gap-x-3 " +
+  "lg:grid-cols-[minmax(0,1fr)_116px_68px_60px_64px_96px_112px] " +
+  "xl:grid-cols-[minmax(0,1fr)_136px_116px_68px_60px_64px_60px_120px_112px]";
 
 const INTESTAZIONE = "text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground";
 
@@ -128,6 +134,26 @@ function Esito({ riga }: { riga: PlanOutcomeRow }) {
   );
 }
 
+/** Il P/L percentuale alla chiusura. Verde un guadagno, rosso una perdita:
+ *  la palette della direzione, perche' e' il verso del conto. */
+function PL({ riga }: { riga: PlanOutcomeRow }) {
+  const pl = plPercentuale(riga);
+  return (
+    <span
+      className={cn(
+        "justify-self-end whitespace-nowrap text-xs font-semibold tabular-nums",
+        pl == null || pl === 0
+          ? "text-muted-foreground"
+          : pl > 0
+            ? "text-emerald-800 dark:text-emerald-300"
+            : "text-rose-700 dark:text-rose-300",
+      )}
+    >
+      {formatPL(pl)}
+    </span>
+  );
+}
+
 /** Le gambe toccate DOPO la chiusura. Quasi sempre nessuna o una.
  *
  *  ⚠️ Fino al 2026-09-22 questa colonna era vuota per quasi ogni segnale
@@ -139,13 +165,13 @@ function Esito({ riga }: { riga: PlanOutcomeRow }) {
 function DopoChiusura({ riga }: { riga: PlanOutcomeRow }) {
   const dopo = sequenzaGambe(riga).filter((g) => g.dopo);
   if (dopo.length === 0) {
-    return <span className="hidden text-xs text-muted-foreground sm:block">—</span>;
+    return <span className="hidden text-xs text-muted-foreground lg:block">—</span>;
   }
   const stretto = stopTroppoStretto(riga);
   return (
     <span
       className={cn(
-        "hidden items-center gap-1 whitespace-nowrap text-xs tabular-nums sm:flex",
+        "hidden items-center gap-1 whitespace-nowrap text-xs tabular-nums lg:flex",
         stretto ? "font-semibold text-foreground" : "text-muted-foreground",
       )}
       title={
@@ -260,8 +286,9 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
       >
         <Identita riga={riga} />
 
-        <span className="hidden truncate text-xs text-muted-foreground xl:block">
-          {detectorLabel(riga.detector)}
+        {/* La stessa pastiglia della home: icona, forma breve, verso nel colore. */}
+        <span className="hidden min-w-0 xl:block">
+          <DetectorChip detector={riga.detector} tone={riga.tone} />
         </span>
 
         <Esito riga={riga} />
@@ -269,6 +296,8 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
         <span className="hidden whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:block">
           {giornoBreve(riga.resolved_date)}
         </span>
+
+        <PL riga={riga} />
 
         <span
           className={cn(
@@ -302,6 +331,16 @@ function Intestazione() {
       <span className={cn(INTESTAZIONE, "hidden xl:block")}>Condizione</span>
       <span className={INTESTAZIONE}>Esito</span>
       <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
+      <span className={cn(INTESTAZIONE, "justify-self-end")}>
+        <HintLabel
+          text={
+            "Il guadagno o la perdita della posizione alla chiusura, in percentuale del prezzo d'ingresso: sul target, sullo stop o, se non è stato toccato niente, alla chiusura dell'ultima seduta dell'orizzonte. Per uno short un prezzo sceso è un guadagno. " +
+            "Senza leva e senza costi: il piano dimensiona la posizione sulla distanza dello stop, quindi due righe con lo stesso P/L possono valere guadagni diversi in conto — ed è per questo che R resta accanto."
+          }
+        >
+          P/L
+        </HintLabel>
+      </span>
       <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
       <span className={cn(INTESTAZIONE, "hidden justify-self-end xl:block")}>
         <HintLabel text="Sedute dall'ingresso alla chiusura della posizione.">Sedute</HintLabel>
@@ -316,7 +355,7 @@ function Intestazione() {
           Sequenza
         </HintLabel>
       </span>
-      <span className={cn(INTESTAZIONE, "hidden sm:block")}>
+      <span className={cn(INTESTAZIONE, "hidden lg:block")}>
         {/* La prosa sta qui, una volta, e non su ogni riga: e' una
             spiegazione, non un dato. Il dato — la data — resta a schermo. */}
         <HintLabel

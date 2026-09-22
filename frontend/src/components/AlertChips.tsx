@@ -7,8 +7,10 @@ import {
   NATURE_SHORT,
   TONE_BG,
   TONE_LABEL,
+  getAlertKindMeta,
   getAlertMeta,
   signalNature,
+  type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +84,40 @@ export function AlertKindChip({ alert, size = "md", className, breve = false }: 
       title={meta.label}
     >
       <Icon className={size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5"} />
+      {breve ? <Abbreviato breve={meta.short} intero={meta.label} /> : meta.label}
+    </span>
+  );
+}
+
+/** La regola di un segnale quando non c'e' un `Alert` intero — una riga del
+ *  magazzino degli esiti, un setup — con la STESSA pastiglia della home:
+ *  icona, etichetta breve, fondo del verso (verde rialzista, rosso ribassista).
+ *
+ *  ⚠️ Il verso arriva a parte (`tone` "bull"/"bear") perche' il nome del
+ *  detector da solo non lo porta: `getAlertKindMeta` rende sempre neutro. */
+export function DetectorChip({
+  detector, tone, size = "sm", breve = true, className,
+}: {
+  detector: string;
+  tone: string | null | undefined;
+  size?: "sm" | "md";
+  breve?: boolean;
+  className?: string;
+}) {
+  const meta = getAlertKindMeta(`signal:${detector}`);
+  const Icon = meta.icon;
+  const tono: AlertTone = tone === "bull" ? "bullish" : tone === "bear" ? "bearish" : "neutral";
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center gap-1 rounded font-semibold whitespace-nowrap",
+        size === "sm" ? "px-1.5 py-0.5 text-[0.7059rem]" : "px-2 py-1 text-sm",
+        TONE_BG[tono],
+        className,
+      )}
+      title={tono === "neutral" ? meta.label : `${meta.label} · ${TONE_LABEL[tono].toLowerCase()}`}
+    >
+      <Icon className={cn("shrink-0", size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5")} aria-hidden />
       {breve ? <Abbreviato breve={meta.short} intero={meta.label} /> : meta.label}
     </span>
   );
