@@ -129,3 +129,56 @@ def test_il_rapporto_MISURA_la_ricostruzione_invece_di_dichiararla_buona(
     assert rapporto["controllo_n"] == 2
     assert rapporto["controllo_oltre_il_5pct"] == 1
     assert rapporto["controllo_scarto_mediano_pct"] is not None
+
+
+def test_la_sola_lettura_non_scrive(db: Session, monkeypatch) -> None:
+    """⚠️ Una modalita' «sola lettura» che lascia le righe in sessione e' peggio
+    di nessuna: il primo commit di qualcun altro le scriverebbe comunque.
+
+    Il monkeypatch di SessionLocal non e' una formalita': lo script lo importa
+    al caricamento del modulo, quindi senza scriverebbe nel database di
+    SVILUPPO.
+    """
+    from app.core import db as db_module
+    from app.scripts import backfill_plan_inputs
+
+    s = _titolo(db)
+    _barre(db, s, _serie("2026-05-04", 30, 4.0))
+    _alert(db, s, prima_emissione="2026-05-20", snap={"atr": 3.5})
+    db.commit()
+
+    monkeypatch.setattr(backfill_plan_inputs, "SessionLocal", db_module.SessionLocal)
+    backfill_plan_inputs.run(applica=False)
+
+    assert CHIAVE not in json.loads(db.query(Alert).one().snapshot)
+
+
+def test_con_applica_scrive(db: Session, monkeypatch) -> None:
+    from app.core import db as db_module
+    from app.scripts import backfill_plan_inputs
+
+    s = _titolo(db)
+    _barre(db, s, _serie("2026-05-04", 30, 4.0))
+    _alert(db, s, prima_emissione="2026-05-20", snap={"atr": 3.5})
+    db.commit()
+
+    monkeypatch.setattr(backfill_plan_inputs, "SessionLocal", db_module.SessionLocal)
+    backfill_plan_inputs.run(applica=True)
+
+    assert json.loads(db.query(Alert).one().snapshot)[CHIAVE] == pytest.approx(3.5)
+
+
+def test_main_inoltra_il_flag(monkeypatch) -> None:
+    """Un `--applica` non inoltrato produce uno script che gira, stampa un
+    rapporto, esce con zero e non scrive MAI."""
+    import sys
+
+    from app.scripts import backfill_plan_inputs
+
+    visti: list[bool] = []
+    monkeypatch.setattr(backfill_plan_inputs, "run", lambda applica=False: visti.append(applica))
+    monkeypatch.setattr(sys, "argv", ["backfill_plan_inputs"])
+    backfill_plan_inputs.main()
+    monkeypatch.setattr(sys, "argv", ["backfill_plan_inputs", "--applica"])
+    backfill_plan_inputs.main()
+    assert visti == [False, True]

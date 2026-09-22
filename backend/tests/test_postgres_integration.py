@@ -519,8 +519,8 @@ def test_la_migrazione_PLAN_OUTCOMES_gira_su_POSTGRES_andata_e_ritorno(monkeypat
                 "INSERT INTO alerts (stock_id, triggered_at, trigger_price, snapshot) "
                 "VALUES (:s, now(), 100.0, '{}')"), {"s": sid})
             aid = c.execute(text("SELECT id FROM alerts")).scalar_one()
-            # ⚠️ `tp2_reached` e `source` NON sono passati: se i loro default
-            # non fossero validi per Postgres, questa INSERT fallirebbe qui.
+            # ⚠️ `tp2_reached` NON e' passato: se il suo default non fosse
+            # valido per Postgres, questa INSERT fallirebbe qui.
             c.execute(text(
                 "INSERT INTO plan_outcomes (alert_id, stock_id, detector, "
                 "signal_date, tone, horizon_days, entry_date, entry, stop, tp1, "
@@ -531,10 +531,9 @@ def test_la_migrazione_PLAN_OUTCOMES_gira_su_POSTGRES_andata_e_ritorno(monkeypat
                 {"a": aid, "s": sid})
 
         with eng.connect() as c:
-            fatto, fonte = c.execute(text(
-                "SELECT tp2_reached, source FROM plan_outcomes")).one()
+            fatto = c.execute(text(
+                "SELECT tp2_reached FROM plan_outcomes")).scalar_one()
         assert fatto is False, "il default booleano non e' arrivato come booleano"
-        assert fonte == "emesso"
 
         # L'unicita' e' del DATABASE, non della diligenza del chiamante.
         with pytest.raises(IntegrityError), eng.begin() as c:
