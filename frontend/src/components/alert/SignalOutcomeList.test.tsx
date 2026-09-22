@@ -120,6 +120,52 @@ describe("SignalOutcomeList", () => {
     expect(ribasso.className).toMatch(/rose/);
   });
 
+  it("⚠️ una colonna nascosta sparisce da intestazione E righe, e dalla griglia", () => {
+    // Una traccia per una cella che non c'e' farebbe scivolare ogni valore
+    // sotto l'intestazione accanto: si fissa che le tre cose restino insieme.
+    const { container } = render(
+      <MemoryRouter>
+        <SignalOutcomeList
+          righe={[riga()]}
+          colonne={{ isVisible: (id) => id !== "pl", toggle: () => {} }}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText("P/L")).not.toBeInTheDocument();
+    expect(screen.queryByText("+9.6%")).not.toBeInTheDocument();
+    const [intestazione, prima] = Array.from(container.querySelectorAll("ul > li"));
+    const cellePrima = prima.querySelector("button")!.children.length;
+    expect(intestazione.children.length).toBe(cellePrima);
+    // Sotto `sm` restano titolo, esito, R e sequenza: quattro tracce, non cinque.
+    const ul = container.querySelector("ul") as HTMLElement;
+    expect(ul.style.getPropertyValue("--g")).toBe("minmax(0,1fr) auto auto 64px");
+    expect(ul.style.getPropertyValue("--g-xl").split(" ")).toHaveLength(8);
+  });
+
+  it("le intestazioni ordinabili chiedono l'ordine, e la colonna attiva lo mostra", async () => {
+    const onOrdina = vi.fn();
+    render(
+      <MemoryRouter>
+        <SignalOutcomeList
+          righe={[riga()]}
+          ordine={{ colonna: "r_multiple", verso: "desc" }}
+          onOrdina={onOrdina}
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Chiusa" }));
+    expect(onOrdina).toHaveBeenCalledWith("resolved_date");
+    // La colonna attiva e' in evidenza; le altre no.
+    // Per CLASSE intera: `hover:text-foreground` ce l'hanno tutte, e una regex
+    // col confine di parola lo riconoscerebbe come la classe dell'attiva.
+    const classi = (nome: string) => screen.getByRole("button", { name: nome }).className.split(/\s+/);
+    expect(classi("R")).toContain("text-foreground");
+    expect(classi("Esito")).not.toContain("text-foreground");
+    // Sequenza e Dopo chiusura non si ordinano: restano spiegazioni.
+    await userEvent.click(screen.getByRole("button", { name: "Sequenza" }));
+    expect(onOrdina).toHaveBeenCalledTimes(1);
+  });
+
   it("non annuncia uno stop troppo stretto quando l'ordine e' l'altro", () => {
     // Controllo negativo: senza, la diagnosi comparirebbe ogni volta che
     // entrambe le gambe sono state toccate — e «entrambe toccate» non e' una

@@ -158,3 +158,55 @@ describe("OutcomesView — i controlli", () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 });
+
+/* L'ordinamento (2026-09-22): come nella tabella Segnali, ma ⚠️ lo fa il
+ * SERVER sull'intera popolazione filtrata — la lista e' paginata, e ordinare la
+ * pagina ricevuta metterebbe in cima il migliore di cinquanta righe. */
+describe("OutcomesView — l'ordinamento", () => {
+  it("un clic sull'intestazione chiede l'ordine al server; un secondo lo inverte", async () => {
+    monta();
+    await screen.findByText("AAA");
+
+    await userEvent.click(screen.getByRole("button", { name: "R" }));
+    await waitFor(() => expect(ultimaUrl()).toContain("sort_by=r_multiple"));
+    expect(ultimaUrl()).toContain("sort_dir=desc");
+    expect(screen.getByTestId("url")).toHaveTextContent("ordina=r_multiple");
+
+    await userEvent.click(screen.getByRole("button", { name: "R" }));
+    await waitFor(() => expect(ultimaUrl()).toContain("sort_dir=asc"));
+  });
+
+  it("una colonna di parole parte dall'A", async () => {
+    monta();
+    await screen.findByText("AAA");
+    await userEvent.click(screen.getByRole("button", { name: "Titolo" }));
+    await waitFor(() => expect(ultimaUrl()).toContain("sort_by=ticker"));
+    expect(ultimaUrl()).toContain("sort_dir=asc");
+  });
+
+  it("cambiare ordine torna alla prima pagina", async () => {
+    monta("/alerts?vista=esiti&pagina=3");
+    await screen.findByText("AAA");
+    await userEvent.click(screen.getByRole("button", { name: "P/L" }));
+    expect(screen.getByTestId("url")).not.toHaveTextContent("pagina");
+  });
+
+  it("senza un ordine scelto la richiesta non ne porta uno", async () => {
+    // Controllo negativo: l'ordine predefinito resta quello del server.
+    monta();
+    await screen.findByText("AAA");
+    expect(ultimaUrl()).not.toContain("sort_by");
+  });
+
+  it("un ordinamento sconosciuto nell'URL non arriva al server", async () => {
+    monta("/alerts?vista=esiti&ordina=forza");
+    await screen.findByText("AAA");
+    expect(ultimaUrl()).not.toContain("sort_by");
+  });
+
+  it("il bottone «Colonne» c'e', come nel resto dell'app", async () => {
+    monta();
+    await screen.findByText("AAA");
+    expect(screen.getByRole("button", { name: /colonne/i })).toBeInTheDocument();
+  });
+});

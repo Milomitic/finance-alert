@@ -1,11 +1,17 @@
-import { ArrowRight, CircleSlash, Target, TrendingDown, XCircle } from "lucide-react";
-import type { CSSProperties } from "react";
+import {
+  ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, CircleSlash, Target, TrendingDown, XCircle,
+} from "lucide-react";
+import { useState, type CSSProperties, type MouseEvent } from "react";
 
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 import { DetectorChip } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
-import { HintLabel } from "@/components/ui/info-hint";
+import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
+import { HintAnchor, HintLabel, HintUnderline } from "@/components/ui/info-hint";
+import {
+  COLONNE_ESITI_NASCONDIBILI, trackEsiti, type ColonnaEsitiId, type OrdineEsiti,
+} from "@/lib/colonneEsiti";
 import {
   ESITO_META, formatPL, formatR, giornoBreve, plPercentuale, raccontaPiano, sequenzaGambe,
   stopTroppoStretto, tracciaGara, type Gamba,
@@ -55,9 +61,12 @@ const PASTIGLIA: Record<string, string> = {
   neutro: "border-border bg-muted/50 text-muted-foreground",
 };
 
-/* ⚠️ I quattro template sono LETTERALI, e il numero di colonne segue quante
- * celle sono VISIBILI a quella larghezza: una cella `hidden` e' `display:none`
- * e non occupa una traccia. Stessa forma della tabella dei setup.
+/* ⚠️ Le tracce della griglia NON sono piu' quattro template letterali: dal
+ * 2026-09-22 le colonne si nascondono, quindi le tracce si calcolano dalle
+ * colonne visibili (`lib/colonneEsiti.ts`) e arrivano come variabili CSS. Le
+ * classi che le leggono restano letterali, per il purger. Il numero di tracce
+ * segue sempre quante celle sono VISIBILI a quella larghezza: una cella
+ * `hidden` e' `display:none` e non occupa una traccia.
  *
  *   < sm    titolo · esito · P/L · R · sequenza
  *   >= sm   + chiusa
@@ -78,10 +87,59 @@ const PASTIGLIA: Record<string, string> = {
  * pixel — cioe' l'identita' della riga cedeva per far posto alla
  * decorazione, l'errore che questo repo ha gia' pagato tre volte. */
 const COLONNE =
-  "grid grid-cols-[minmax(0,1fr)_auto_auto_auto_64px] items-center gap-x-2 " +
-  "sm:grid-cols-[minmax(0,1fr)_116px_68px_60px_64px_96px] sm:gap-x-3 " +
-  "lg:grid-cols-[minmax(0,1fr)_116px_68px_60px_64px_96px_112px] " +
-  "xl:grid-cols-[minmax(0,1fr)_136px_116px_68px_60px_64px_60px_120px_112px]";
+  "grid grid-cols-[var(--g)] items-center gap-x-2 sm:grid-cols-[var(--g-sm)] sm:gap-x-3 " +
+  "lg:grid-cols-[var(--g-lg)] xl:grid-cols-[var(--g-xl)]";
+
+type Visibile = (id: ColonnaEsitiId) => boolean;
+const TUTTE: Visibile = () => true;
+
+export interface OrdineAttivo {
+  colonna: OrdineEsiti;
+  verso: "asc" | "desc";
+}
+
+/** Un'intestazione che ordina, come `SortableHeader` della tabella Segnali:
+ *  la parola (sottolineata a tratti se ha una spiegazione, che si apre al
+ *  passaggio) e la freccia del verso. Senza `onOrdina` resta un'etichetta. */
+function IntestazioneOrdinabile({
+  etichetta, chiave, hint, ordine, onOrdina, className,
+}: {
+  etichetta: string;
+  chiave: OrdineEsiti;
+  hint?: string;
+  ordine?: OrdineAttivo | null;
+  onOrdina?: (o: OrdineEsiti) => void;
+  className?: string;
+}) {
+  if (!onOrdina) {
+    return (
+      <span className={cn(INTESTAZIONE, className)}>
+        {hint ? <HintLabel text={hint}>{etichetta}</HintLabel> : etichetta}
+      </span>
+    );
+  }
+  const attiva = ordine?.colonna === chiave;
+  const bottone = (
+    <button
+      type="button"
+      onClick={() => onOrdina(chiave)}
+      className={cn(
+        "inline-flex items-center gap-1 uppercase transition-colors hover:text-foreground",
+        attiva && "text-foreground",
+      )}
+    >
+      {hint ? <HintUnderline>{etichetta}</HintUnderline> : <span>{etichetta}</span>}
+      {attiva && ordine?.verso === "desc" && <ArrowDown className="h-3 w-3" aria-hidden />}
+      {attiva && ordine?.verso === "asc" && <ArrowUp className="h-3 w-3" aria-hidden />}
+      {!attiva && <ArrowUpDown className="h-3 w-3 opacity-30" aria-hidden />}
+    </button>
+  );
+  return (
+    <span className={cn(INTESTAZIONE, className)}>
+      {hint ? <HintAnchor text={hint}>{bottone}</HintAnchor> : bottone}
+    </span>
+  );
+}
 
 const INTESTAZIONE = "text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground";
 
@@ -272,7 +330,11 @@ function Sequenza({ riga }: { riga: PlanOutcomeRow }) {
   );
 }
 
-function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) => void }) {
+function Riga({ riga, onApri, vis }: {
+  riga: PlanOutcomeRow;
+  onApri?: (id: number) => void;
+  vis: Visibile;
+}) {
   return (
     <li>
       {/* Un bottone, non un link: la domanda che una riga di questo elenco
@@ -287,97 +349,139 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
         <Identita riga={riga} />
 
         {/* La stessa pastiglia della home: icona, forma breve, verso nel colore. */}
-        <span className="hidden min-w-0 xl:block">
-          <DetectorChip detector={riga.detector} tone={riga.tone} />
-        </span>
+        {vis("condizione") && (
+          <span className="hidden min-w-0 xl:block">
+            <DetectorChip detector={riga.detector} tone={riga.tone} />
+          </span>
+        )}
 
-        <Esito riga={riga} />
+        {vis("esito") && <Esito riga={riga} />}
 
-        <span className="hidden whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:block">
-          {giornoBreve(riga.resolved_date)}
-        </span>
+        {vis("chiusa") && (
+          <span className="hidden whitespace-nowrap text-xs tabular-nums text-muted-foreground sm:block">
+            {giornoBreve(riga.resolved_date)}
+          </span>
+        )}
 
-        <PL riga={riga} />
+        {vis("pl") && <PL riga={riga} />}
 
-        <span
-          className={cn(
-            "justify-self-end text-sm font-bold tabular-nums",
-            riga.r_multiple > 0
-              ? "text-emerald-800 dark:text-emerald-300"
-              : riga.r_multiple < 0
-                ? "text-rose-700 dark:text-rose-300"
-                : "text-muted-foreground",
-          )}
-        >
-          {formatR(riga.r_multiple)}
-        </span>
+        {vis("r") && (
+          <span
+            className={cn(
+              "justify-self-end text-sm font-bold tabular-nums",
+              riga.r_multiple > 0
+                ? "text-emerald-800 dark:text-emerald-300"
+                : riga.r_multiple < 0
+                  ? "text-rose-700 dark:text-rose-300"
+                  : "text-muted-foreground",
+            )}
+          >
+            {formatR(riga.r_multiple)}
+          </span>
+        )}
 
-        <span className="hidden justify-self-end whitespace-nowrap text-xs tabular-nums text-muted-foreground xl:block">
-          {riga.bars_to_outcome}
-        </span>
+        {vis("sedute") && (
+          <span className="hidden justify-self-end whitespace-nowrap text-xs tabular-nums text-muted-foreground xl:block">
+            {riga.bars_to_outcome}
+          </span>
+        )}
 
-        <Sequenza riga={riga} />
+        {vis("sequenza") && <Sequenza riga={riga} />}
 
-        <DopoChiusura riga={riga} />
+        {vis("dopo") && <DopoChiusura riga={riga} />}
       </button>
     </li>
   );
 }
 
-function Intestazione() {
+function Intestazione({ vis, ordine, onOrdina, onMenu }: {
+  vis: Visibile;
+  ordine?: OrdineAttivo | null;
+  onOrdina?: (o: OrdineEsiti) => void;
+  onMenu?: (e: MouseEvent) => void;
+}) {
+  const o = { ordine, onOrdina };
   return (
-    <li className={cn(COLONNE, "border-b bg-muted/20 px-3 py-1")}>
-      <span className={INTESTAZIONE}>Titolo</span>
-      <span className={cn(INTESTAZIONE, "hidden xl:block")}>Condizione</span>
-      <span className={INTESTAZIONE}>Esito</span>
-      <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
-      <span className={cn(INTESTAZIONE, "justify-self-end")}>
-        <HintLabel
-          text={
+    // Clic destro sull'intestazione: il menu delle colonne, come nella tabella
+    // Segnali. Il bottone «Colonne» sopra la lista fa lo stesso, ed e' quello
+    // che si trova senza saperlo.
+    <li className={cn(COLONNE, "border-b bg-muted/20 px-3 py-1")} onContextMenu={onMenu}>
+      <IntestazioneOrdinabile etichetta="Titolo" chiave="ticker" {...o} />
+      {vis("condizione") && (
+        <IntestazioneOrdinabile etichetta="Condizione" chiave="detector" className="hidden xl:block" {...o} />
+      )}
+      {vis("esito") && <IntestazioneOrdinabile etichetta="Esito" chiave="esito" {...o} />}
+      {vis("chiusa") && (
+        <IntestazioneOrdinabile etichetta="Chiusa" chiave="resolved_date" className="hidden sm:block" {...o} />
+      )}
+      {vis("pl") && (
+        <IntestazioneOrdinabile
+          etichetta="P/L"
+          chiave="pl"
+          className="justify-self-end"
+          hint={
             "Il guadagno o la perdita della posizione alla chiusura, in percentuale del prezzo d'ingresso: sul target, sullo stop o, se non è stato toccato niente, alla chiusura dell'ultima seduta dell'orizzonte. Per uno short un prezzo sceso è un guadagno. " +
             "Senza leva e senza costi: il piano dimensiona la posizione sulla distanza dello stop, quindi due righe con lo stesso P/L possono valere guadagni diversi in conto — ed è per questo che R resta accanto."
           }
-        >
-          P/L
-        </HintLabel>
-      </span>
-      <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
-      <span className={cn(INTESTAZIONE, "hidden justify-self-end xl:block")}>
-        <HintLabel text="Sedute dall'ingresso alla chiusura della posizione.">Sedute</HintLabel>
-      </span>
-      <span className={INTESTAZIONE}>
-        <HintLabel
-          text={
-            "La gara disegnata nel tempo: a sinistra l'ingresso, a destra l'ultima seduta dell'orizzonte del segnale, e la barretta verticale è il giorno in cui la posizione si è chiusa. Quadrato = stop, cerchio = target, rombo = secondo target; pieno se toccato a posizione aperta, vuoto se dopo la chiusura. " +
-            "A sinistra della barretta non può esserci niente se non ciò che è successo nella stessa seduta: la posizione si chiude alla prima gamba toccata. Le posizioni sono in sedute, senza contare le festività: la data esatta è nel testo, passando sopra al disegno."
-          }
-        >
-          Sequenza
-        </HintLabel>
-      </span>
-      <span className={cn(INTESTAZIONE, "hidden lg:block")}>
-        {/* La prosa sta qui, una volta, e non su ogni riga: e' una
-            spiegazione, non un dato. Il dato — la data — resta a schermo. */}
-        <HintLabel
-          text={
-            "Le gambe toccate DOPO che la posizione si era chiusa, fino alla fine dell'orizzonte del segnale. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
-            "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito. " +
-            "«—» su un segnale chiuso da poco vuol dire «non ancora»: la finestra resta aperta fino alla fine dell'orizzonte."
-          }
-        >
-          Dopo chiusura
-        </HintLabel>
-      </span>
+          {...o}
+        />
+      )}
+      {vis("r") && <IntestazioneOrdinabile etichetta="R" chiave="r_multiple" className="justify-self-end" {...o} />}
+      {vis("sedute") && (
+        <IntestazioneOrdinabile
+          etichetta="Sedute"
+          chiave="bars_to_outcome"
+          className="hidden justify-self-end xl:block"
+          hint="Sedute dall'ingresso alla chiusura della posizione."
+          {...o}
+        />
+      )}
+      {vis("sequenza") && (
+        <span className={INTESTAZIONE}>
+          <HintLabel
+            text={
+              "La gara disegnata nel tempo: a sinistra l'ingresso, a destra l'ultima seduta dell'orizzonte del segnale, e la barretta verticale è il giorno in cui la posizione si è chiusa. Quadrato = stop, cerchio = target, rombo = secondo target; pieno se toccato a posizione aperta, vuoto se dopo la chiusura. " +
+              "A sinistra della barretta non può esserci niente se non ciò che è successo nella stessa seduta: la posizione si chiude alla prima gamba toccata. Le posizioni sono in sedute, senza contare le festività: la data esatta è nel testo, passando sopra al disegno."
+            }
+          >
+            Sequenza
+          </HintLabel>
+        </span>
+      )}
+      {vis("dopo") && (
+        <span className={cn(INTESTAZIONE, "hidden lg:block")}>
+          {/* La prosa sta qui, una volta, e non su ogni riga: e' una
+              spiegazione, non un dato. Il dato — la data — resta a schermo. */}
+          <HintLabel
+            text={
+              "Le gambe toccate DOPO che la posizione si era chiusa, fino alla fine dell'orizzonte del segnale. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
+              "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito. " +
+              "«—» su un segnale chiuso da poco vuol dire «non ancora»: la finestra resta aperta fino alla fine dell'orizzonte."
+            }
+          >
+            Dopo chiusura
+          </HintLabel>
+        </span>
+      )}
     </li>
   );
 }
 
 export function SignalOutcomeList({
-  righe, onApriSegnale,
+  righe, onApriSegnale, ordine, onOrdina, colonne,
 }: {
   righe: PlanOutcomeRow[];
   onApriSegnale?: (alertId: number) => void;
+  /** L'ordinamento attivo, e chi lo cambia. ⚠️ Lo fa il SERVER, sull'intera
+   *  popolazione filtrata: la lista e' paginata. */
+  ordine?: OrdineAttivo | null;
+  onOrdina?: (o: OrdineEsiti) => void;
+  /** Le colonne visibili, dallo stato che possiede la vista (e il bottone
+   *  «Colonne»). Assente: tutte, senza menu. */
+  colonne?: { isVisible: (id: string) => boolean; toggle: (id: string) => void };
 }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const vis: Visibile = colonne ? (id) => colonne.isVisible(id) : TUTTE;
   if (righe.length === 0) {
     return (
       <Card>
@@ -393,10 +497,34 @@ export function SignalOutcomeList({
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
-        <ul className="divide-y divide-border/40">
-          <Intestazione />
+        {colonne && (
+          <ColumnVisibilityMenu
+            columns={COLONNE_ESITI_NASCONDIBILI}
+            isVisible={colonne.isVisible}
+            toggle={colonne.toggle}
+            open={menu !== null}
+            onOpenChange={(v) => { if (!v) setMenu(null); }}
+            anchor={menu ?? { x: 0, y: 0 }}
+          />
+        )}
+        {/* Le tracce della griglia, per le colonne visibili: variabili CSS che
+            le righe ereditano dall'elenco. */}
+        <ul className="divide-y divide-border/40" style={trackEsiti(vis) as CSSProperties}>
+          <Intestazione
+            vis={vis}
+            ordine={ordine}
+            onOrdina={onOrdina}
+            onMenu={
+              colonne
+                ? (e) => {
+                    e.preventDefault();
+                    setMenu({ x: e.clientX, y: e.clientY });
+                  }
+                : undefined
+            }
+          />
           {righe.map((r) => (
-            <Riga key={r.alert_id} riga={r} onApri={onApriSegnale} />
+            <Riga key={r.alert_id} riga={r} onApri={onApriSegnale} vis={vis} />
           ))}
         </ul>
         {/* La legenda del disegno, a schermo e non in un suggerimento: un

@@ -17,7 +17,7 @@ Sola lettura, calcolato su richiesta.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -194,6 +194,26 @@ def _riga(esito: PlanOutcome, ticker: str, nome: str | None) -> dict:
     }
 
 
+#: Le colonne per cui la lista degli esiti si ordina, e la chiave di ciascuna.
+#:
+#: ⚠️ L'ordinamento si fa QUI, sull'intera popolazione filtrata, e non nel
+#: frontend: la lista e' paginata, e ordinare la sola pagina ricevuta
+#: metterebbe in cima il migliore di cinquanta righe spacciandolo per il
+#: migliore di trecento. Stessa regola del riassunto qui sotto.
+#:
+#: Il P/L si calcola come nel frontend (`plPercentuale`): `r_multiple × r /
+#: entry`, gia' col segno del guadagno per entrambi i versi.
+ORDINAMENTI_ESITI: dict[str, Callable[[PlanOutcome, str], object]] = {
+    "resolved_date": lambda e, _t: e.resolved_date,
+    "ticker": lambda _e, t: t or "",
+    "detector": lambda e, _t: e.detector,
+    "esito": lambda e, _t: e.esito,
+    "pl": lambda e, _t: (e.r_multiple * e.r / e.entry) if e.entry else 0.0,
+    "r_multiple": lambda e, _t: e.r_multiple,
+    "bars_to_outcome": lambda e, _t: e.bars_to_outcome,
+}
+
+
 def elenco_esiti_piano(
     db: Session,
     *,
@@ -204,6 +224,8 @@ def elenco_esiti_piano(
     limit: int = 50,
     offset: int = 0,
     min_n: int = _DEFAULT_MIN_N,
+    ordina: str | None = None,
+    verso: str = "desc",
 ) -> dict:
     """Gli esiti di piano, uno per segnale, i piu' recenti per primi.
 
@@ -246,6 +268,14 @@ def elenco_esiti_piano(
     if detector:
         righe = [r for r in righe if r[0].detector == detector]
     esiti = [r[0] for r in righe]
+
+    # L'ordine di partenza e' quello della query (chiusura piu' recente
+    # prima); `sort` e' STABILE anche con `reverse`, quindi a parita' di chiave
+    # le righe restano in quell'ordine invece di mescolarsi fra una pagina e
+    # la successiva.
+    if ordina in ORDINAMENTI_ESITI:
+        chiave = ORDINAMENTI_ESITI[ordina]
+        righe = sorted(righe, key=lambda r: chiave(r[0], r[1]), reverse=verso == "desc")
 
     riassunto = _cella("tutti", esiti, min_n) if esiti else None
     if riassunto is not None:

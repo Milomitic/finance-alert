@@ -197,3 +197,69 @@ def test_il_menu_delle_condizioni_non_si_svuota_selezionandone_una(db: Session) 
     # Controllo negativo: gli ALTRI filtri invece devono restringere anche il
     # menu, altrimenti mostrerebbe condizioni che non hanno nessuna riga.
     assert elenco_esiti_piano(db, esito="stop")["counts_by_detector"] == {}
+
+
+# ─── L'ordinamento (2026-09-22) ─────────────────────────────────────────────
+# Le colonne della lista Esiti si ordinano come quelle della tabella Segnali.
+# ⚠️ Sul server, sull'intera popolazione filtrata: ordinare la sola pagina
+# metterebbe in cima il migliore di cinquanta righe.
+
+
+def test_ordinare_per_R_attraversa_le_pagine(db: Session) -> None:
+    s = _titolo(db, "AAA")
+    for i, r in enumerate([0.5, 3.0, -1.0, 2.0, 1.0]):
+        _esito(db, s, r_mult=r, risolto=f"2026-03-1{i}")
+
+    prima = elenco_esiti_piano(db, ordina="r_multiple", verso="desc", limit=2)
+    seconda = elenco_esiti_piano(db, ordina="r_multiple", verso="desc", limit=2, offset=2)
+    assert [x["r_multiple"] for x in prima["items"]] == [3.0, 2.0]
+    assert [x["r_multiple"] for x in seconda["items"]] == [1.0, 0.5]
+    # E al contrario il peggiore viene primo.
+    su = elenco_esiti_piano(db, ordina="r_multiple", verso="asc", limit=1)
+    assert su["items"][0]["r_multiple"] == -1.0
+
+
+def test_il_pl_si_ordina_sul_prezzo_d_ingresso_non_sull_R(db: Session) -> None:
+    """Due righe con lo stesso R ma stop diversi hanno P/L diversi: e' la
+    ragione per cui il P/L e' una colonna a se'."""
+    s = _titolo(db, "AAA")
+    stretto = _esito(db, s, r_mult=2.0, risolto="2026-03-10")
+    largo = _esito(db, s, r_mult=2.0, risolto="2026-03-11")
+    largo.r = 10.0   # stop a 10 punti: +20% invece di +8%
+    db.flush()
+
+    dati = elenco_esiti_piano(db, ordina="pl", verso="desc")
+    assert [x["alert_id"] for x in dati["items"]] == [largo.alert_id, stretto.alert_id]
+
+
+def test_per_titolo_in_ordine_alfabetico(db: Session) -> None:
+    for t in ("MMM", "AAA", "ZZZ"):
+        _esito(db, _titolo(db, t))
+    dati = elenco_esiti_piano(db, ordina="ticker", verso="asc")
+    assert [x["ticker"] for x in dati["items"]] == ["AAA", "MMM", "ZZZ"]
+
+
+def test_senza_ordinamento_resta_la_chiusura_piu_recente(db: Session) -> None:
+    """Controllo negativo: il parametro nuovo non cambia il default."""
+    s = _titolo(db, "AAA")
+    _esito(db, s, r_mult=3.0, risolto="2026-03-01")
+    _esito(db, s, r_mult=0.1, risolto="2026-03-20")
+    dati = elenco_esiti_piano(db)
+    assert [x["r_multiple"] for x in dati["items"]] == [0.1, 3.0]
+
+
+def test_l_ordinamento_non_cambia_il_riassunto(db: Session) -> None:
+    s = _titolo(db, "AAA")
+    for r in (0.5, 3.0, -1.0):
+        _esito(db, s, r_mult=r)
+    a = elenco_esiti_piano(db)["summary"]
+    b = elenco_esiti_piano(db, ordina="r_multiple", verso="asc", limit=1)["summary"]
+    assert a == b
+
+
+def test_un_ordinamento_sconosciuto_e_un_400(client: TestClient) -> None:
+    r = client.get("/api/alerts/plan-outcomes?sort_by=forza")
+    assert r.status_code == 400
+    assert "r_multiple" in r.json()["detail"]
+    assert client.get("/api/alerts/plan-outcomes?sort_by=pl&sort_dir=su").status_code == 400
+    assert client.get("/api/alerts/plan-outcomes?sort_by=pl&sort_dir=asc").status_code == 200

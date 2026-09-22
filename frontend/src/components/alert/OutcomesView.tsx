@@ -7,12 +7,17 @@ import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { SignalOutcomeList } from "@/components/alert/SignalOutcomeList";
 import { SetupsView } from "@/components/setups/SetupsView";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
+import { ColumnVisibilityButton } from "@/components/ui/column-visibility-menu";
 import { MetricStrip, type MetricTileProps } from "@/components/ui/metric-tile";
 import { SchedePagina } from "@/components/ui/schede-pagina";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useAlert } from "@/hooks/useAlerts";
+import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { ESITI_PER_PAGINA, usePlanOutcomes } from "@/hooks/usePlanOutcomes";
+import {
+  COLONNE_ESITI_NASCONDIBILI, ordineDa, versoIniziale, type OrdineEsiti,
+} from "@/lib/colonneEsiti";
 import { ESITO_META, formatR } from "@/lib/planOutcome";
 import { detectorLabel } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
@@ -217,11 +222,18 @@ export function OutcomesView() {
     Number.isInteger(paginaUrl) && paginaUrl > 1 ? (paginaUrl - 1) * ESITI_PER_PAGINA : 0;
   const [signalId, setSignalId] = useState<number | null>(null);
   const signal = useAlert(signalId);
+  // L'ordinamento vive nell'URL come i filtri, cosi' un link lo porta con se'.
+  // Assente = la chiusura piu' recente prima, cioe' l'ordine del server.
+  const ordina = ordineDa(params.get("ordina"));
+  const direzione: "asc" | "desc" = params.get("direzione") === "asc" ? "asc" : "desc";
+  // Le colonne visibili: stesso meccanismo della tabella Segnali, chiave sua.
+  const colonne = useColumnVisibility("esiti", COLONNE_ESITI_NASCONDIBILI);
 
   const q = usePlanOutcomes(
     {
       esito: gara ?? undefined, detector: detector ?? undefined, tone, ticker,
       limit: ESITI_PER_PAGINA, offset,
+      sort_by: ordina ?? undefined, sort_dir: ordina ? direzione : undefined,
     },
     sotto === "segnali",
   );
@@ -239,6 +251,14 @@ export function OutcomesView() {
    *  mezzo di una popolazione diversa, senza che niente lo dica. */
   const cambiaPerimetro = (cambi: Record<string, string | null>) =>
     scrivi({ ...cambi, pagina: null });
+  /** Stessa colonna: si inverte il verso. Colonna nuova: parole dall'A,
+   *  numeri e date dal piu' grande. Torna alla prima pagina, come un filtro:
+   *  la quarta pagina di un altro ordine e' un'altra fetta. */
+  const ordinaPer = (col: OrdineEsiti) => {
+    const verso =
+      ordina === col ? (direzione === "desc" ? "asc" : "desc") : versoIniziale(col);
+    cambiaPerimetro({ ordina: col, direzione: verso });
+  };
 
   const righe = q.data?.items ?? [];
   const totale = q.data?.total ?? 0;
@@ -366,6 +386,13 @@ export function OutcomesView() {
                    righe in pagina: questa app ha gia' stampato «50 setup
                    chiusi» sopra una lista di 795. */
                 label={`Piani risolti — ${totale.toLocaleString("it-IT")}`}
+                right={
+                  <ColumnVisibilityButton
+                    columns={COLONNE_ESITI_NASCONDIBILI}
+                    isVisible={colonne.isVisible}
+                    toggle={colonne.toggle}
+                  />
+                }
               />
             </div>
             {q.isLoading ? (
@@ -381,7 +408,17 @@ export function OutcomesView() {
                 isRetrying={q.isFetching}
               />
             ) : (
-              <SignalOutcomeList righe={righe} onApriSegnale={setSignalId} />
+              <SignalOutcomeList
+                righe={righe}
+                onApriSegnale={setSignalId}
+                ordine={
+                  ordina
+                    ? { colonna: ordina, verso: direzione }
+                    : { colonna: "resolved_date", verso: "desc" }
+                }
+                onOrdina={ordinaPer}
+                colonne={colonne}
+              />
             )}
 
             {!q.isLoading && !q.isError && totale > ESITI_PER_PAGINA && (

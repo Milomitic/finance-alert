@@ -78,6 +78,9 @@ export interface PlanOutcomeParams {
   ticker?: string;
   limit?: number;
   offset?: number;
+  /** Una chiave di `ORDINAMENTI_ESITI` (backend) / `OrdineEsiti` (qui). */
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
 }
 
 export const planOutcomes = {

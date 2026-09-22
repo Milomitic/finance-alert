@@ -804,6 +804,8 @@ def plan_outcomes(
     ticker: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    sort_by: str | None = None,
+    sort_dir: str = "desc",
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> PlanOutcomeListOut:
@@ -830,9 +832,23 @@ def plan_outcomes(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="tone must be 'bull' or 'bear'",
         )
+    # Un ordinamento sconosciuto e' un errore, non un «ignoralo»: un link con
+    # un refuso mostrerebbe l'ordine predefinito facendolo passare per quello
+    # chiesto.
+    if sort_by is not None and sort_by not in plan_performance_service.ORDINAMENTI_ESITI:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"sort_by must be one of {sorted(plan_performance_service.ORDINAMENTI_ESITI)}",
+        )
+    if sort_dir not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort_dir must be 'asc' or 'desc'",
+        )
     dati = plan_performance_service.elenco_esiti_piano(
         db, esito=esito, detector=detector, tone=tone, ticker=ticker,
         limit=max(1, min(limit, 200)), offset=max(0, offset),
+        ordina=sort_by, verso=sort_dir,
     )
     return PlanOutcomeListOut(**dati)
 
