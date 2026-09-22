@@ -127,6 +127,26 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
 }
 
 
+#: Titoli TOLTI dal catalogo che un indice rimetterebbe dentro.
+#:
+#: ⚠️ Cancellare la riga non basta: `refresh_index` gira ogni sabato alle 03:00
+#: e ricrea qualunque costituente che Wikipedia elenca e che non trova in
+#: `stocks` — la stessa porta da cui BRK.B e BF.B sono tornati come zombie un
+#: mese dopo essere stati rinominati a mano (vedi `_normalize_ticker`). Una
+#: rimozione chiesta dall'utente deve quindi passare di qui, altrimenti dura
+#: fino al sabato successivo e poi si annulla in silenzio, a storia vuota.
+#:
+#: Chiave `(ticker, exchange)` DOPO la normalizzazione, cioe' la stessa del
+#: vincolo unico di `stocks`.
+ESCLUSI_DAL_CATALOGO: frozenset[tuple[str, str]] = frozenset({
+    # JD Sports Fashion, FTSE 100. Rimosso il 2026-09-22 su richiesta
+    # dell'utente; il backup delle sue righe e' in
+    # backend/data/catalog-removals/JD.L_2026-09-22.json.gz. NON e' il «JD» del
+    # NASDAQ, che e' JD.com e resta.
+    ("JD.L", "LSE"),
+})
+
+
 @dataclass
 class RefreshResult:
     index_code: str
@@ -279,6 +299,8 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
             if pd.isna(ticker_raw):
                 continue
             ticker, exchange = _normalize_ticker(ticker_raw, str(src["default_exchange"]))
+            if (ticker, exchange) in ESCLUSI_DAL_CATALOGO:
+                continue
             name_val = str(row.get(src["name_col"]) or ticker)
             sector_raw = (
                 str(row.get(src["sector_col"]))

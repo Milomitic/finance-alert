@@ -226,3 +226,39 @@ class TestIndexNamesFollowTheSource:
         _ensure_index(db, "DJI", "Dow Jones Industrial Average", "US")
 
         assert not db.dirty
+
+
+# ─── Esclusioni (2026-09-22) ────────────────────────────────────────────────
+# Un titolo tolto dal catalogo su richiesta dell'utente non deve tornare col
+# prossimo aggiornamento del sabato, che ricrea ogni costituente mancante.
+
+FTSE_TABLE = pd.DataFrame(
+    {
+        "Ticker": ["JD", "SHEL", "AZN"],
+        "Company": ["JD Sports", "Shell", "AstraZeneca"],
+        "FTSE industry classification benchmark sector[39]": ["Retail", "Oil", "Pharma"],
+    }
+)
+
+
+def test_un_titolo_escluso_non_torna_col_refresh(db: Session) -> None:
+    with patch("app.services.catalog_refresh_service._fetch_table", return_value=FTSE_TABLE):
+        result = refresh_index(db, "FTSE100")
+    db.commit()
+    assert result.status == "success"
+    tickers = {s.ticker for s in db.query(Stock).all()}
+    assert "JD.L" not in tickers
+    # Controllo negativo: gli altri costituenti della stessa tabella entrano,
+    # quindi l'esclusione e' di UN titolo e non ha spento l'indice.
+    assert {"SHEL.L", "AZN.L"} <= tickers
+    assert result.stocks_added == 2
+
+
+def test_l_esclusione_usa_la_chiave_normalizzata():
+    """«JD» nudo su Wikipedia diventa «JD.L» su LSE: e' quella la chiave che
+    deve stare nell'elenco, o l'esclusione non scatta mai."""
+    from app.services.catalog_refresh_service import ESCLUSI_DAL_CATALOGO, _normalize_ticker
+
+    assert _normalize_ticker("JD", "LSE") in ESCLUSI_DAL_CATALOGO
+    # E non tocca JD.com, che e' un'altra societa'.
+    assert _normalize_ticker("JD", "NASDAQ") not in ESCLUSI_DAL_CATALOGO
