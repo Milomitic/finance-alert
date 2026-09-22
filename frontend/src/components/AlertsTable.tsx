@@ -6,7 +6,7 @@ import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert, PlanBrief } from "@/api/types";
-import { AlertKindChip, AlertNatureCell, AlertToneCell } from "@/components/AlertChips";
+import { AlertKindChip, AlertNatureCell } from "@/components/AlertChips";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColumnVisibilityMenu } from "@/components/ui/column-visibility-menu";
@@ -35,13 +35,16 @@ import { cn } from "@/lib/utils";
  *  Checkbox + Titolo are always-on (identity + selection).
  *  The old single "Confidenza" column was split into "Forza" (pattern
  *  strength, tone-colored) + "Prob." (historical hit-rate, neutral). */
+/* ⚠️ «Tono» e «Catena» tolte il 2026-09-22 (richiesta dell'utente). Il tono
+ * lo porta gia' la pastiglia della Regola, nel colore e nell'icona — la
+ * stessa ragione per cui era gia' fuori dalla scheda del titolo — e la catena
+ * sta intera nel dettaglio del segnale, dove c'e' lo spazio per leggerla. Una
+ * preferenza salvata che le nascondeva resta nel localStorage e non fa niente. */
 const ALERTS_COLS = [
   { id: "data_segnale", label: "Data segnale" },
   { id: "rilevato",    label: "Rilevato" },
   { id: "regola",      label: "Regola" },
-  { id: "catena",      label: "Catena" },
   { id: "natura",      label: "Natura" },
-  { id: "tono",        label: "Tono" },
   { id: "orizzonte",   label: "Orizzonte" },
   { id: "forza",       label: "Forza" },
   { id: "probabilita", label: "Prob." },
@@ -95,6 +98,12 @@ interface Props {
   onArchiveToggle?: (alert: Alert) => void;
 }
 
+/** Le intestazioni della tabella, piu' piccole del corpo (2026-09-22,
+ *  richiesta dell'utente): erano a 1rem, piu' grandi delle righe che
+ *  nominano. Maiuscoletto spaziato, come le intestazioni degli Esiti.
+ *  `normal-case` sui bottoni non serve: l'`uppercase` si applica al testo. */
+const INTESTAZIONE = "text-[0.7059rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground";
+
 /** Small local sortable column header — same pattern as StockBrowserTable
  *  and BreadthMatrixTable but scoped to AlertsTable so we avoid an
  *  unrelated cross-component refactor. */
@@ -119,7 +128,8 @@ function SortableHeader({
   return (
     <th
       className={cn(
-        "px-3 py-1.5 text-base font-medium",
+        "px-3 py-1",
+        INTESTAZIONE,
         align === "right" ? "text-right" : "text-left",
       )}
     >
@@ -139,7 +149,7 @@ function SortableHeader({
             type="button"
             onClick={() => onSort(column)}
             className={cn(
-              "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+              "inline-flex items-center gap-1 uppercase hover:text-foreground transition-colors",
               active && "text-foreground",
             )}
           >
@@ -264,9 +274,7 @@ export function AlertsTable({
   const showRilevato = embedded || isVisible("rilevato");
   const showTitolo = !embedded;
   const showRegola = embedded || isVisible("regola");
-  const showCatena = !embedded && isVisible("catena");
   const showNatura = !embedded && isVisible("natura");
-  const showTono = !embedded && isVisible("tono");
   const showOrizzonte = embedded || isVisible("orizzonte");
   const showForza = embedded || isVisible("forza");
   const showProbabilita = embedded || isVisible("probabilita");
@@ -276,18 +284,22 @@ export function AlertsTable({
   // never in embedded mode — like the checkbox, it's an action, not data,
   // so it doesn't participate in the column-visibility menu.
   const showArchive = !embedded && !!onArchiveToggle;
+  // Le intestazioni ridotte valgono per la PAGINA Segnali. La scheda del
+  // titolo (embedded) ha gia' le sue, a 13,5px dalla classe della tabella, e
+  // non e' stata chiesta: resta com'era.
+  const TESTA = embedded ? "text-base" : INTESTAZIONE;
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
     showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
-    showCatena, showNatura, showTono, showOrizzonte, showForza, showProbabilita,
+    showNatura, showOrizzonte, showForza, showProbabilita,
     showEsito, showPiano, showArchive,
   ].filter(Boolean).length;
 
-  // Per user spec: header cells at 1rem (text-base), body rows at
-  // 0.875rem (text-sm) — uniform across all cells. Table root sits at
-  // text-sm so every body cell inherits without per-cell overrides;
-  // each <TableHead> bumps to text-base for the header band only.
+  // Corpo a 0.875rem (text-sm), intestazioni PIU' PICCOLE (`INTESTAZIONE`):
+  // erano a 1rem per una richiesta vecchia, e il 2026-09-22 l'utente le ha
+  // chieste ridotte. E righe piu' basse: `py-1` sulle celle e pastiglia della
+  // regola compatta, perche' e' la cella piu' alta a decidere l'altezza.
   return (
     <>
       {/* Column-visibility context menu (non-embedded only) */}
@@ -301,13 +313,13 @@ export function AlertsTable({
           anchor={menuAnchor}
         />
       )}
-      <Table className={embedded ? "text-[13.5px] [&_td]:py-0.5 [&_td]:px-2 [&_th]:h-7 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm"}>
+      <Table className={embedded ? "text-[13.5px] [&_td]:py-0.5 [&_td]:px-2 [&_th]:h-7 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm [&_td]:py-1 [&_th]:h-8"}>
       <TableHeader>
         {/* Right-click anywhere on the header row opens the column-visibility
             menu (non-embedded only). The menu positions itself at the cursor. */}
         <TableRow onContextMenu={embedded ? undefined : openColumnMenu}>
           {showCheckbox && (
-            <TableHead className="w-8 text-base">
+            <TableHead className="w-8">
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={(checked) => onSelectAll(!!checked)}
@@ -325,7 +337,7 @@ export function AlertsTable({
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" hint="Data della barra di mercato in cui la regola è scattata">
+              <TableHead className={TESTA} hint="Data della barra di mercato in cui la regola è scattata">
                 Data segnale
               </TableHead>
             )
@@ -341,7 +353,7 @@ export function AlertsTable({
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base" hint="Quando il sistema ha registrato il segnale">
+              <TableHead className={TESTA} hint="Quando il sistema ha registrato il segnale">
                 Rilevato
               </TableHead>
             )
@@ -351,13 +363,13 @@ export function AlertsTable({
                like the dashboard cards. Holds the inline ticker/name search.
                Always visible — identity column. */
             onSort ? (
-              <th className="px-3 py-1.5 text-base text-left font-medium">
+              <th className={cn("px-3 py-1 text-left", INTESTAZIONE)}>
                 <div className="flex items-center gap-2 min-w-0">
                   <button
                     type="button"
                     onClick={() => onSort("ticker")}
                     className={cn(
-                      "inline-flex items-center gap-1 hover:text-foreground transition-colors shrink-0",
+                      "inline-flex items-center gap-1 uppercase hover:text-foreground transition-colors shrink-0",
                       sortBy === "ticker" && "text-foreground",
                     )}
                   >
@@ -376,7 +388,7 @@ export function AlertsTable({
                 </div>
               </th>
             ) : (
-              <TableHead className="text-base">
+              <TableHead className={TESTA}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="shrink-0">Titolo</span>
                   <TableSearchInput
@@ -391,23 +403,15 @@ export function AlertsTable({
             )
           )}
           {showRegola && (
-            <TableHead className="text-base">Regola</TableHead>
-          )}
-          {showCatena && (
-            <TableHead className="text-base">Catena</TableHead>
+            <TableHead className={TESTA}>Regola</TableHead>
           )}
           {showNatura && (
-            <TableHead className="text-base" hint="Natura del segnale: continuazione del trend o inversione">
+            <TableHead className={TESTA} hint="Natura del segnale: continuazione del trend o inversione">
               Natura
             </TableHead>
           )}
-          {showTono && (
-            <TableHead className="text-base" hint="Direzione semantica del segnale (rialzista / ribassista / neutra)">
-              Tono
-            </TableHead>
-          )}
           {showOrizzonte && (
-            <TableHead className="text-base" hint="Orizzonte temporale del segnale (breve / medio / lungo)">
+            <TableHead className={TESTA} hint="Orizzonte temporale del segnale (breve / medio / lungo)">
               Orizzonte
             </TableHead>
           )}
@@ -423,7 +427,7 @@ export function AlertsTable({
                 onSort={onSort}
               />
             ) : (
-              <TableHead className="text-base text-right" hint="Forza del pattern (0-100)">
+              <TableHead className={cn(TESTA, "text-right")} hint="Forza del pattern (0-100)">
                 Forza
               </TableHead>
             )
@@ -436,13 +440,13 @@ export function AlertsTable({
               that read as "best signals first" and was nothing of the kind.
               The "Tipo segnale" filter selects detectors properly. */}
           {showProbabilita && (
-            <TableHead className="text-base text-right" hint={PROBABILITA_TOOLTIP}>
+            <TableHead className={cn(TESTA, "text-right")} hint={PROBABILITA_TOOLTIP}>
               Prob.
             </TableHead>
           )}
           {showEsito && (
             <TableHead
-              className="text-base"
+              className={TESTA}
               hint="La DIREZIONE ha pagato all'orizzonte del detector: verde = azzeccata, rosso = mancata, … = in attesa dell'orizzonte, «Fermo» = la serie prezzi del titolo non avanza più e l'orizzonte non potrà mai completarsi. ⚠️ Non dice niente su stop e target: quella è la colonna «Piano» qui accanto, e le due possono discordare — un segnale può prendere il target in tre sedute e finire l'orizzonte sotto il prezzo d'ingresso."
             >
               Direzione
@@ -450,7 +454,7 @@ export function AlertsTable({
           )}
           {showPiano && (
             <TableHead
-              className="text-base"
+              className={TESTA}
               hint="Quale fra stop e target il prezzo ha toccato per PRIMO, con il guadagno in multipli di R (R = la distanza dello stop). L'ESITO è quello della gara, perché una posizione con quel target aveva anche uno stop: contare i soli tocchi darebbe un tasso che non corrisponde a nessun guadagno. Ma ogni tocco viene REGISTRATO comunque — la data del primo tocco di stop, 1° e 2° target su tutto l'orizzonte, anche dopo la chiusura — ed è da lì che la scheda Esiti conta gli «stop troppo stretti». Passa sulla cella per la sequenza. «—» quando il detector non emetteva un livello di invalidazione, o quando la gara non si è ancora chiusa."
             >
               Piano
@@ -458,7 +462,7 @@ export function AlertsTable({
           )}
           {showArchive && (
             /* Action column — empty header, fixed narrow width. */
-            <TableHead className="w-10 text-base" aria-label="Azioni" />
+            <TableHead className="w-10" aria-label="Azioni" />
           )}
         </TableRow>
       </TableHeader>
@@ -544,14 +548,18 @@ export function AlertsTable({
             {showTitolo && (
               /* Titolo cell: always visible (identity column). */
               <TableCell>
+                {/* Ticker e nome sulla STESSA riga (2026-09-22, richiesta
+                    dell'utente): su due righe erano la cella piu' alta della
+                    tabella. Il nome cede per primo — `truncate`, `min-w-0` — e
+                    il ticker, che e' l'identita', non si stringe mai. */}
                 <div className="flex items-center gap-2 min-w-0">
                   <StockLogo ticker={a.ticker ?? ""} size="xs" />
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-baseline gap-1.5">
                     {a.ticker ? (
                       <Link
                         to={`/stocks/${encodeURIComponent(a.ticker)}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-semibold hover:underline block leading-tight"
+                        className="shrink-0 font-semibold hover:underline leading-tight"
                         title={`Vai al dettaglio di ${a.ticker}`}
                       >
                         {a.ticker}
@@ -560,12 +568,12 @@ export function AlertsTable({
                       <span className="font-semibold">—</span>
                     )}
                     {a.name && (
-                      <div
-                        className="text-xs text-muted-foreground truncate max-w-[200px] leading-tight"
+                      <span
+                        className="min-w-0 truncate text-xs text-muted-foreground max-w-[220px] leading-tight"
                         title={a.name}
                       >
                         {a.name}
-                      </div>
+                      </span>
                     )}
                   </div>
                 </div>
@@ -573,40 +581,15 @@ export function AlertsTable({
             )}
             {showRegola && (
               <TableCell>
-                {/* Embedded: chip piu' piccolo e piu' basso. E' la cella piu'
-                    alta della riga, quindi e' lei a decidere l'altezza delle
-                    righe della scheda segnali. Classi letterali: il purger. */}
-                <AlertKindChip
-                  alert={a}
-                  className={embedded ? "px-1.5 py-0.5 text-[0.7647rem]" : undefined}
-                />
-              </TableCell>
-            )}
-            {showCatena && (
-              <TableCell className="max-w-[260px]">
-                {(() => {
-                  const chain = (a.snapshot as Record<string, unknown> | undefined)?.chain;
-                  if (!Array.isArray(chain) || chain.length === 0) {
-                    return <span className="text-muted-foreground">—</span>;
-                  }
-                  const labels = (chain as { label?: string }[]).map((s) => s.label ?? "").filter(Boolean);
-                  const summary = labels.join(" → ");
-                  return (
-                    <span className="text-xs text-muted-foreground truncate block" title={summary}>
-                      {summary}
-                    </span>
-                  );
-                })()}
+                {/* Chip compatto ovunque (dal 2026-09-22 anche nella pagina):
+                    e' la cella piu' alta della riga, quindi e' lei a decidere
+                    l'altezza delle righe. Classi letterali: il purger. */}
+                <AlertKindChip alert={a} className="px-1.5 py-0.5 text-[0.7647rem]" />
               </TableCell>
             )}
             {showNatura && (
               <TableCell>
                 <AlertNatureCell alert={a} size="sm" />
-              </TableCell>
-            )}
-            {showTono && (
-              <TableCell>
-                <AlertToneCell alert={a} />
               </TableCell>
             )}
             {/* Orizzonte — temporal horizon of the signal (breve/medio/lungo),
