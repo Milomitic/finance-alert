@@ -14,6 +14,7 @@ import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useFlipList } from "@/hooks/useFlipList";
 import { projectVolRatio } from "@/lib/intradayVolume";
+import { completaMover, daLiveMover } from "@/lib/liveMovers";
 import { cn } from "@/lib/utils";
 import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtVolume } from "@/lib/volumeFormat";
@@ -141,7 +142,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
     const rawVol = m.vol_today ?? null;
     // Only US-session names follow the projection curve; HK/EU bars are
     // already a full day at snapshot time → show them as-is.
-    const proj = isUS ? projectVolRatio(m.vol_ratio ?? null, computedAt) : null;
+    const proj = isUS ? projectVolRatio(m.vol_ratio ?? null, m.vol_as_of ?? computedAt) : null;
     if (proj?.projected && proj.fraction > 0) {
       volValue = rawVol != null ? Math.round(rawVol / proj.fraction) : null;
       volEstimated = true;
@@ -345,15 +346,9 @@ export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
   const liveUniQ = useLiveUniverseMovers(isLive);
   const liveUniverseMovers = useMemo<Mover[]>(() => {
     if (!isLive || !liveUniQ.data) return [];
-    return [...liveUniQ.data.gainers, ...liveUniQ.data.losers].map((lm) => ({
-      ticker: lm.ticker,
-      name: lm.name ?? lm.ticker,
-      index: null,
-      sector: null,
-      change_pct: lm.change_pct,
-      last_close: lm.price ?? 0,
-      prev_close: null,
-    }));
+    // Con volume, moltiplicatore e punteggio: senza, queste righe erano le
+    // uniche a mostrare «—» nelle ultime colonne. Vedi `lib/liveMovers.ts`.
+    return [...liveUniQ.data.gainers, ...liveUniQ.data.losers].map(daLiveMover);
   }, [isLive, liveUniQ.data]);
 
   // Live candidate pool: the union of EVERY EOD mover list — not just
@@ -439,7 +434,6 @@ export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
     // moves intraday can climb into the displayed list. Effective
     // change = live ?? EOD fallback. (Price overlay is applied in the
     // row render; sorting is by change_pct only.)
-    const seen = new Set<string>();
     const pool: Mover[] = [];
     const freshPool: Mover[] = [];
     const lists: (Mover[] | undefined)[] = [
@@ -457,15 +451,24 @@ export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
       // day they didn't make the EOD top-N.
       movers.high_beta,
     ];
+    // Un titolo per riga, nell'ordine della prima lista in cui compare. ⚠️ Le
+    // copie successive non si SCARTANO: completano la prima con cio' che le
+    // manca. Il giro live viene letto per primo e porta la variazione di
+    // oggi; le liste di fine giornata portano settore, indice, sparkline — e
+    // prima venivano buttate, lasciando la riga senza.
+    const unici = new Map<string, Mover>();
     for (const list of lists) {
       for (const m of list ?? []) {
-        if (!m || !m.ticker || seen.has(m.ticker)) continue;
-        seen.add(m.ticker);
-        const overlay = liveMap.get(m.ticker);
-        pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
-        if (overlay?.fresh) {
-          freshPool.push({ ...m, change_pct: overlay.change_pct });
-        }
+        if (!m || !m.ticker) continue;
+        const gia = unici.get(m.ticker);
+        unici.set(m.ticker, gia ? completaMover(gia, m) : m);
+      }
+    }
+    for (const m of unici.values()) {
+      const overlay = liveMap.get(m.ticker);
+      pool.push(overlay != null ? { ...m, change_pct: overlay.change_pct } : m);
+      if (overlay?.fresh) {
+        freshPool.push({ ...m, change_pct: overlay.change_pct });
       }
     }
     // While the session is OPEN, rank ONLY rows with TODAY's data: at the

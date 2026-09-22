@@ -568,6 +568,10 @@ export interface Mover {
   /** Listing exchange (NASDAQ / NYSE / HKEX / ...). The movers card scopes
    *  the intraday volume projection to US-session exchanges only. */
   exchange?: string | null;
+  /** Quando e' stato letto `vol_today`, se NON e' l'ora dell'istantanea di
+   *  mercato: le righe del giro live lo portano, perche' il loro volume e'
+   *  della sessione in corso e va proiettato a quell'istante. */
+  vol_as_of?: string | null;
 }
 
 export interface VolumeSpike extends Mover {

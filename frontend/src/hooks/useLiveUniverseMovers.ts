@@ -7,6 +7,15 @@ export interface LiveMover {
   name: string | null;
   change_pct: number;
   price: number | null;
+  /** Volume della sessione, dalla quotazione live. Opzionali tutti e cinque:
+   *  una risposta di un backend precedente non li porta. */
+  vol_today?: number | null;
+  /** `vol_today` / media a 20 sedute, PARZIALE a mercato aperto. */
+  vol_ratio?: number | null;
+  composite?: number | null;
+  exchange?: string | null;
+  /** Istante della quotazione (ISO, UTC): il riferimento della proiezione. */
+  as_of?: string | null;
 }
 export interface LiveMoversResponse {
   gainers: LiveMover[];

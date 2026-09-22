@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.models import Stock, User
+from app.models import Stock, StockMetrics, StockScore, User
 from app.schemas.market import MarketSummaryOut
 from app.schemas.stock_detail import LiveQuoteOut
 from app.services import (
@@ -31,6 +31,22 @@ class LiveMoverOut(BaseModel):
     name: str | None = None
     change_pct: float
     price: float | None = None
+    # ⚠️ Le stesse colonne delle righe di fine giornata, perche' il «Top
+    # movers» le mette nella STESSA tabella. Senza, un titolo che entrava in
+    # classifica dal giro live mostrava «—» su volume e punteggio — proprio
+    # quelli che si muovono di piu' oggi (2026-09-22).
+    #: Volume della sessione in corso, dalla quotazione live.
+    vol_today: int | None = None
+    #: `vol_today` / media a 20 sedute (`stock_metrics.vol_avg_20`). PARZIALE
+    #: a mercato aperto: la proiezione a fine giornata la fa il frontend,
+    #: all'istante `as_of`.
+    vol_ratio: float | None = None
+    #: Ultimo punteggio composito persistito.
+    composite: float | None = None
+    exchange: str | None = None
+    #: Quando e' stata letta la quotazione (UTC): il riferimento della
+    #: proiezione del volume, che NON e' l'ora dell'istantanea di mercato.
+    as_of: datetime | None = None
 
 
 class LiveMoversOut(BaseModel):
@@ -51,18 +67,34 @@ def get_live_movers(
     quotes (a few ticks after boot during market hours)."""
     data = live_universe_sweep_service.get_live_movers()
     tickers = {r["ticker"] for r in data["gainers"]} | {r["ticker"] for r in data["losers"]}
-    name_map = dict(
-        db.execute(select(Stock.ticker, Stock.name).where(Stock.ticker.in_(tickers))).all()
-    ) if tickers else {}
+    # Una query per tutte le righe: anagrafica, media dei volumi, punteggio.
+    # OUTER join perche' a un titolo appena entrato possono mancare metriche o
+    # punteggio, e allora quella cella resta «—» invece di sparire la riga.
+    info = {
+        t: (nome, borsa, media, punteggio)
+        for t, nome, borsa, media, punteggio in db.execute(
+            select(Stock.ticker, Stock.name, Stock.exchange,
+                   StockMetrics.vol_avg_20, StockScore.composite)
+            .outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id)
+            .outerjoin(StockScore, StockScore.stock_id == Stock.id)
+            .where(Stock.ticker.in_(tickers))
+        ).all()
+    } if tickers else {}
 
     def _rows(rows: list[dict]) -> list[LiveMoverOut]:
-        return [
-            LiveMoverOut(
-                ticker=r["ticker"], name=name_map.get(r["ticker"]),
+        out = []
+        for r in rows:
+            nome, borsa, media, punteggio = info.get(r["ticker"], (None, None, None, None))
+            vol = r.get("volume")
+            out.append(LiveMoverOut(
+                ticker=r["ticker"], name=nome,
                 change_pct=r["change_pct"], price=r.get("price"),
-            )
-            for r in rows
-        ]
+                vol_today=vol,
+                vol_ratio=(vol / media) if vol is not None and media else None,
+                composite=punteggio, exchange=borsa,
+                as_of=datetime.fromtimestamp(r["ts"], UTC) if r.get("ts") else None,
+            ))
+        return out
 
     return LiveMoversOut(
         gainers=_rows(data["gainers"]), losers=_rows(data["losers"]), swept=data["swept"]

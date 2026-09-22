@@ -31,7 +31,7 @@ from app.core.config import settings
 from app.core.visibility import visible_country_clause
 from app.models import Stock
 
-# ticker -> {"change_pct": float, "price": float | None, "ts": epoch}
+# ticker -> {"change_pct": float, "price": float | None, "volume": int | None, "ts": epoch}
 _CHANGE: dict[str, dict[str, Any]] = {}
 _ROT = {"idx": 0}
 _LOCK = Lock()
@@ -64,7 +64,15 @@ def record_quotes(quotes: dict[str, Any]) -> int:
             chg = getattr(q, "change_pct", None)
             if err is not None or price is None or chg is None:
                 continue
-            _CHANGE[tk] = {"change_pct": float(chg), "price": float(price), "ts": now}
+            # Il volume della sessione, se la quotazione lo porta: senza, la
+            # riga del «Top movers» restava a «—» su volume e moltiplicatore
+            # proprio per i titoli che si muovono di piu' oggi.
+            vol = getattr(q, "volume", None)
+            _CHANGE[tk] = {
+                "change_pct": float(chg), "price": float(price),
+                "volume": int(vol) if isinstance(vol, int | float) and vol >= 0 else None,
+                "ts": now,
+            }
             n += 1
     return n
 
@@ -76,14 +84,17 @@ def get_live_movers(top_n: int | None = None) -> dict[str, Any]:
     ttl = settings.live_movers_stale_seconds
     with _LOCK:
         fresh = [
-            (tk, d["change_pct"], d.get("price"))
+            (tk, d["change_pct"], d.get("price"), d.get("volume"), d["ts"])
             for tk, d in _CHANGE.items()
             if now - d["ts"] <= ttl
         ]
     gainers = sorted((x for x in fresh if x[1] > 0), key=lambda x: x[1], reverse=True)[:top_n]
     losers = sorted((x for x in fresh if x[1] < 0), key=lambda x: x[1])[:top_n]
     def _fmt(rows):
-        return [{"ticker": tk, "change_pct": round(c, 2), "price": p} for tk, c, p in rows]
+        return [
+            {"ticker": tk, "change_pct": round(c, 2), "price": p, "volume": v, "ts": ts}
+            for tk, c, p, v, ts in rows
+        ]
     return {"gainers": _fmt(gainers), "losers": _fmt(losers), "swept": len(fresh)}
 
 

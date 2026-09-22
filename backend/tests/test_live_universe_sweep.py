@@ -163,3 +163,62 @@ def test_a_closed_market_we_already_hold_is_left_alone(db):
         has_value=lambda t: True,          # already held
     )
     assert seen == [], "nothing is open and nothing is missing — no reason to fetch"
+
+
+# ─── Le colonne del «Top movers» (2026-09-22) ───────────────────────────────
+# Le righe che entrano in classifica dal giro live mostravano «—» su volume,
+# moltiplicatore e punteggio: la quotazione portava solo prezzo e variazione.
+
+
+def _qv(change_pct, volume, price=10.0):
+    return SimpleNamespace(change_pct=change_pct, price=price, error=None, volume=volume)
+
+
+def test_il_volume_della_sessione_viene_registrato():
+    sweep.record_quotes({"AAA": _qv(8.0, 1_500_000), "BBB": _qv(-3.0, None)})
+    m = sweep.get_live_movers(top_n=5)
+    assert m["gainers"][0]["volume"] == 1_500_000
+    assert m["losers"][0]["volume"] is None
+    assert m["gainers"][0]["ts"] > 0
+
+
+def test_l_endpoint_porta_volume_moltiplicatore_e_punteggio(db, monkeypatch):
+    from datetime import UTC, datetime
+
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_user, get_db
+    from app.main import app
+    from app.models import StockMetrics, StockScore, User
+
+    s = Stock(ticker="WBD", exchange="NASDAQ", name="Warner Bros. Discovery", country="US")
+    nudo = Stock(ticker="NEW", exchange="NYSE", name="Appena entrato", country="US")
+    db.add_all([s, nudo])
+    db.flush()
+    db.add(StockMetrics(stock_id=s.id, computed_at=datetime.now(UTC), vol_avg_20=1_000_000.0))
+    db.add(StockScore(stock_id=s.id, composite=72.5, risk_tier="medium",
+                      computed_at=datetime.now(UTC), breakdown="{}"))
+    user = User(username="admin", password_hash="x")
+    db.add(user)
+    db.commit()
+    sweep.record_quotes({"WBD": _qv(10.8, 2_500_000), "NEW": _qv(6.0, 300_000)})
+
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        r = TestClient(app).get("/api/dashboard/live-movers")
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200, r.text
+    righe = {x["ticker"]: x for x in r.json()["gainers"]}
+    wbd = righe["WBD"]
+    assert wbd["vol_today"] == 2_500_000
+    assert wbd["vol_ratio"] == 2.5
+    assert wbd["composite"] == 72.5
+    assert wbd["exchange"] == "NASDAQ"
+    assert wbd["as_of"] is not None
+    # Senza metriche ne' punteggio la riga resta, con le celle vuote: non
+    # sparisce e non inventa una media.
+    assert righe["NEW"]["vol_today"] == 300_000
+    assert righe["NEW"]["vol_ratio"] is None
+    assert righe["NEW"]["composite"] is None
