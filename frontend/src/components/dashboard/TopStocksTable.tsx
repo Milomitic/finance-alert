@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { TopStock } from "@/api/types";
+import { Abbreviato } from "@/components/AlertChips";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import {
   Table,
@@ -11,6 +12,7 @@ import {
 import {
   NATURE_BG,
   NATURE_LABEL,
+  NATURE_SHORT,
   TONE_BG,
   getAlertKindMeta,
   signalNature,
@@ -85,17 +87,20 @@ export function TopStocksTable({ data }: Props) {
                   </Link>
                 </TableCell>
                 {/* Natura cell: continuazione / inversione chip, mirroring
-                    the dashboard FEED + alerts-page Natura column. */}
+                    the dashboard FEED + alerts-page Natura column. Solo
+                    l'iniziale dal 2026-09-22 (richiesta dell'utente): la
+                    legenda sta nel suggerimento dell'intestazione «Top
+                    stocks», il nome intero nel nome accessibile. */}
                 <TableCell className="py-2">
                   {nature ? (
                     <span
                       className={cn(
-                        "inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
+                        "inline-flex min-w-5 items-center justify-center rounded px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap",
                         NATURE_BG[nature],
                       )}
                       title={`Natura del segnale: ${NATURE_LABEL[nature].toLowerCase()}`}
                     >
-                      {NATURE_LABEL[nature]}
+                      <Abbreviato breve={NATURE_SHORT[nature]} intero={NATURE_LABEL[nature]} />
                     </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>
@@ -113,7 +118,7 @@ export function TopStocksTable({ data }: Props) {
                       title={`Regola più frequente: ${meta.label}`}
                     >
                       <Icon className="h-3 w-3 shrink-0" />
-                      {meta.label}
+                      <Abbreviato breve={meta.short} intero={meta.label} />
                     </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>

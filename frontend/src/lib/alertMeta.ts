@@ -22,6 +22,9 @@ export type AlertTone = "bullish" | "bearish" | "warning" | "neutral";
 export interface AlertKindMeta {
   /** Human-readable label shown in chips and table cells. */
   label: string;
+  /** La stessa etichetta ABBREVIATA, per le tabelle dense della home. Mai da
+   *  sola: chi la rende mette `label` nel nome accessibile e nel suggerimento. */
+  short: string;
   /** Lucide icon. Picked to match the indicator's directional meaning. */
   icon: LucideIcon;
   /** Semantic tone — drives the chip background / accent color. */
@@ -37,14 +40,11 @@ export function getAlertKindMeta(rule_kind: string | null | undefined): AlertKin
   // direction - that lives in the per-alert snapshot, which kind-only
   // callers (Top Stocks aggregate, Settings perf table) do not have.
   if (isSignalKind(rule_kind)) {
-    const { label, icon } = signalMeta(rule_kind as string);
-    return { label, icon, tone: "neutral" };
+    const { label, short, icon } = signalMeta(rule_kind as string);
+    return { label, short, icon, tone: "neutral" };
   }
-  return {
-    label: rule_kind ?? "Price alert",
-    icon: Bell,
-    tone: "neutral",
-  };
+  const label = rule_kind ?? "Price alert";
+  return { label, short: label, icon: Bell, tone: "neutral" };
 }
 
 /** True when the alert kind is a signal-engine kind ("signal:<name>"). */
@@ -53,30 +53,42 @@ export function isSignalKind(rule_kind: string | null | undefined): boolean {
 }
 
 /** Friendly label + icon per signal detector name (the part after "signal:").
- *  Tone is NOT here - it comes from the snapshot's bull/bear field. */
-const SIGNAL_META: Record<string, { label: string; icon: LucideIcon }> = {
-  volume_breakout: { label: "Volume Breakout", icon: Zap },
-  trend_pullback: { label: "Trend + Pullback", icon: TrendingUp },
-  rsi_divergence: { label: "Divergenza RSI", icon: Activity },
-  squeeze_expansion: { label: "Squeeze + Espansione", icon: ChevronsUp },
-  high52_momentum: { label: "Massimo 52 settimane", icon: ArrowUpToLine },
-  gap_and_go: { label: "Gap and Go", icon: Zap },
-  adx_confirmation: { label: "Conferma ADX", icon: Activity },
-  sr_flip: { label: "Flip S/R", icon: Activity },
-  structure_break: { label: "Rottura struttura", icon: ChevronsUp },
-  hidden_divergence: { label: "Divergenza nascosta", icon: Activity },
-  pead: { label: "Drift post-utili", icon: Zap },
-  analyst_momentum: { label: "Momentum analisti", icon: TrendingUp },
-  macd_divergence: { label: "Divergenza MACD", icon: Activity },
-  oversold_reversal: { label: "Inversione ipervenduto", icon: Activity },
-  candle_reversal: { label: "Inversione a candela", icon: Activity },
-  insider_buy: { label: "Acquisti insider", icon: TrendingUp },
-  chart_pattern: { label: "Pattern grafico", icon: Activity },
+ *  Tone is NOT here - it comes from the snapshot's bull/bear field.
+ *
+ *  `short` e' la forma per le tabelle dense della home (2026-09-22, richiesta
+ *  dell'utente): tre colonne affiancate, e la regola e' la cella che si
+ *  prendeva piu' spazio. ⚠️ E' un'ABBREVIAZIONE, non un altro nome: chi la
+ *  rende tiene `label` come nome accessibile, altrimenti un lettore di schermo
+ *  pronuncerebbe «Max punto 52 sett punto». */
+const SIGNAL_META: Record<string, { label: string; short: string; icon: LucideIcon }> = {
+  volume_breakout: { label: "Volume Breakout", short: "Breakout vol.", icon: Zap },
+  trend_pullback: { label: "Trend + Pullback", short: "Trend + Pull", icon: TrendingUp },
+  rsi_divergence: { label: "Divergenza RSI", short: "Div. RSI", icon: Activity },
+  squeeze_expansion: { label: "Squeeze + Espansione", short: "Squeeze + Esp.", icon: ChevronsUp },
+  high52_momentum: { label: "Massimo 52 settimane", short: "Max. 52 sett.", icon: ArrowUpToLine },
+  gap_and_go: { label: "Gap and Go", short: "Gap & Go", icon: Zap },
+  adx_confirmation: { label: "Conferma ADX", short: "Conf. ADX", icon: Activity },
+  sr_flip: { label: "Flip S/R", short: "Flip S/R", icon: Activity },
+  structure_break: { label: "Rottura struttura", short: "Rott. strutt.", icon: ChevronsUp },
+  hidden_divergence: { label: "Divergenza nascosta", short: "Div. nascosta", icon: Activity },
+  pead: { label: "Drift post-utili", short: "Drift utili", icon: Zap },
+  analyst_momentum: { label: "Momentum analisti", short: "Mom. analisti", icon: TrendingUp },
+  macd_divergence: { label: "Divergenza MACD", short: "Div. MACD", icon: Activity },
+  oversold_reversal: { label: "Inversione ipervenduto", short: "Inv. ipervend.", icon: Activity },
+  candle_reversal: { label: "Inversione a candela", short: "Inv. candela", icon: Activity },
+  insider_buy: { label: "Acquisti insider", short: "Acq. insider", icon: TrendingUp },
+  chart_pattern: { label: "Pattern grafico", short: "Pattern", icon: Activity },
 };
 
-function signalMeta(rule_kind: string): { label: string; icon: LucideIcon } {
+/** I detector con un'etichetta: esportato per il censimento nei test. */
+export const SIGNAL_NAMES = Object.keys(SIGNAL_META);
+
+function signalMeta(rule_kind: string): { label: string; short: string; icon: LucideIcon } {
   const name = rule_kind.slice("signal:".length);
-  return SIGNAL_META[name] ?? { label: name.replace(/_/g, " "), icon: Bell };
+  const nota = SIGNAL_META[name];
+  if (nota) return nota;
+  const label = name.replace(/_/g, " ");
+  return { label, short: label, icon: Bell };
 }
 
 /** Get metadata for an alert as a whole — for SIGNAL alerts it derives label
@@ -96,24 +108,24 @@ function signalMeta(rule_kind: string): { label: string; icon: LucideIcon } {
  *  rule-name dropdown in AlertFilters). */
 export function getAlertMeta(alert: Alert): AlertKindMeta {
   if (isSignalKind(alert.rule_kind)) {
-    const { label, icon } = signalMeta(alert.rule_kind as string);
+    const { label, short, icon } = signalMeta(alert.rule_kind as string);
     const snapTone = (alert.snapshot as Record<string, unknown> | undefined)?.tone;
     const tone: AlertTone =
       snapTone === "bull" ? "bullish" : snapTone === "bear" ? "bearish" : "neutral";
-    return { label, icon, tone };
+    return { label, short, icon, tone };
   }
   // Price alert — read direction from the snapshot dict the backend
   // wrote (`backend/app/services/price_alert_service.py`).
   const direction =
     (alert.snapshot as Record<string, unknown> | undefined)?.direction;
   if (direction === "above") {
-    return { label: "Price target ↑", icon: TrendingUp, tone: "bullish" };
+    return { label: "Price target ↑", short: "Target ↑", icon: TrendingUp, tone: "bullish" };
   }
   if (direction === "below") {
-    return { label: "Price target ↓", icon: TrendingDown, tone: "bearish" };
+    return { label: "Price target ↓", short: "Target ↓", icon: TrendingDown, tone: "bearish" };
   }
   // Truly unknown (legacy rows without snapshot): keep the generic label.
-  return { label: "Price alert", icon: Bell, tone: "neutral" };
+  return { label: "Price alert", short: "Price alert", icon: Bell, tone: "neutral" };
 }
 
 /* ─── Tone → Tailwind class maps ────────────────────────────────────────── */
@@ -290,6 +302,15 @@ export const NATURE_LABEL: Record<SignalNature, string> = {
   continuazione: "Continuazione",
   inversione: "Inversione",
   misto: "Misto",
+};
+
+/** L'iniziale, per le tabelle dense della home. Stessa regola di
+ *  `SIGNAL_META.short`: il nome intero resta quello accessibile, e la legenda
+ *  sta nel suggerimento dell'intestazione di colonna. */
+export const NATURE_SHORT: Record<SignalNature, string> = {
+  continuazione: "C",
+  inversione: "I",
+  misto: "M",
 };
 
 export const NATURE_BG: Record<SignalNature, string> = {

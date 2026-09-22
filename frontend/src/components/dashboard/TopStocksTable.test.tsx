@@ -49,3 +49,23 @@ describe("TopStocksTable — senza intestazione visibile", () => {
     expect(screen.getByText("8")).toBeInTheDocument();
   });
 });
+
+describe("TopStocksTable — le etichette brevi", () => {
+  it("l'iniziale della natura e la regola abbreviata, coi nomi interi all'ascolto", () => {
+    // `top_kind` arriva dall'API col prefisso `signal:` — senza, la natura non
+    // si classifica e la cella rende «—», che e' cio' che le righe sopra
+    // (scritte prima) esercitano.
+    const righe = RIGHE.map((r) => ({ ...r, top_kind: `signal:${r.top_kind}` }));
+    render(
+      <MemoryRouter>
+        <TopStocksTable data={righe} />
+      </MemoryRouter>,
+    );
+    const c = screen.getAllByText("C");
+    expect(c).toHaveLength(righe.length);
+    for (const el of c) expect(el).toHaveAttribute("aria-hidden");
+    expect(screen.getAllByText("Continuazione")[0]).toHaveClass("sr-only");
+    expect(screen.getAllByText("Max. 52 sett.")[0]).toHaveAttribute("aria-hidden");
+    expect(screen.getAllByText("Massimo 52 settimane")[0]).toHaveClass("sr-only");
+  });
+});

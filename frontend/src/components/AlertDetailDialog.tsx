@@ -56,7 +56,7 @@ import {
   type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
-import { buildPlaybook } from "@/lib/tradePlaybook";
+import { pianoDelSegnale } from "@/lib/tradePlaybook";
 
 export type { AlertChartLink };
 
@@ -695,7 +695,7 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
           // ⚠️ Sul prezzo della PRIMA emissione: e' l'ingresso che il
           // magazzino dei piani misura, e mostrare una geometria mentre se ne
           // misura un'altra e' peggio di non mostrarla.
-          const pb = buildPlaybook(alert.snapshot ?? {}, entryPrice(alert), alert.rule_kind ?? null);
+          const pb = pianoDelSegnale(alert);
           return (
             <div className="px-5 pt-2 pb-4">
               <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-2">

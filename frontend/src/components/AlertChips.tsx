@@ -4,6 +4,7 @@ import type { Alert } from "@/api/types";
 import {
   NATURE_BG,
   NATURE_LABEL,
+  NATURE_SHORT,
   TONE_BG,
   TONE_LABEL,
   getAlertMeta,
@@ -44,7 +45,28 @@ interface Props {
   className?: string;
 }
 
-export function AlertKindChip({ alert, size = "md", className }: Props) {
+/** Le forme brevi delle tabelle dense (la home). */
+interface PropsBreve extends Props {
+  /** Etichetta ABBREVIATA a schermo, quella intera nel nome accessibile e nel
+   *  suggerimento. */
+  breve?: boolean;
+}
+
+/** Il testo di una pastiglia abbreviata: il breve si VEDE, l'intero si
+ *  ASCOLTA. ⚠️ Non `aria-label` sullo span: su un elemento senza ruolo e'
+ *  vietato dalla specifica e i lettori di schermo lo ignorano, quindi si
+ *  sentirebbe «I» invece di «Inversione». */
+export function Abbreviato({ breve, intero }: { breve: string; intero: string }) {
+  if (breve === intero) return <>{intero}</>;
+  return (
+    <>
+      <span aria-hidden>{breve}</span>
+      <span className="sr-only">{intero}</span>
+    </>
+  );
+}
+
+export function AlertKindChip({ alert, size = "md", className, breve = false }: PropsBreve) {
   const meta = getAlertMeta(alert);
   const Icon = meta.icon;
   return (
@@ -60,7 +82,7 @@ export function AlertKindChip({ alert, size = "md", className }: Props) {
       title={meta.label}
     >
       <Icon className={size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5"} />
-      {meta.label}
+      {breve ? <Abbreviato breve={meta.short} intero={meta.label} /> : meta.label}
     </span>
   );
 }
@@ -124,7 +146,7 @@ export function AlertToneCell({ alert, size = "md" }: Props) {
  * surfaces never drift. Returns null for non-signal / unclassifiable
  * alerts (the chip variant), or a faint em dash (the cell variant).
  */
-export function AlertNatureChip({ alert, size = "md", className }: Props) {
+export function AlertNatureChip({ alert, size = "md", className, breve = false }: PropsBreve) {
   const nat = signalNature(
     alert.rule_kind,
     (alert.snapshot as { chain?: { label?: string }[] } | undefined)?.chain,
@@ -135,12 +157,15 @@ export function AlertNatureChip({ alert, size = "md", className }: Props) {
       className={cn(
         "inline-flex items-center rounded font-semibold whitespace-nowrap",
         size === "sm" ? "px-1.5 py-0.5 text-[0.7059rem]" : "px-2 py-0.5 text-xs",
+        // L'iniziale in un quadrato: C e I hanno larghezze diverse, e una
+        // colonna di lettere storte si legge peggio di una di pastiglie.
+        breve && "min-w-5 justify-center",
         NATURE_BG[nat],
         className,
       )}
       title={`Natura del segnale: ${NATURE_LABEL[nat].toLowerCase()}`}
     >
-      {NATURE_LABEL[nat]}
+      {breve ? <Abbreviato breve={NATURE_SHORT[nat]} intero={NATURE_LABEL[nat]} /> : NATURE_LABEL[nat]}
     </span>
   );
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Alert } from "@/api/types";
 import {
+  NATURE_LABEL,
+  NATURE_SHORT,
+  SIGNAL_NAMES,
   getAlertMeta,
   getSnapshotHeadline,
   isSignalKind,
@@ -58,5 +61,36 @@ describe("signal alert metadata", () => {
     expect(snapshotProbabilita({ probability: 54 })).toBe(54);
     expect(snapshotProbabilita({ strength: 80 })).toBeNull(); // legacy: no probability
     expect(snapshotProbabilita(null)).toBeNull();
+  });
+});
+
+/* Le forme brevi della home (2026-09-22). Un'abbreviazione vale solo se e'
+ * davvero piu' corta e se ogni detector ne ha una: un detector nuovo senza
+ * `short` erediterebbe l'etichetta intera, e il Feed tornerebbe largo senza
+ * che nessuno se ne accorga. */
+describe("etichette brevi", () => {
+  it("ogni detector ha una forma breve, mai piu' lunga dell'intera", () => {
+    // Il pavimento: diciassette detector oggi. Senza, un elenco vuoto
+    // passerebbe ogni asserzione sotto.
+    expect(SIGNAL_NAMES.length).toBeGreaterThanOrEqual(17);
+    for (const n of SIGNAL_NAMES) {
+      const m = getAlertMeta(signalAlert({ rule_kind: `signal:${n}` }));
+      expect(m.short.length, n).toBeGreaterThan(0);
+      expect(m.short.length, n).toBeLessThanOrEqual(m.label.length);
+      // Il tetto che fa stare la regola in una colonna stretta.
+      expect(m.short.length, n).toBeLessThanOrEqual(14);
+    }
+  });
+
+  it("i due esempi dell'utente", () => {
+    expect(getAlertMeta(signalAlert({ rule_kind: "signal:high52_momentum" })).short).toBe("Max. 52 sett.");
+    expect(getAlertMeta(signalAlert({ rule_kind: "signal:trend_pullback" })).short).toBe("Trend + Pull");
+  });
+
+  it("la natura e' un'iniziale, e le iniziali non si confondono", () => {
+    expect(NATURE_SHORT.continuazione).toBe("C");
+    expect(NATURE_SHORT.inversione).toBe("I");
+    const iniziali = Object.values(NATURE_SHORT);
+    expect(new Set(iniziali).size).toBe(Object.keys(NATURE_LABEL).length);
   });
 });

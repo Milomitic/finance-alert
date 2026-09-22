@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPlaybook } from "./tradePlaybook";
+import { buildPlaybook, pianoDelSegnale, primoTarget } from "./tradePlaybook";
 
 /* The plan used to size positions off Forza: risk budget ran 0.5% -> 1.5%
  * linearly in `strength`, and leverage followed it, so it committed the most
@@ -99,5 +99,54 @@ describe("il resto del piano è intatto", () => {
   it("refuses to invent a plan without a structural stop", () => {
     expect(buildPlaybook({ ...snap(80), invalidation: null }, 100, "sr_flip")).toBeNull();
     expect(buildPlaybook({ ...snap(80), tone: "neutral" }, 100, "sr_flip")).toBeNull();
+  });
+});
+
+/* Il piano di UN alert: il proprietario unico che il dialogo di dettaglio e il
+ * Feed della home leggono entrambi. */
+describe("pianoDelSegnale", () => {
+  // Un alert vecchio: niente `horizon` stampato e una catena di un giorno
+  // solo, quindi l'orizzonte viene dal PRIOR del detector.
+  const legacy = {
+    rule_kind: "signal:trend_pullback",
+    trigger_price: 100,
+    snapshot: { tone: "bull", invalidation: { level: 90 }, atr: 3, chain: [{ date: "2026-09-01" }] },
+  };
+
+  it("passa il detector SENZA il prefisso, come il gemello Python", () => {
+    // trend_pullback ha PRIOR «long». Col nome prefissato il PRIOR non trova
+    // niente e l'orizzonte cade su «medium»: il controllo negativo sotto
+    // fissa che la differenza esiste, altrimenti questo test sarebbe vero
+    // anche di un pianoDelSegnale che passasse il nome intero.
+    expect(pianoDelSegnale(legacy)!.horizon).toBe("Lungo");
+    expect(buildPlaybook(legacy.snapshot, 100, "signal:trend_pullback")!.horizon).toBe("Medio");
+  });
+
+  it("parte dal prezzo della PRIMA emissione, non da trigger_price", () => {
+    const vivo = { ...legacy, trigger_price: 120, snapshot: { ...legacy.snapshot, first_price: 100 } };
+    expect(pianoDelSegnale(vivo)!.entry).toBe(100);
+  });
+
+  it("non esiste per un alert che non e' un segnale", () => {
+    expect(pianoDelSegnale({ ...legacy, rule_kind: null })).toBeNull();
+    expect(pianoDelSegnale({ ...legacy, rule_kind: "price" })).toBeNull();
+  });
+});
+
+describe("primoTarget", () => {
+  it("long: il target sta sopra, la variazione e' positiva", () => {
+    const pb = buildPlaybook(snap(70), 100, "sr_flip")!;
+    const t = primoTarget(pb);
+    expect(t.prezzo).toBe(pb.targets[0].price);
+    expect(t.ingresso).toBe(100);
+    expect(t.variazionePct).toBeCloseTo((pb.targets[0].price / 100 - 1) * 100, 9);
+    expect(t.variazionePct).toBeGreaterThan(0);
+  });
+
+  it("short: il target sta sotto, e la variazione porta il SEGNO del movimento", () => {
+    const pb = buildPlaybook(snap(70, { tone: "bear", invalidation: { level: 110 } }), 100, "sr_flip")!;
+    const t = primoTarget(pb);
+    expect(t.prezzo).toBeLessThan(100);
+    expect(t.variazionePct).toBeLessThan(0);
   });
 });

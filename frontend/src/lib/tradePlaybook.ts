@@ -1,4 +1,5 @@
 import type { SignalSnapshot } from "@/api/types";
+import { entryPrice } from "@/lib/alertEntry";
 
 export interface PlaybookTarget {
   label: string;
@@ -179,4 +180,39 @@ export function buildPlaybook(
     side, action, horizon: P.label, entry, stop, stopPct, stopCapped, targets,
     duration: P.duration, riskBudgetPct, positionPct, leverage, leverageNote,
   };
+}
+
+/* ─── Il piano di UN alert ───────────────────────────────────────────────── *
+ *
+ * Un proprietario solo per due scelte che ogni lettore deve fare allo stesso
+ * modo, e che il dialogo di dettaglio e il Feed della home fanno entrambi:
+ *
+ *   - l'INGRESSO e' il prezzo della prima emissione (`entryPrice`), non
+ *     `trigger_price`, che ogni scansione riscrive: e' il prezzo su cui il
+ *     magazzino `plan_outcomes` misura la gara;
+ *   - il detector si passa SENZA il prefisso `signal:`. ⚠️ Il dialogo passava
+ *     `rule_kind` intero, quindi `PRIOR["signal:trend_pullback"]` non trovava
+ *     niente e un alert vecchio senza `horizon` cadeva sempre su «Medio»,
+ *     mentre il gemello Python (`plan_outcome_service`) riceve il nome nudo e
+ *     misurava «Lungo»: una geometria a schermo, un'altra nel magazzino.
+ */
+type AlertPerPiano = {
+  rule_kind: string | null;
+  trigger_price: number;
+  snapshot?: Record<string, unknown> | null;
+};
+
+export function pianoDelSegnale(alert: AlertPerPiano): Playbook | null {
+  const kind = alert.rule_kind;
+  if (typeof kind !== "string" || !kind.startsWith("signal:")) return null;
+  return buildPlaybook(alert.snapshot ?? {}, entryPrice(alert), kind.slice("signal:".length));
+}
+
+/** Il primo target e quanto dista dall'ingresso, in percentuale e COL SEGNO
+ *  del movimento: negativo per uno short, il cui target sta sotto. */
+export function primoTarget(
+  piano: Playbook,
+): { prezzo: number; variazionePct: number; ingresso: number } {
+  const prezzo = piano.targets[0].price;
+  return { prezzo, variazionePct: (prezzo / piano.entry - 1) * 100, ingresso: piano.entry };
 }

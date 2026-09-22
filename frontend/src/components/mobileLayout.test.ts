@@ -231,4 +231,12 @@ describe("le card della home: una riga per titolo, e niente nome su telefono", (
     for (const k of ["confluence", "top", "feed"]) expect(t).toContain(`key: "${k}"`);
     expect(t).toMatch(/row-full:grid-cols-3/);
   });
+
+  it("il Feed e' la PRIMA colonna, a sinistra delle altre due", () => {
+    // L'ordine dell'array COLUMNS e' l'ordine a schermo (2026-09-22).
+    const t = sorgente("dashboard/AlertsCompactPanel.tsx");
+    const pos = ["feed", "confluence", "top"].map((k) => t.indexOf(`key: "${k}"`));
+    for (const p of pos) expect(p).toBeGreaterThan(-1);
+    expect(pos).toEqual([...pos].sort((a, b) => a - b));
+  });
 });

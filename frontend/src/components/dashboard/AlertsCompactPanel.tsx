@@ -16,9 +16,14 @@ interface Props {
   alertsPrev24h: number;
 }
 
+/* La legenda delle iniziali di natura, detta una volta per le due tabelle che
+   le usano. */
+const LEGENDA_NATURA = "C = continuazione del trend, I = inversione, M = misto";
+
+/* ⚠️ L'ORDINE dell'array e' l'ordine a schermo: il Feed sta a sinistra dal
+   2026-09-22 (richiesta dell'utente) — e' la colonna che cambia di piu' e
+   quella che si legge per prima. */
 const COLUMNS: { key: string; label: string; nota?: string }[] = [
-  { key: "confluence", label: "Top confluenze" },
-  { key: "top", label: "Top stocks" },
   /* ⚠️ La `nota` raccoglie le spiegazioni che stavano nell'intestazione della
      tabella Feed, tolta su richiesta dell'utente. Non sono state cancellate ma
      SPOSTATE: quella sulla Probabilita' dice che e' un tasso di base per
@@ -28,19 +33,34 @@ const COLUMNS: { key: string; label: string; nota?: string }[] = [
     key: "feed",
     label: "Feed",
     nota:
-      "Colonne: titolo, natura del segnale, regola che è scattata, Forza del pattern (0-100), " +
-      `Probabilità, prezzo e data. ${PROBABILITA_TOOLTIP}`,
+      `Colonne: titolo, natura del segnale (${LEGENDA_NATURA}), regola che è scattata, ` +
+      "Forza del pattern (0-100), Probabilità, 1° target del piano e quanto dista dal prezzo " +
+      "d'ingresso (la stessa geometria del dettaglio del segnale; «—» se il detector non ha " +
+      `emesso un livello di invalidazione), data. ${PROBABILITA_TOOLTIP}`,
+  },
+  { key: "confluence", label: "Top confluenze" },
+  {
+    key: "top",
+    label: "Top stocks",
+    nota:
+      "Titoli con più segnali negli ultimi 30 giorni: natura della regola più frequente " +
+      `(${LEGENDA_NATURA}), la regola, e quanti segnali.`,
   },
 ];
 
 /* ⚠️ Il bordo di ciascuna colonna, per larghezza. Non `divide-x`: sotto
-   `row-full` il Feed va a capo su una riga sua, e `divide-x` gli metterebbe
-   un bordo SINISTRO contro la cornice e nessun bordo sopra. Letterali, perche'
-   il purger di Tailwind legge solo stringhe intere. */
+   `row-full` il Feed sta su una riga sua, e `divide-x` metterebbe alla
+   colonna che gli va sotto un bordo SINISTRO contro la cornice e nessun
+   bordo sopra. Letterali, perche' il purger di Tailwind legge solo stringhe
+   intere.
+
+     < sm        una colonna: Feed, confluenze, top — bordo sopra alle due ultime
+     sm..full    Feed su tutta la riga, sotto confluenze | top
+     row-full    Feed | confluenze | top */
 const COLONNA: Record<string, string> = {
-  confluence: "",
-  top: "border-t border-border/40 sm:border-t-0 sm:border-l",
-  feed: "border-t border-border/40 sm:col-span-2 row-full:col-span-1 row-full:border-t-0 row-full:border-l",
+  feed: "sm:col-span-2 row-full:col-span-1",
+  confluence: "border-t border-border/40 row-full:border-t-0 row-full:border-l",
+  top: "border-t border-border/40 sm:border-l row-full:border-t-0",
 };
 
 /**
@@ -95,8 +115,8 @@ export function AlertsCompactPanel({
             each column 231px and the confluence identity resolved to 0px;
             the Feed row (identity + natura + regola + Forza) needs ~500px,
             which a three-way split reaches at row-full — the same width two
-            columns get at 1280. Below it Top confluenze and Top stocks share
-            a row and the Feed takes the full width underneath. */}
+            columns get at 1280. Below it the Feed takes the full width on
+            top, and Top confluenze and Top stocks share the row beneath. */}
         <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 row-full:grid-cols-3">
           {COLUMNS.map((col) => (
             <div key={col.key} className={`flex flex-col min-h-0 min-w-0 ${COLONNA[col.key] ?? ""}`}>

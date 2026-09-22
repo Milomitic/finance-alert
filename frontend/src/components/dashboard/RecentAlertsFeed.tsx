@@ -15,10 +15,18 @@ import {
 import { formatMoney } from "@/lib/money";
 import { isAlertDelayed } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { pianoDelSegnale, primoTarget } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
 
 interface Props {
   alerts: Alert[];
+}
+
+/** «+8.4%» / «−3.1%», col segno tipografico: un trattino corto accanto a
+ *  cifre tabulari si confonde con un separatore. */
+function variazione(pct: number): string {
+  const v = Math.abs(pct).toFixed(1);
+  return `${pct > 0 ? "+" : pct < 0 ? "\u2212" : ""}${v}%`;
 }
 
 /**
@@ -26,12 +34,19 @@ interface Props {
  *
  * Rebuilt as a real <Table> (was a flex <ul>) so its columns align
  * vertically and match the sibling "TOP STOCKS" table in the same panel:
- * Titolo · Natura · Regola · Forza · Prob. · Prezzo · Data. A flex list gives each
+ * Titolo · Natura · Regola · Forza · Prob. · Target · Δ% · Data. A flex list gives each
  * row its own widths, so the chips never lined up; a table shares one
  * width per column across all rows, which is exactly the alignment the
  * user asked for. Row click opens the detail dialog; the ticker is a Link
  * that navigates to the stock page (and stops row propagation).
+ *
+ * 2026-09-22 (richiesta dell'utente): al posto del prezzo di rilevazione, il
+ * 1° TARGET del piano e quanto dista dall'ingresso. ⚠️ E' la stessa geometria
+ * del dialogo di dettaglio e del magazzino `plan_outcomes` (`pianoDelSegnale`),
+ * non un numero nuovo: un target calcolato qui in un altro modo sarebbe un
+ * terzo piano, diverso da quello che poi viene misurato.
  */
+
 export function RecentAlertsFeed({ alerts }: Props) {
   const [openDetail, setOpenDetail] = useState<Alert | null>(null);
 
@@ -68,6 +83,8 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     ? "text-amber-700 dark:text-amber-400"
                     : "text-rose-600 dark:text-rose-400";
             const prob = snapshotProbabilita(snap);
+            const piano = pianoDelSegnale(a);
+            const target = piano ? primoTarget(piano) : null;
             return (
               <TableRow
                 key={a.id}
@@ -93,13 +110,13 @@ export function RecentAlertsFeed({ alerts }: Props) {
                 {/* Natura — continuazione/inversione chip (signals only;
                     renders nothing for non-signal alerts). */}
                 <TableCell className="py-2">
-                  <AlertNatureChip alert={a} size="sm" />
+                  <AlertNatureChip alert={a} size="sm" breve />
                 </TableCell>
                 {/* Regola — the shared AlertKindChip (same component the
                     alerts-page table uses): friendly label, no "signal:"
                     prefix, colored green/red by the snapshot bull/bear tone. */}
                 <TableCell className="py-2">
-                  <AlertKindChip alert={a} size="sm" />
+                  <AlertKindChip alert={a} size="sm" breve />
                 </TableCell>
                 {/* Forza — pattern strength, colored by conviction; em dash when absent. */}
                 <TableCell className="py-2 text-right">
@@ -128,10 +145,38 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     </span>
                   )}
                 </TableCell>
-                {/* Prezzo */}
-                <TableCell className="py-2 text-right tabular-nums font-semibold">
-                  {formatMoney(a.trigger_price, a.currency)}
-                </TableCell>
+                {/* Target — il 1° target del piano, e accanto quanto dista
+                    dall'ingresso. «—» quando il piano non esiste: il detector
+                    non ha emesso un livello di invalidazione, o non e' un
+                    segnale. */}
+                {target ? (
+                  <>
+                    <TableCell
+                      className="py-2 text-right tabular-nums font-semibold"
+                      title={`1° target del piano, dall'ingresso a ${formatMoney(target.ingresso, a.currency)}`}
+                    >
+                      {formatMoney(target.prezzo, a.currency)}
+                    </TableCell>
+                    <TableCell className="py-2 text-right">
+                      <span
+                        className={cn(
+                          "whitespace-nowrap text-[0.7647rem] font-semibold tabular-nums",
+                          target.variazionePct >= 0
+                            ? "text-emerald-800 dark:text-emerald-400"
+                            : "text-rose-600 dark:text-rose-400",
+                        )}
+                        title={`Il 1° target dista ${variazione(target.variazionePct)} dal prezzo d'ingresso`}
+                      >
+                        {variazione(target.variazionePct)}
+                      </span>
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className="py-2 text-right text-muted-foreground">—</TableCell>
+                    <TableCell className="py-2 text-right text-muted-foreground">—</TableCell>
+                  </>
+                )}
                 {/* Data — signal_date primary; orange clock flags a lagged
                     detection (>=1 day after the market bar). */}
                 <TableCell className="py-2 text-right pr-4">
