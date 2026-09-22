@@ -18,8 +18,7 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
-import { fmtBig } from "@/lib/format";
-import { formatMoney } from "@/lib/money";
+import { formatBigMoney, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
 
@@ -72,6 +71,28 @@ const SOLO_DA_SM = "hidden sm:table-cell";
    tabelle diverse. Decimali CHIESTI, quindi fissi: la colonna resta
    allineata. */
 const EPS = { decimals: 2 } as const;
+
+/* ─── DUE valute nella stessa scheda (2026-09-22) ─────────────────────────── *
+ *
+ * ⚠️ Ricavi, utile ed EPS del conto economico sono nella valuta dei
+ * RENDICONTI (`financial_currency`), non in quella di quotazione. Misurato
+ * sulla cache dei fondamentali: SHEL.L, AZN.L, HSBA.L e BP.L quotano a Londra
+ * e rendicontano in dollari; TSM quota in dollari e rendiconta in dollari
+ * taiwanesi. Prima ogni ricavo portava un `$` fisso (`fmtBig`), cioe' giusto
+ * per caso sui titoli americani e sbagliato su un titolo su tre.
+ *
+ *   valuta dei rendiconti   Rev, Net Inc, Est Rev, EPS GAAP (conto economico)
+ *   valuta di quotazione    EPS adj., Est EPS (dal calendario utili)
+ *
+ * ⚠️ La seconda riga e' l'ipotesi PRECEDENTE, lasciata com'era, e la misura
+ * non la conferma per tutti: per SHEL.L l'EPS del calendario (0,83 nel
+ * 4° trimestre 2021) e' in dollari come il bilancio, per TSM (1,07) e' in
+ * dollari per ADR mentre il bilancio e' in dollari taiwanesi. Nessuna delle
+ * due valute e' giusta per entrambi, e yfinance non dichiara quella del
+ * consensus: si e' cambiato solo cio' che la misura decide.
+ *
+ * `financial_currency` assente — ignota, o riga di cache piu' vecchia del
+ * campo — rende le cifre NUDE, mai in dollari. */
 
 interface Props {
   ticker: string;
@@ -185,7 +206,7 @@ function aggregateAnnualEarnings(
 }
 
 function AnnualTabBody({
-  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate, currency,
+  annual, earnings, currFyEpsEstimate, currFyRevenueEstimate, currency, valutaBilancio,
 }: {
   annual: FundamentalsAnnual[];
   earnings: FundamentalsEarnings[];
@@ -193,6 +214,8 @@ function AnnualTabBody({
    *  estimate tables, `0y` avg). Null on thin-coverage tickers. */
   currFyEpsEstimate: number | null;
   currency: string | null;
+  /** Valuta dei rendiconti — vedi `VALUTE` in cima al file. */
+  valutaBilancio: string | null;
   currFyRevenueEstimate: number | null;
 }) {
   const annualEarnings = useMemo(() => aggregateAnnualEarnings(earnings), [earnings]);
@@ -251,7 +274,15 @@ function AnnualTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={currency} />
+          {/* Nell'annuale la linea «EPS» e' quella del CONTO ECONOMICO (GAAP),
+              quindi nella valuta dei rendiconti; «EPS est» e' il consensus. */}
+          <MiniTrendChart
+            data={chartData}
+            hasEstimate={hasEstimate}
+            currency={currency}
+            epsCurrency={valutaBilancio}
+            revenueCurrency={valutaBilancio}
+          />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -304,7 +335,7 @@ function AnnualTabBody({
                       </span>
                     </td>
                     <td className="px-1.5 py-1 text-right">
-                      {currFyRevenueEstimate != null ? fmtBig(currFyRevenueEstimate) : "—"}
+                      {formatBigMoney(currFyRevenueEstimate, valutaBilancio)}
                     </td>
                     <td className="px-1.5 py-1 text-right">{yoyEst}</td>
                     <td className="px-1.5 py-1 text-right">—</td>
@@ -336,16 +367,16 @@ function AnnualTabBody({
               return (
                 <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
                   <td className={cn("px-1.5 py-1 font-mono whitespace-nowrap", PRIMA_CELLA)}>{shortYear(a.fiscal_year_end)}</td>
-                  <td className="px-1.5 py-1 text-right">{fmtBig(a.revenue)}</td>
+                  <td className="px-1.5 py-1 text-right">{formatBigMoney(a.revenue, valutaBilancio)}</td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {prevYear ? yoy(a.revenue, prevYear.revenue) : "—"}
                   </td>
-                  <td className="px-1.5 py-1 text-right">{fmtBig(a.net_income)}</td>
+                  <td className="px-1.5 py-1 text-right">{formatBigMoney(a.net_income, valutaBilancio)}</td>
                   {/* GAAP EPS — neutral/muted: it's the audited legal
                       figure but NOT comparable to the adjusted consensus,
                       so no beat/miss colour claim here. */}
                   <td className={cn("px-1.5 py-1 text-right text-muted-foreground", SOLO_DA_SM)}>
-                    {formatMoney(a.eps, currency, EPS)}
+                    {formatMoney(a.eps, valutaBilancio, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsAdjTone)}>
                     {formatMoney(epsAdj, currency, EPS)}
@@ -371,7 +402,7 @@ function AnnualTabBody({
 
 function QuarterlyTabBody({
   quarterly, earnings, nextEarningsDate, nextEarningsWhen, nextEpsEstimate, nextRevenueEstimate,
-  currency,
+  currency, valutaBilancio,
 }: {
   quarterly: FundamentalsQuarterly[];
   earnings: FundamentalsEarnings[];
@@ -381,6 +412,8 @@ function QuarterlyTabBody({
   nextEpsEstimate: number | null;
   nextRevenueEstimate: number | null;
   currency: string | null;
+  /** Valuta dei rendiconti — vedi `VALUTE` in cima al file. */
+  valutaBilancio: string | null;
 }) {
   // **Dedup earnings by fiscal quarter**, keeping the most recent release per
   // quarter. yfinance occasionally returns two earnings entries that both map
@@ -454,7 +487,12 @@ function QuarterlyTabBody({
             <div className="h-full w-full animate-pulse rounded bg-muted/40" />
           }
         >
-          <MiniTrendChart data={chartData} hasEstimate={hasEstimate} currency={currency} />
+          <MiniTrendChart
+            data={chartData}
+            hasEstimate={hasEstimate}
+            currency={currency}
+            revenueCurrency={valutaBilancio}
+          />
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
@@ -523,7 +561,7 @@ function QuarterlyTabBody({
                 </td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
-                  {nextRevenueEstimate != null ? fmtBig(nextRevenueEstimate) : "—"}
+                  {formatBigMoney(nextRevenueEstimate, valutaBilancio)}
                 </td>
                 {/* GAAP EPS + adj. EPS — both empty (no actuals yet). */}
                 <td className={cn("px-1.5 py-1 text-right text-muted-foreground italic", SOLO_DA_SM)}>—</td>
@@ -556,10 +594,10 @@ function QuarterlyTabBody({
                     </span>
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", revTone)}>
-                    {fmtBig(revActual)}
+                    {formatBigMoney(revActual, valutaBilancio)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {e.revenue_estimate != null ? fmtBig(e.revenue_estimate) : "—"}
+                    {formatBigMoney(e.revenue_estimate, valutaBilancio)}
                   </td>
                   {/* GAAP EPS for the quarter (from the income
                       statement) — muted, no beat/miss claim (not
@@ -568,7 +606,7 @@ function QuarterlyTabBody({
                   <td className={cn("px-1.5 py-1 text-right text-muted-foreground", SOLO_DA_SM)}>
                     {(() => {
                       const g = epsGaapByQuarter.get(fq);
-                      return formatMoney(g, currency, EPS);
+                      return formatMoney(g, valutaBilancio, EPS);
                     })()}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
@@ -760,6 +798,7 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
               {effective === "annual" && hasAnnual && (
                 <AnnualTabBody
                   currency={currency}
+                  valutaBilancio={f.financial_currency ?? null}
                   annual={f.annual}
                   earnings={f.earnings}
                   currFyEpsEstimate={f.curr_fy_eps_estimate ?? null}
@@ -769,6 +808,7 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
               {effective === "quarterly" && hasQuarterly && (
                 <QuarterlyTabBody
                   currency={currency}
+                  valutaBilancio={f.financial_currency ?? null}
                   quarterly={f.quarterly}
                   earnings={f.earnings}
                   nextEarningsDate={f.next_earnings_date}

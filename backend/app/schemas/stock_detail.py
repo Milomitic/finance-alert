@@ -281,6 +281,10 @@ class FundamentalsOut(BaseModel):
     # estimate row at the top of the Fundamentals annual table.
     curr_fy_eps_estimate: float | None = None
     curr_fy_revenue_estimate: float | None = None
+    # Valuta dei rendiconti (ricavi, utile, EPS di bilancio, stime di ricavo),
+    # distinta da quella di quotazione. None = ignota: il frontend mostra il
+    # numero nudo, mai un dollaro preso in prestito.
+    financial_currency: str | None = None
     micro: MicroDataOut = MicroDataOut()
     profile: CompanyProfileOut = CompanyProfileOut()
     insiders: list[InsiderTransactionOut] = []

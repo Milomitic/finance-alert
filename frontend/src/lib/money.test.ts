@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { fmtBig } from "./format";
 import {
   currencySymbol,
   displayCurrency,
+  formatBigMoney,
   formatCompactMoney,
   formatMoney,
   formatMoneySigned,
@@ -304,5 +306,38 @@ describe("nessuna schermata rifa la formattazione compatta per conto proprio", (
       query: "?raw", import: "default", eager: true,
     });
     expect(Object.keys(sorgenti).length).toBeGreaterThan(50);
+  });
+});
+
+/* La scala di `fmtBig` con la valuta: i ricavi di un'azienda sono nella valuta
+ * dei suoi rendiconti, e `fmtBig` scriveva `$` su tutti. */
+describe("formatBigMoney", () => {
+  it("in dollari e' IDENTICO a fmtBig, che ora vi si appoggia", () => {
+    for (const v of [3.5e12, 15_689_000_000, 2_500_000, 4_200, 950, -1_500_000, 0]) {
+      expect(formatBigMoney(v, "USD")).toBe(fmtBig(v));
+    }
+  });
+
+  it("porta il simbolo della valuta, o il codice quando un simbolo non c'e'", () => {
+    expect(formatBigMoney(2_263_891_300_000, "TWD")).toBe("TWD 2.26T");
+    expect(formatBigMoney(381_314_000_000, "GBP")).toBe("£381.31B");
+    expect(formatBigMoney(176_954_000_000, "DKK")).toBe("DKr176.95B");
+    // Pence: l'etichetta si normalizza, il valore no.
+    expect(formatBigMoney(2_100_000_000, "GBp")).toBe("£2.10B");
+  });
+
+  it("il segno sta fuori dal simbolo", () => {
+    expect(formatBigMoney(-1_500_000, "EUR")).toBe("-€1.50M");
+  });
+
+  it("valuta ignota: il numero NUDO, mai dollari", () => {
+    expect(formatBigMoney(15_689_000_000, null)).toBe("15.69B");
+    expect(formatBigMoney(15_689_000_000, undefined)).toBe("15.69B");
+    expect(formatBigMoney(15_689_000_000, "US Dollar")).toBe("15.69B");
+  });
+
+  it("assenza resta assenza", () => {
+    expect(formatBigMoney(null, "USD")).toBe("—");
+    expect(formatBigMoney(Number.NaN, "USD")).toBe("—");
   });
 });

@@ -8,6 +8,7 @@ amortises the cost across every UI subview that needs any of these fields.
 """
 import math
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import date
@@ -17,7 +18,7 @@ from typing import Any
 import pandas as pd
 from loguru import logger
 
-from app.services.currency_units import is_minor_unit
+from app.services.currency_units import is_minor_unit, major_unit_currency
 
 
 @dataclass
@@ -271,6 +272,13 @@ class Fundamentals:
     # coverage / non-US) — old L2 rows lack the keys and default here too.
     curr_fy_eps_estimate: float | None = None
     curr_fy_revenue_estimate: float | None = None
+    # La valuta dei RENDICONTI (`info["financialCurrency"]`), che non e' quella
+    # di quotazione: SHEL.L quota in pence e rendiconta in dollari, TSM quota
+    # in dollari e rendiconta in dollari taiwanesi. Vale per ricavi, utile e
+    # EPS del conto economico, e per le stime di ricavo. None quando yfinance
+    # non la dichiara, e anche per le righe L2 scritte prima del campo — vedi
+    # `_financial_currency`.
+    financial_currency: str | None = None
     micro: MicroData = field(default_factory=MicroData)
     profile: CompanyProfile = field(default_factory=CompanyProfile)
     insiders: list[InsiderTransaction] = field(default_factory=list)
@@ -781,6 +789,41 @@ def patch_earning_from_finnhub(ticker: str, rec) -> bool:
         f"(date={rec_date_str} eps_actual={rec.eps_actual})"
     )
     return True
+
+
+_ISO_4217 = re.compile(r"[A-Za-z]{3}")
+
+
+def _financial_currency(info: dict | None) -> str | None:
+    """La valuta in cui sono espressi i rendiconti, pronta da ETICHETTARE.
+
+    ⚠️ Non e' la valuta di quotazione, ed e' per questo che esiste. Misurato
+    sulla cache dei fondamentali il 2026-09-22: SHEL.L, AZN.L, HSBA.L e BP.L
+    quotano a Londra e hanno ricavi, utile ed EPS di bilancio in DOLLARI
+    (Shell 2022: 381 miliardi, EPS 5,71 — cifre in dollari); TSM quota in
+    dollari e ha i ricavi in dollari taiwanesi (2.264 miliardi nel 2022).
+    Etichettarli con la valuta del titolo sposta ogni cifra di un tasso di
+    cambio, e senza nessun errore visibile.
+
+    Normalizzata con `major_unit_currency`, cioe' solo l'ETICHETTA: GBp/GBX
+    diventano GBP e nessun numero viene diviso. Un rendiconto in pence non si
+    e' mai visto; se comparisse, la regola qui e' quella di tutto il resto
+    dell'app — l'etichetta si normalizza, il valore resta quello di yfinance.
+
+    None per tutto cio' che non e' un codice di tre lettere: una valuta
+    ignota si mostra come numero nudo, mai come dollari (CLAUDE.md, «A
+    missing currency must never become USD»).
+    """
+    if not isinstance(info, dict):
+        return None
+    grezza = info.get("financialCurrency")
+    if not isinstance(grezza, str):
+        return None
+    grezza = grezza.strip()
+    if not _ISO_4217.fullmatch(grezza):
+        return None
+    normalizzata = major_unit_currency(grezza)
+    return normalizzata.upper() if normalizzata else None
 
 
 def _extract_micro(info: dict | None) -> MicroData:
@@ -1688,6 +1731,7 @@ def _fetch_fresh(ticker: str) -> Fundamentals:
             info = raw.get("info")
             f.micro = _extract_micro(info)
             f.profile = _extract_profile(info)
+            f.financial_currency = _financial_currency(info)
             if isinstance(info, dict) and is_minor_unit(info.get("currency")):
                 pence_scale = 0.01
             if any(getattr(f.micro, k) is not None for k in vars(f.micro)):

@@ -1037,6 +1037,13 @@ export interface Fundamentals {
    *  and thin-coverage tickers lack them. */
   curr_fy_eps_estimate?: number | null;
   curr_fy_revenue_estimate?: number | null;
+  /** La valuta dei RENDICONTI (`financialCurrency` di yfinance), distinta da
+   *  quella di quotazione: SHEL.L quota in pence e rendiconta in dollari, TSM
+   *  quota in dollari e rendiconta in dollari taiwanesi. Vale per ricavi,
+   *  utile, EPS del conto economico e stime di ricavo. null = ignota, e allora
+   *  il numero si mostra NUDO; opzionale per le risposte in cache scritte
+   *  prima del campo. */
+  financial_currency?: string | null;
   micro: MicroData;
   /** Optional for back-compat with cached pre-V2 API responses. */
   profile?: CompanyProfile;

@@ -67,12 +67,30 @@ function Segno({ voce }: { voce: Voce }) {
 }
 
 export default function MiniTrendChart({
-  data, hasEstimate, currency = null,
-}: { data: ChartPoint[]; hasEstimate: boolean; currency?: string | null }) {
-  // Ricavi e utile per azione sono nella valuta di RENDICONTAZIONE, che per
-  // una quotata e la sua valuta di quotazione. Gli assi dicevano dollari per
-  // tutti, su un catalogo dove un titolo su tre non e in dollari.
-  const unit = currencySymbol(currency) ?? "";
+  data, hasEstimate, currency = null, epsCurrency, revenueCurrency = null,
+}: {
+  data: ChartPoint[];
+  hasEstimate: boolean;
+  /** Valuta della stima EPS (e dell'EPS, se `epsCurrency` manca). */
+  currency?: string | null;
+  /** Valuta della serie «EPS», quando e' diversa da quella della stima: nel
+   *  grafico annuale e' l'EPS del conto economico, nella valuta dei
+   *  rendiconti. */
+  epsCurrency?: string | null;
+  /** Valuta dei ricavi, cioe' dei rendiconti. */
+  revenueCurrency?: string | null;
+}) {
+  // ⚠️ Questo commento diceva che la valuta dei rendiconti «per una quotata e'
+  // la sua valuta di quotazione». Non lo e': SHEL.L quota in pence e
+  // rendiconta in dollari, TSM quota in dollari e rendiconta in dollari
+  // taiwanesi. Tre valute possibili, una per serie; ignota = nessun simbolo.
+  const unitEpsStima = currencySymbol(currency) ?? "";
+  const unitEps = epsCurrency === undefined ? unitEpsStima : (currencySymbol(epsCurrency) ?? "");
+  const unitRicavi = currencySymbol(revenueCurrency) ?? "";
+  // Un asse solo per due serie: il simbolo sta sull'asse solo se le due
+  // valute coincidono, altrimenti l'asse porta il numero nudo e il simbolo
+  // giusto lo dice il suggerimento, serie per serie.
+  const unitAsseEps = unitEps === unitEpsStima ? unitEps : "";
   if (data.length === 0) {
     return <div className="text-sm text-muted-foreground text-center py-6">Nessun dato per il grafico</div>;
   }
@@ -142,15 +160,16 @@ export default function MiniTrendChart({
         />
         <YAxis
           yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `${unit}${v.toFixed(1)}`}
+          tickFormatter={(v) => `${unitAsseEps}${v.toFixed(1)}`}
         />
         <Tooltip
           contentStyle={{ fontSize: 12, borderRadius: 6, padding: "4px 8px" }}
           formatter={(value: unknown, name: unknown) => {
             const n = typeof value === "number" ? value : Number(value);
             const nm = String(name ?? "");
-            if (nm === "Revenue" || nm === "Revenue est") return [`${unit}${n.toFixed(1)}B`, nm];
-            if (nm === "EPS" || nm === "EPS est") return [`${unit}${n.toFixed(2)}`, nm];
+            if (nm === "Revenue" || nm === "Revenue est") return [`${unitRicavi}${n.toFixed(1)}B`, nm];
+            if (nm === "EPS") return [`${unitEps}${n.toFixed(2)}`, nm];
+            if (nm === "EPS est") return [`${unitEpsStima}${n.toFixed(2)}`, nm];
             return [String(value), nm];
           }}
         />

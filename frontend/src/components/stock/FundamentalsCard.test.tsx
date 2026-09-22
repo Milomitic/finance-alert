@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Fundamentals } from "@/api/types";
 
@@ -32,8 +32,15 @@ const DATI: Fundamentals = {
   curr_fy_revenue_estimate: 16e9,
 } as Fundamentals;
 
+/* Il dato che la scheda riceve: un test lo sostituisce, `afterEach` lo
+   rimette. Letto a ogni chiamata, quindi il mock non va rifatto. */
+let corrente: Fundamentals = DATI;
+afterEach(() => {
+  corrente = DATI;
+});
+
 vi.mock("@/hooks/useStockFundamentals", () => ({
-  useStockFundamentals: () => ({ isLoading: false, data: DATI }),
+  useStockFundamentals: () => ({ isLoading: false, data: corrente }),
 }));
 // Il grafico e la nota di degrado non sono l'oggetto di questi test, e
 // interrogherebbero la rete.
@@ -137,5 +144,49 @@ describe("FundamentalsCard — la prossima trimestrale nell'intestazione", () =>
     const c = monta("EUR");
     expect(c.textContent).toContain("est €0.31");
     expect(c.textContent).not.toMatch(/est \$/);
+  });
+});
+
+/* Le cifre del BILANCIO nella valuta dei rendiconti (2026-09-22). Il caso che
+ * conta e' quello di SHEL.L: quota a Londra, rendiconta in dollari. */
+describe("FundamentalsCard — la valuta dei rendiconti", () => {
+  function celle(tr: Element): string[] {
+    return Array.from(tr.children).map((td) => td.textContent ?? "");
+  }
+
+  it("ricavi, utile ed EPS di bilancio in dollari; EPS adjusted e stime nella valuta del titolo", () => {
+    corrente = { ...DATI, financial_currency: "USD" };
+    const c = monta("GBP");
+
+    // Trimestrale: [data, Rev, Est Rev, EPS GAAP, EPS adj., Est EPS, Surp].
+    const [prossima, trimestre] = Array.from(tabella(c).querySelectorAll("tbody tr")).map(celle);
+    expect(prossima[2]).toBe("$4.10B");
+    expect(prossima[5]).toBe("£0.31");
+    expect(trimestre[1]).toBe("$4.00B");
+    expect(trimestre[2]).toBe("$3.90B");
+    expect(trimestre[4]).toBe("£0.23");
+    expect(trimestre[5]).toBe("£0.22");
+
+    // Annuale: [FY, Rev, YoY, Net Inc, EPS GAAP, EPS adj., Est EPS, Surp].
+    fireEvent.click(screen.getByRole("button", { name: "Annuale" }));
+    const [stima, fy25] = Array.from(tabella(c).querySelectorAll("tbody tr")).map(celle);
+    expect(stima[1]).toBe("$16.00B");
+    expect(fy25[1]).toBe("$15.69B");
+    expect(fy25[3]).toBe("$1.48B");
+    expect(fy25[4]).toBe("$7.46");
+  });
+
+  it("valuta dei rendiconti ignota: le cifre di bilancio restano NUDE, mai dollari", () => {
+    // DATI non porta `financial_currency`: e' anche la forma di una risposta
+    // servita da una riga di cache scritta prima del campo.
+    const c = monta("GBP");
+    const trimestre = celle(tabella(c).querySelectorAll("tbody tr")[1]);
+    expect(trimestre[1]).toBe("4.00B");
+    fireEvent.click(screen.getByRole("button", { name: "Annuale" }));
+    const fy25 = celle(tabella(c).querySelectorAll("tbody tr")[1]);
+    expect(fy25[1]).toBe("15.69B");
+    expect(fy25[3]).toBe("1.48B");
+    // Il controllo che conta: da nessuna parte un dollaro preso in prestito.
+    expect(tabella(c).textContent).not.toContain("$");
   });
 });

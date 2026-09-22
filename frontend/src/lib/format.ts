@@ -1,3 +1,5 @@
+import { formatBigMoney } from "./money";
+
 /* Numeric formatters, for the whole app.
  *
  * This was `sectorFormat.ts`, and the name was the problem. Scoped to one
@@ -34,16 +36,14 @@ export function fmtNum(
  *  dei trilioni una partecipazione da 3,5 mila miliardi usciva "$3500.00B".
  *
  *  Il segno sta FUORI dal simbolo di valuta: "-$1.50M" si legge come un
- *  importo negativo, "$-1.50M" si legge come un refuso. */
+ *  importo negativo, "$-1.50M" si legge come un refuso.
+ *
+ *  ⚠️ SOLO per cifre che SONO in dollari (partecipazioni 13F, flussi dei
+ *  fondi). La scala vive in `formatBigMoney`, che prende la valuta: per un
+ *  importo di un'azienda — ricavi, utile — si usa quella, con la valuta dei
+ *  rendiconti. */
 export function fmtBig(v: number | null | undefined): string {
-  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-" : "";
-  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
+  return formatBigMoney(v, "USD");
 }
 
 /** Capitalizzazione. Stessa scala di `fmtBig`: era una funzione a parte con

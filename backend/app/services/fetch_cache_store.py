@@ -71,6 +71,16 @@ KIND_NEWS = "news"
 #       Finnhub revenue est/actual backfill. Pre-deploy payloads carry these
 #       as null and would otherwise never re-fetch (same schema + fresh TTL),
 #       so they MUST be invalidated to populate the new fundamentals.
+#
+# ⚠️ NON un bump — `financial_currency` (2026-09-22) e' entrato alla v7 di
+#     proposito. Una versione nuova rende OGNI riga L2 una mancanza: i
+#     detector della scansione leggono solo la cache (`get_fundamentals_cached`)
+#     e resterebbero senza fondamentali, e la ricomposizione dei punteggi
+#     riscaricherebbe l'intero universo da yfinance in un colpo. Per
+#     un'etichetta non vale quel prezzo: una riga vecchia la legge None
+#     (valuta ignota, numero nudo a schermo) finche' il TTL o il pulsante
+#     della scheda non la riscrivono. Un campo che cambia i NUMERI, invece,
+#     il bump lo vuole — come la v7.
 _FUNDAMENTALS_SCHEMA_VERSION = 7
 _SCHEMA_VERSION_KEY = "_schema_version"
 

@@ -147,6 +147,33 @@ export function formatMoneySigned(
   return `${sign}${formatMoney(Math.abs(value), currency, opts)}`;
 }
 
+/** Un importo grande abbreviato — T/B/M/K — nella sua valuta: `$15.69B`,
+ *  `£2.10B`, `TWD 2.26T`.
+ *
+ *  La scala e la precisione sono quelle di `fmtBig` (due decimali su T/B/M,
+ *  nessuno sotto il milione), che ora si appoggia qui: un proprietario solo
+ *  per «quanti decimali ha un miliardo». Il segno sta FUORI dal simbolo,
+ *  come la' — «-£1.50M» si legge come un importo negativo.
+ *
+ *  Valuta ignota → numero NUDO («15.69B»), mai dollari: e' la regola 1 in
+ *  cima al file, ed e' il motivo per cui questa funzione esiste — la scheda
+ *  Fondamentali stampava `fmtBig`, cioe' un `$` fisso, sui ricavi di un
+ *  titolo su tre. */
+export function formatBigMoney(
+  value: number | null | undefined,
+  currency: string | null | undefined,
+): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sym = currencySymbol(currency) ?? "";
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${sym}${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}${sym}${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}${sym}${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}${sym}${(abs / 1e3).toFixed(0)}K`;
+  return `${sign}${sym}${abs.toFixed(0)}`;
+}
+
 /** Una capitalizzazione in forma compatta, nella valuta della riga:
  *  `$3.00T`, `HK$2.86T`, `£196.0B`, `₩450.5T`.
  *
