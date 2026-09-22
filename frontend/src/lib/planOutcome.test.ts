@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 
 import {
-  formatR, gambaChiudente, raccontaPiano, sequenzaGambe, stopTroppoStretto,
+  formatR, gambaChiudente, raccontaPiano, sedute, sequenzaGambe, stopTroppoStretto,
+  tracciaGara,
 } from "./planOutcome";
 
 function riga(p: Partial<PlanOutcomeRow> = {}): PlanOutcomeRow {
@@ -136,5 +137,78 @@ describe("raccontaPiano", () => {
       esito: "scaduto", r_multiple: 0.4, resolved_date: "2026-03-30",
       tp1_hit_date: null, stop_hit_date: null,
     }))).toBe("Orizzonte trascorso il 30 mar senza toccare né stop né target (+0.4R).");
+  });
+});
+
+describe("sedute", () => {
+  it("conta i giorni feriali DOPO l'ingresso, fino alla data compresa", () => {
+    // 2 marzo 2026 e' un lunedi'. La gara parte dalla barra successiva
+    // all'ingresso, quindi il giorno stesso vale zero.
+    expect(sedute("2026-03-02", "2026-03-02")).toBe(0);
+    expect(sedute("2026-03-02", "2026-03-06")).toBe(4);   // mar-ven
+    // Venerdi' -> lunedi': il fine settimana non e' una seduta.
+    expect(sedute("2026-03-06", "2026-03-09")).toBe(1);
+  });
+
+  it("una data illeggibile o all'indietro vale zero, non un numero inventato", () => {
+    expect(sedute("2026-03-10", "2026-03-02")).toBe(0);
+    expect(sedute("non-una-data", "2026-03-02")).toBe(0);
+  });
+});
+
+describe("tracciaGara", () => {
+  it("⚠️ stop e poi target: lo stop sulla barretta, il target DOPO e vuoto", () => {
+    // Il caso che la colonna esiste per far vedere a colpo d'occhio.
+    const t = tracciaGara(riga({
+      esito: "stop", r_multiple: -1, resolved_date: "2026-03-05", bars_to_outcome: 3,
+      stop_hit_date: "2026-03-05", tp1_hit_date: "2026-03-18",
+    }));
+    expect(t.chiusura).toBeCloseTo(3 / 21);
+    const [stop, target] = t.punti;
+    expect(stop).toMatchObject({ chiave: "stop", chiude: true, dopo: false });
+    expect(stop.x).toBeCloseTo(t.chiusura);
+    expect(target).toMatchObject({ chiave: "tp1", chiude: false, dopo: true });
+    expect(target.x).toBeCloseTo(12 / 21);                 // 12 sedute dal 2 al 18 marzo
+    expect(target.x).toBeGreaterThan(t.chiusura);
+  });
+
+  it("la chiusura usa le sedute VERE, non la stima dal calendario", () => {
+    // bars_to_outcome e' esatto; le date contano solo i fine settimana.
+    const t = tracciaGara(riga({ bars_to_outcome: 7, resolved_date: "2026-03-10" }));
+    expect(t.chiusura).toBeCloseTo(7 / 21);
+    expect(t.punti[0].x).toBeCloseTo(7 / 21);
+  });
+
+  it("⚠️ una gamba dopo la chiusura non finisce MAI a sinistra della barretta", () => {
+    // Le festivita' non sono contate: con qualche seduta di scarto la stima
+    // di una gamba successiva potrebbe cadere prima della chiusura, e il
+    // disegno direbbe il contrario dell'ordine vero.
+    const t = tracciaGara(riga({
+      esito: "stop", r_multiple: -1, resolved_date: "2026-03-04", bars_to_outcome: 10,
+      stop_hit_date: "2026-03-04", tp1_hit_date: "2026-03-05",
+    }));
+    const target = t.punti.find((p) => p.chiave === "tp1")!;
+    expect(target.dopo).toBe(true);
+    expect(target.x).toBeGreaterThanOrEqual(t.chiusura);
+  });
+
+  it("stop e target nella stessa barra stanno nello stesso punto, uno sopra l'altro", () => {
+    const t = tracciaGara(riga({
+      esito: "ambigua", r_multiple: -1, resolved_date: "2026-03-05", bars_to_outcome: 3,
+      stop_hit_date: "2026-03-05", tp1_hit_date: "2026-03-05",
+    }));
+    expect(t.punti.map((p) => p.x)).toEqual([t.chiusura, t.chiusura]);
+    expect(t.punti.map((p) => p.impilato)).toEqual([0, 1]);
+    // Nessuno dei due e' «dopo»: e' la stessa seduta.
+    expect(t.punti.every((p) => !p.dopo)).toBe(true);
+  });
+
+  it("uno scaduto chiude a fine orizzonte e non ha segni", () => {
+    const t = tracciaGara(riga({
+      esito: "scaduto", r_multiple: 0.4, resolved_date: "2026-03-30", bars_to_outcome: 21,
+      tp1_hit_date: null, stop_hit_date: null,
+    }));
+    expect(t.chiusura).toBe(1);
+    expect(t.punti).toEqual([]);
   });
 });

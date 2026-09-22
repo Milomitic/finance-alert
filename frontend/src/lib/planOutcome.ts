@@ -85,6 +85,96 @@ export function sequenzaGambe(riga: GaraDiPiano): Gamba[] {
     }));
 }
 
+/* ─── La gara nel tempo: dove cade ogni gamba sull'orizzonte ───────────── */
+
+/** Una gara con le misure che servono a disegnarla nel tempo. `PlanOutcomeRow`
+ *  e `PlanBrief` le portano entrambi. */
+export interface GaraNelTempo extends GaraDiPiano {
+  entry_date: string;
+  /** Sedute dall'ingresso alla chiusura: la posizione ESATTA della chiusura. */
+  bars_to_outcome: number;
+  horizon_days: number;
+}
+
+export interface PuntoTraccia {
+  chiave: Gamba["chiave"];
+  data: string;
+  /** Sull'orizzonte: 0 = l'ingresso, 1 = l'ultima seduta dell'orizzonte. */
+  x: number;
+  chiude: boolean;
+  /** Toccata DOPO la chiusura: nel disegno e' un segno vuoto. */
+  dopo: boolean;
+  /** Quante gambe PRIMA di questa cadono nella stessa seduta — barra ambigua,
+   *  o i due target nello stesso giorno. Sposta il segno in verticale, cosi'
+   *  due segni nello stesso punto non diventano uno. */
+  impilato: number;
+}
+
+export interface TracciaGara {
+  /** Dove si e' chiusa la posizione, sulla stessa scala dei punti. */
+  chiusura: number;
+  punti: PuntoTraccia[];
+}
+
+const GIORNO_MS = 86_400_000;
+
+function giornoUtc(iso: string): number | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+/** Le sedute (lun-ven) in `(da, a]`: la stessa convenzione della gara, che
+ *  parte dalla barra STRETTAMENTE successiva all'ingresso.
+ *
+ *  ⚠️ In UTC, non nel fuso locale: una data ISO nuda e' mezzanotte UTC, e
+ *  mescolarla con una mezzanotte locale sposta il conteggio di un giorno a
+ *  ovest di Greenwich — il difetto che questo repo ha gia' trovato in un test
+ *  «vero di niente» in CI.
+ *
+ *  ⚠️ Le festivita' NON sono saltate: il catalogo copre borse con calendari
+ *  diversi e nessuno e' a portata di questo calcolo. Il disegno e' quindi una
+ *  posizione approssimata di qualche seduta; la data esatta resta nel testo
+ *  accanto, e la CHIUSURA non usa questa funzione ma `bars_to_outcome`. */
+export function sedute(da: string, a: string): number {
+  const inizio = giornoUtc(da);
+  const fine = giornoUtc(a);
+  if (inizio == null || fine == null || fine <= inizio) return 0;
+  let n = 0;
+  for (let t = inizio + GIORNO_MS; t <= fine; t += GIORNO_MS) {
+    const g = new Date(t).getUTCDay();
+    if (g !== 0 && g !== 6) n++;
+  }
+  return n;
+}
+
+/** Dove cade ogni gamba toccata sull'orizzonte del segnale.
+ *
+ *  ⚠️ A sinistra della chiusura, per costruzione, non puo' esserci niente se
+ *  non cio' che e' accaduto NELLA STESSA SEDUTA: la posizione si chiude alla
+ *  prima gamba toccata. Il disegno lo rende visibile invece di doverlo
+ *  spiegare — ed e' anche la ragione per cui qui l'ordine prevale sulla
+ *  posizione stimata: una gamba dopo la chiusura non puo' finire a sinistra
+ *  della barretta per un errore di calendario. */
+export function tracciaGara(riga: GaraNelTempo): TracciaGara {
+  const orizzonte = Math.max(1, riga.horizon_days);
+  const scala = (v: number) => Math.min(1, Math.max(0, v / orizzonte));
+  const chiusura = scala(riga.bars_to_outcome);
+  const perGiorno = new Map<string, number>();
+  const punti = sequenzaGambe(riga).map((g) => {
+    const stimata = scala(sedute(riga.entry_date, g.data));
+    const x =
+      g.data === riga.resolved_date
+        ? chiusura
+        : g.dopo
+          ? Math.max(chiusura, stimata)
+          : Math.min(chiusura, stimata);
+    const impilato = perGiorno.get(g.data) ?? 0;
+    perGiorno.set(g.data, impilato + 1);
+    return { chiave: g.chiave, data: g.data, x, chiude: g.chiude, dopo: g.dopo, impilato };
+  });
+  return { chiusura, punti };
+}
+
 /** Lo stop e' stato colpito PRIMA di un target poi arrivato lo stesso.
  *
  *  E' il numero che nessun altro magazzino sa dare, e la ragione per cui le

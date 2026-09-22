@@ -40,6 +40,8 @@ describe("SignalOutcomeList", () => {
     // quale un multiplo e quale un conteggio. Stesso difetto che la tabella
     // dei setup aveva e ha chiuso.
     monta([riga()]);
+    // «Sequenza» per ruolo: la parola compare anche nella legenda sotto.
+    expect(screen.getByRole("button", { name: "Sequenza" })).toBeInTheDocument();
     for (const nome of ["Titolo", "Esito", "Chiusa", "Poi", "R"]) {
       expect(screen.getByText(nome)).toBeInTheDocument();
     }
@@ -118,5 +120,40 @@ describe("SignalOutcomeList", () => {
   it("un elenco vuoto spiega quando nasce una riga, invece di sembrare rotto", () => {
     monta([]);
     expect(screen.getByText(/Nessun piano ancora risolto/)).toBeInTheDocument();
+  });
+
+  it("⚠️ la sequenza disegna stop PIENO sulla chiusura e target VUOTO dopo", () => {
+    // Il caso che la colonna esiste per far vedere: la posizione chiusa allo
+    // stop il 5, e il target toccato il 18 quando non c'era piu' niente da
+    // pagare. Il disegno deve dirlo con la forma, non solo col colore.
+    monta([riga({
+      esito: "stop", r_multiple: -1, resolved_date: "2026-03-05", bars_to_outcome: 3,
+      stop_hit_date: "2026-03-05", tp1_hit_date: "2026-03-18",
+    })]);
+    const disegno = screen.getByRole("img", { name: /Stop colpito il 5 mar/ });
+    // Il nome accessibile e' la frase INTERA, gambe successive comprese.
+    expect(disegno).toHaveAccessibleName(/Dopo la chiusura il prezzo ha toccato target il 18 mar/);
+    const segni = disegno.querySelectorAll("span[aria-hidden].h-2");
+    expect(segni).toHaveLength(2);
+    const [stop, target] = Array.from(segni);
+    expect(stop.className).toMatch(/bg-rose-600/);       // pieno
+    expect(target.className).toMatch(/border-emerald-600/); // vuoto
+    expect(target.className).toMatch(/rounded-full/);    // la forma del target
+  });
+
+  it("uno scaduto ha la barretta in fondo e nessun segno", () => {
+    monta([riga({
+      esito: "scaduto", r_multiple: 0.4, resolved_date: "2026-03-30", bars_to_outcome: 21,
+      tp1_hit_date: null, stop_hit_date: null,
+    })]);
+    const disegno = screen.getByRole("img", { name: /Orizzonte trascorso/ });
+    expect(disegno.querySelectorAll("span[aria-hidden].h-2")).toHaveLength(0);
+  });
+
+  it("la legenda del disegno e' a schermo, non in un suggerimento", () => {
+    // Un codice di forme che non si vede non si impara.
+    monta([riga()]);
+    expect(screen.getByText("secondo target")).toBeInTheDocument();
+    expect(screen.getByText(/vuoto = toccato dopo la chiusura/)).toBeInTheDocument();
   });
 });

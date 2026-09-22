@@ -1,11 +1,13 @@
 import { ArrowRight, CircleSlash, Target, TrendingDown, XCircle } from "lucide-react";
+import type { CSSProperties } from "react";
 
 import type { PlanOutcomeRow } from "@/api/planOutcomes";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { HintLabel } from "@/components/ui/info-hint";
 import {
-  ESITO_META, formatR, giornoBreve, sequenzaGambe, stopTroppoStretto,
+  ESITO_META, formatR, giornoBreve, raccontaPiano, sequenzaGambe, stopTroppoStretto,
+  tracciaGara, type Gamba,
 } from "@/lib/planOutcome";
 import { detectorLabel } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
@@ -56,14 +58,19 @@ const PASTIGLIA: Record<string, string> = {
  * sono VISIBILI a quella larghezza: una cella `hidden` e' `display:none` e non
  * occupa una traccia. Stessa forma della tabella dei setup.
  *
- *   < sm    titolo · esito · R
+ *   < sm    titolo · esito · R · sequenza
  *   >= sm   + chiusa, poi
- *   >= lg   + condizione, sedute
- */
+ *   >= xl   + condizione, sedute
+ *
+ * ⚠️ Condizione e sedute stanno da `xl` e non da `lg` dal 2026-09-22, quando
+ * e' arrivata la sequenza. Il conto a 1024px: 240 di barra laterale, 48 di
+ * margini, 652 di colonne fisse e 84 di spazi lasciavano al TITOLO zero
+ * pixel — cioe' l'identita' della riga cedeva per far posto alla
+ * decorazione, l'errore che questo repo ha gia' pagato tre volte. */
 const COLONNE =
-  "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 " +
-  "sm:grid-cols-[minmax(0,1fr)_116px_68px_100px_64px] sm:gap-x-3 " +
-  "lg:grid-cols-[minmax(0,1fr)_124px_116px_68px_100px_64px_60px]";
+  "grid grid-cols-[minmax(0,1fr)_auto_auto_64px] items-center gap-x-2 " +
+  "sm:grid-cols-[minmax(0,1fr)_116px_68px_100px_64px_96px] sm:gap-x-3 " +
+  "xl:grid-cols-[minmax(0,1fr)_124px_116px_68px_100px_64px_60px_120px]";
 
 const INTESTAZIONE = "text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground";
 
@@ -141,6 +148,92 @@ function Poi({ riga }: { riga: PlanOutcomeRow }) {
   );
 }
 
+/* ─── La sequenza: la gara disegnata nel tempo ───────────────────────────
+ *
+ * Una riga d'orizzonte per segnale: a sinistra l'ingresso, a destra l'ultima
+ * seduta dell'orizzonte del detector, e una barretta sul giorno in cui la
+ * posizione si e' chiusa. Ogni gamba toccata e' un segno nella sua seduta.
+ *
+ * ⚠️ La forma porta il SIGNIFICATO, il colore lo ripete. Stop quadrato, target
+ * cerchio, secondo target rombo: chi non distingue il rosso dal verde legge lo
+ * stesso disegno. Pieno = toccato a posizione aperta, vuoto = dopo la
+ * chiusura, cioe' un prezzo arrivato quando non c'era piu' niente da pagare.
+ *
+ * ⚠️ E il disegno non sostituisce il testo: la frase intera, date comprese,
+ * e' il nome accessibile e il suggerimento. Una posizione stimata di qualche
+ * seduta (le festivita' non sono contate) va bene per un'idea a colpo
+ * d'occhio, non come fonte della data.
+ */
+
+/* Classi LETTERALI per la stessa ragione delle pastiglie. */
+const FORMA: Record<Gamba["chiave"], string> = {
+  stop: "rounded-[1px]",
+  tp1: "rounded-full",
+  tp2: "rotate-45 rounded-[1px]",
+};
+const PIENO: Record<Gamba["chiave"], string> = {
+  stop: "bg-rose-600 dark:bg-rose-400",
+  tp1: "bg-emerald-600 dark:bg-emerald-400",
+  tp2: "bg-emerald-600 dark:bg-emerald-400",
+};
+const VUOTO: Record<Gamba["chiave"], string> = {
+  stop: "border-[1.5px] border-rose-600 bg-card dark:border-rose-400",
+  tp1: "border-[1.5px] border-emerald-600 bg-card dark:border-emerald-400",
+  tp2: "border-[1.5px] border-emerald-600 bg-card dark:border-emerald-400",
+};
+/* Due segni nella stessa seduta: il secondo sale, il terzo scende. */
+const QUOTA = ["50%", "18%", "82%"];
+
+function Segno({ chiave, vuoto, className, style }: {
+  chiave: Gamba["chiave"];
+  vuoto: boolean;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      aria-hidden
+      className={cn("h-2 w-2 shrink-0", FORMA[chiave], vuoto ? VUOTO[chiave] : PIENO[chiave], className)}
+      style={style}
+    />
+  );
+}
+
+function Sequenza({ riga }: { riga: PlanOutcomeRow }) {
+  const { chiusura, punti } = tracciaGara(riga);
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const storia = raccontaPiano(riga);
+  return (
+    /* `role="img"` con un nome: il disegno e' UNA affermazione, e gli
+       assistivi devono sentirla intera invece di una fila di forme. */
+    <span role="img" aria-label={storia} title={storia} className="block px-1">
+      <span className="relative block h-4">
+        {/* L'orizzonte intero. */}
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" />
+        {/* Il tratto in cui la posizione era APERTA. */}
+        <span
+          className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted-foreground/25"
+          style={{ width: pct(chiusura) }}
+        />
+        {/* La chiusura. */}
+        <span
+          className="absolute inset-y-0 w-px -translate-x-1/2 bg-foreground/60"
+          style={{ left: pct(chiusura) }}
+        />
+        {punti.map((p) => (
+          <Segno
+            key={p.chiave}
+            chiave={p.chiave}
+            vuoto={p.dopo}
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{ left: pct(p.x), top: QUOTA[Math.min(p.impilato, QUOTA.length - 1)] }}
+          />
+        ))}
+      </span>
+    </span>
+  );
+}
+
 function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) => void }) {
   return (
     <li>
@@ -155,7 +248,7 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
       >
         <Identita riga={riga} />
 
-        <span className="hidden truncate text-xs text-muted-foreground lg:block">
+        <span className="hidden truncate text-xs text-muted-foreground xl:block">
           {detectorLabel(riga.detector)}
         </span>
 
@@ -180,9 +273,11 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
           {formatR(riga.r_multiple)}
         </span>
 
-        <span className="hidden justify-self-end whitespace-nowrap text-xs tabular-nums text-muted-foreground lg:block">
+        <span className="hidden justify-self-end whitespace-nowrap text-xs tabular-nums text-muted-foreground xl:block">
           {riga.bars_to_outcome}
         </span>
+
+        <Sequenza riga={riga} />
       </button>
     </li>
   );
@@ -192,7 +287,7 @@ function Intestazione() {
   return (
     <li className={cn(COLONNE, "border-b bg-muted/20 px-3 py-1")}>
       <span className={INTESTAZIONE}>Titolo</span>
-      <span className={cn(INTESTAZIONE, "hidden lg:block")}>Condizione</span>
+      <span className={cn(INTESTAZIONE, "hidden xl:block")}>Condizione</span>
       <span className={INTESTAZIONE}>Esito</span>
       <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
       <span className={cn(INTESTAZIONE, "hidden sm:block")}>
@@ -208,8 +303,18 @@ function Intestazione() {
         </HintLabel>
       </span>
       <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
-      <span className={cn(INTESTAZIONE, "hidden justify-self-end lg:block")}>
+      <span className={cn(INTESTAZIONE, "hidden justify-self-end xl:block")}>
         <HintLabel text="Sedute dall'ingresso alla chiusura della posizione.">Sedute</HintLabel>
+      </span>
+      <span className={INTESTAZIONE}>
+        <HintLabel
+          text={
+            "La gara disegnata nel tempo: a sinistra l'ingresso, a destra l'ultima seduta dell'orizzonte del segnale, e la barretta verticale è il giorno in cui la posizione si è chiusa. Quadrato = stop, cerchio = target, rombo = secondo target; pieno se toccato a posizione aperta, vuoto se dopo la chiusura. " +
+            "A sinistra della barretta non può esserci niente se non ciò che è successo nella stessa seduta: la posizione si chiude alla prima gamba toccata. Le posizioni sono in sedute, senza contare le festività: la data esatta è nel testo, passando sopra al disegno."
+          }
+        >
+          Sequenza
+        </HintLabel>
       </span>
     </li>
   );
@@ -242,6 +347,20 @@ export function SignalOutcomeList({
             <Riga key={r.alert_id} riga={r} onApri={onApriSegnale} />
           ))}
         </ul>
+        {/* La legenda del disegno, a schermo e non in un suggerimento: un
+            codice di forme che non si vede non si impara. */}
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t bg-muted/20 px-3 py-1.5 text-[0.7059rem] text-muted-foreground">
+          <span className="font-semibold uppercase tracking-[0.14em]">Sequenza</span>
+          <span className="inline-flex items-center gap-1"><Segno chiave="stop" vuoto={false} /> stop</span>
+          <span className="inline-flex items-center gap-1"><Segno chiave="tp1" vuoto={false} /> target</span>
+          <span className="inline-flex items-center gap-1"><Segno chiave="tp2" vuoto={false} /> secondo target</span>
+          <span className="inline-flex items-center gap-1">
+            <Segno chiave="tp1" vuoto /> vuoto = toccato dopo la chiusura
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden className="inline-block h-3 w-px bg-foreground/60" /> chiusura della posizione
+          </span>
+        </p>
         {ricostruiti > 0 && (
           <p className="border-t bg-muted/20 px-3 py-1.5 text-[0.7059rem] text-muted-foreground">
             <b className="tabular-nums text-foreground">{ricostruiti}</b> righe marcate{" "}
