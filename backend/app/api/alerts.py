@@ -384,7 +384,7 @@ def list_alerts(
     horizon: str | None = None,
     limit: int = 50,
     offset: int = 0,
-    sort_by: str = "triggered_at",
+    sort_by: str = "emissione",
     sort_dir: str = "desc",
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),

@@ -41,7 +41,13 @@ import { useHolderCounts } from "@/hooks/useInstitutionals";
 import { useSignalOhlcv } from "@/hooks/useSignalOhlcv";
 import { formatMoney } from "@/lib/money";
 import { earningsProximityDays as sharedEarningsProximityDays } from "@/lib/earningsProximity";
-import { alertDelayDays, detectionInstant, isAlertDelayed } from "@/lib/alertDates";
+import {
+  alertDelayDays,
+  barraDiversaDalSegnale,
+  detectionInstant,
+  giornoDelSegnale,
+  isAlertDelayed,
+} from "@/lib/alertDates";
 import { InfoHint } from "@/components/ui/info-hint";
 import { entryPrice, priceHasMoved } from "@/lib/alertEntry";
 import {
@@ -203,10 +209,17 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
   // su 8.396 sono in questo stato, con punte di 371 revisioni — e l'unico
   // posto in cui la data originaria compariva era un attributo title, che su
   // un dispositivo tattile non si apre mai.
-  const originDiverges =
-    firstEmittedAt != null &&
-    alert.signal_date != null &&
-    firstEmittedAt.slice(0, 10) !== alert.signal_date;
+  // La barra del match quando e' un giorno diverso da quello di nascita, e
+  // l'ultima revisione quando ce n'e' stata una: due fatti secondari, sotto
+  // l'unica data in evidenza.
+  const barraDiversa = barraDiversaDalSegnale(alert);
+  // ⚠️ Una barra PRECEDENTE e una SUCCESSIVA raccontano due cose opposte: la
+  // prima è una rilevazione tardiva (l'abbiamo visto giorni dopo la candela),
+  // la seconda è il segnale che PERSISTE e la cui ancora avanza a ogni
+  // scansione. Dirle con la stessa frase rimetterebbe in testa al lettore
+  // proprio la confusione che questa data unica chiude.
+  const barraTardiva = barraDiversa != null && barraDiversa < giornoDelSegnale(alert);
+  const ultimaRevisione = amendedAt ? amendedAt.slice(0, 10) : null;
   // ⚠️ Il livello del PIANO, cioè quello della prima emissione: il riquadro
   // sta accanto al prezzo d'ingresso e allo stop, e mostrarne uno di un altro
   // istante rimetterebbe a schermo la mescolanza che `ingressiDelPiano` chiude.
@@ -410,29 +423,53 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
           <div className="rounded-lg border border-border/60 bg-muted/30 dark:bg-muted/15 p-3">
             <div className="flex items-center gap-1 text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold">
               <CalendarRange className="h-3 w-3" />
-              Data segnale
+              Segnale del
+              <InfoHint
+                label="Segnale del"
+                text={
+                  "Il giorno in cui il segnale è comparso: è la barra su cui poggiano il prezzo "
+                  + "d'ingresso, lo stop e i target. Se la regola aveva fatto match su una barra "
+                  + "precedente, quella data è qui sotto insieme ai giorni di scarto. Finché il "
+                  + "segnale persiste ogni scansione lo rivede: l'ultima revisione è un fatto "
+                  + "diverso e sta anch'essa qui sotto, non in evidenza."
+                }
+              />
             </div>
-            {alert.signal_date ? (
+            {alert.signal_date || firstEmittedAt ? (
               <>
+                {/* ⚠️ UNA data in evidenza, e la scelta non e' cosmetica. Qui
+                    stava `signal_date`, che per i detector di stato viene
+                    ririmessa sull'ultima barra a ogni revisione: su MRNA
+                    diceva «21 ago» mentre il piano era costruito sulla barra
+                    del 12, e il riquadro accanto mostrava il prezzo di quel
+                    12. Vedi `lib/alertDates.giornoDelSegnale`. */}
                 <div className="text-base font-bold tabular-nums mt-1 leading-tight">
-                  {new Date(alert.signal_date).toLocaleDateString("it-IT", {
+                  {new Date(`${giornoDelSegnale(alert)}T00:00:00`).toLocaleDateString("it-IT", {
                     weekday: "short",
                     day: "numeric",
                     month: "short",
                   })}
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums mt-0.5">
-                  {alert.signal_date}
+                  {giornoDelSegnale(alert)}
                 </div>
-                {originDiverges && firstEmittedAt && (
+                {barraTardiva && (
                   <div className="mt-1.5 pt-1.5 border-t border-border/50 text-[0.7059rem] leading-snug text-amber-700 dark:text-amber-300">
-                    <span className="font-semibold">Ultima osservazione.</span>{" "}
-                    Emesso il{" "}
-                    <span className="tabular-nums">{firstEmittedAt.slice(0, 10)}</span>
-                    {amendCount != null && amendCount > 0 ? (
+                    La candela è del{" "}
+                    <span className="tabular-nums">{barraDiversa}</span>
+                    {delta != null && delta > 0
+                      ? `: rilevato ${delta} ${delta === 1 ? "giorno" : "giorni"} dopo.`
+                      : "."}
+                  </div>
+                )}
+                {amendCount != null && amendCount > 0 && ultimaRevisione && (
+                  <div className="mt-1.5 pt-1.5 border-t border-border/50 text-[0.7059rem] leading-snug text-muted-foreground">
+                    Poi rivisto {amendCount} {amendCount === 1 ? "volta" : "volte"},
+                    l'ultima il <span className="tabular-nums">{ultimaRevisione}</span>
+                    {!barraTardiva && barraDiversa ? (
                       <>
-                        , poi rivisto {amendCount}{" "}
-                        {amendCount === 1 ? "volta" : "volte"}
+                        , con la condizione ancora valida sulla barra del{" "}
+                        <span className="tabular-nums">{barraDiversa}</span>
                       </>
                     ) : null}
                     .

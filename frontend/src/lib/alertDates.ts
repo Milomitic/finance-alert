@@ -108,6 +108,45 @@ export function detectionInstant(alert: AlertDatabile): string {
   return typeof grezzo === "string" && grezzo.length >= 10 ? grezzo : alert.triggered_at;
 }
 
+/* ─── La data UNICA in evidenza ──────────────────────────────────────────── *
+ *
+ * Un alert porta tre date e non sono la stessa cosa:
+ *
+ *   1. la BARRA su cui la regola ha fatto match (`signal_date`), che per i
+ *      detector di stato viene ririmessa sull'ultima barra a ogni revisione —
+ *      4.775 alert su 7.296 rivisti ce l'hanno diversa dalla nascita, fino a
+ *      nove giorni dopo;
+ *   2. il GIORNO in cui l'alert è comparso, dove sono fissati il prezzo
+ *      d'ingresso e la geometria del piano;
+ *   3. l'ultima osservazione (`triggered_at`), che avanza finché il segnale
+ *      persiste.
+ *
+ * In evidenza va la (2), e la ragione è che è l'unica di cui si possa fare
+ * qualcosa: è il giorno della barra a cui appartiene il prezzo d'ingresso.
+ * Misurato in produzione il 2026-09-22: quel prezzo coincide al centesimo con
+ * la chiusura di quella barra in 8.892 casi su 8.910. Le altre due restano
+ * dove rispondono a una domanda loro — la (1) nella pastiglia «in ritardo»,
+ * la (3) in una riga secondaria del dialogo quando è diversa.
+ *
+ * ⚠️ Si prende la DATA DEL TESTO, non il giorno locale dell'istante. Le
+ * scansioni girano alle 23:32 UTC: convertito in ora italiana quell'istante
+ * cade il giorno DOPO, cioè un giorno dopo la barra su cui il piano è
+ * costruito — che è esattamente la confusione che questa data unica chiude.
+ */
+
+/** Il giorno in cui l'alert è comparso, come "YYYY-MM-DD". */
+export function giornoDelSegnale(alert: AlertDatabile): string {
+  return detectionInstant(alert).slice(0, 10);
+}
+
+/** La barra del match, quando è un giorno DIVERSO da quello di nascita: il
+ *  fatto che la pastiglia «in ritardo» misura, e l'unico posto in cui
+ *  `signal_date` merita ancora di comparire. */
+export function barraDiversaDalSegnale(alert: AlertDatabile): string | null {
+  const bar = alert.signal_date;
+  return bar && bar.slice(0, 10) !== giornoDelSegnale(alert) ? bar.slice(0, 10) : null;
+}
+
 /** I giorni di calendario fra la barra del segnale e la rilevazione VERA. */
 export function alertDelayDays(alert: AlertDatabile): number | null {
   return daysBetween(detectionInstant(alert), alert.signal_date);

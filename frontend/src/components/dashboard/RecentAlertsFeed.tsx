@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMoney } from "@/lib/money";
-import { isAlertDelayed } from "@/lib/alertDates";
+import { barraDiversaDalSegnale, giornoDelSegnale, isAlertDelayed } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { pianoDelSegnale, primoTarget } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
@@ -177,32 +177,31 @@ export function RecentAlertsFeed({ alerts }: Props) {
                     <TableCell className="py-2 text-right text-muted-foreground">—</TableCell>
                   </>
                 )}
-                {/* Data — signal_date primary; orange clock flags a lagged
-                    detection (>=1 day after the market bar). */}
+                {/* Data — il giorno in cui il segnale e' COMPARSO, che e'
+                    quello del prezzo d'ingresso mostrato qui accanto. La barra
+                    di mercato, quando e' un altro giorno, resta nel titolo
+                    insieme all'orologio. */}
                 <TableCell className="py-2 text-right pr-4">
-                  <span
-                    className="inline-flex items-center justify-end gap-1 text-[0.7647rem] text-muted-foreground tabular-nums whitespace-nowrap"
-                    title={
-                      a.signal_date
-                        ? `Segnale: ${a.signal_date} · Rilevato: ${new Date(a.triggered_at).toLocaleString("it-IT")}`
-                        : new Date(a.triggered_at).toLocaleString("it-IT")
-                    }
-                  >
-                    {delayed && (
-                      <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400" />
-                    )}
-                    {a.signal_date
-                      ? new Date(a.signal_date).toLocaleDateString("it-IT", {
+                  {(() => {
+                    const barra = barraDiversaDalSegnale(a);
+                    return (
+                      <span
+                        className="inline-flex items-center justify-end gap-1 text-[0.7647rem] text-muted-foreground tabular-nums whitespace-nowrap"
+                        title={[
+                          `Comparso il ${giornoDelSegnale(a)}`,
+                          barra ? `barra di mercato ${barra}` : null,
+                        ].filter(Boolean).join(" · ")}
+                      >
+                        {delayed && (
+                          <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400" />
+                        )}
+                        {new Date(`${giornoDelSegnale(a)}T00:00:00`).toLocaleDateString("it-IT", {
                           day: "2-digit",
                           month: "2-digit",
-                        })
-                      : new Date(a.triggered_at).toLocaleString("it-IT", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
                         })}
-                  </span>
+                      </span>
+                    );
+                  })()}
                 </TableCell>
               </TableRow>
             );

@@ -23,7 +23,9 @@ import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useSignalCalibration } from "@/hooks/useSignalCalibration";
 import {
   alertDelayDays,
+  barraDiversaDalSegnale,
   formatShortDate,
+  giornoDelSegnale,
   isAlertDelayed,
 } from "@/lib/alertDates";
 import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
@@ -40,9 +42,19 @@ import { cn } from "@/lib/utils";
  * stessa ragione per cui era gia' fuori dalla scheda del titolo — e la catena
  * sta intera nel dettaglio del segnale, dove c'e' lo spazio per leggerla. Una
  * preferenza salvata che le nascondeva resta nel localStorage e non fa niente. */
+/** Che cosa dice quella data, in una riga: sta sull'intestazione e nel
+ *  popover, quindi va scritta una volta sola. */
+const HINT_SEGNALE =
+  "Il giorno in cui il segnale è comparso. È la data su cui poggiano il prezzo "
+  + "d'ingresso e il piano; se la barra di mercato è precedente, l'orologio lo segnala.";
+
 const ALERTS_COLS = [
-  { id: "data_segnale", label: "Data segnale" },
-  { id: "rilevato",    label: "Rilevato" },
+  // ⚠️ UNA data sola, e l'id resta `data_segnale` perche' le preferenze
+  // salvate dell'utente sono indicizzate su quello. La colonna «Rilevato» —
+  // che mostrava `triggered_at`, cioe' l'ULTIMA REVISIONE — non c'e' piu':
+  // erano due date accanto, nessuna delle quali era quella su cui poggia il
+  // piano. Vedi `lib/alertDates.giornoDelSegnale`.
+  { id: "data_segnale", label: "Segnale" },
   { id: "regola",      label: "Regola" },
   { id: "natura",      label: "Natura" },
   { id: "orizzonte",   label: "Orizzonte" },
@@ -270,8 +282,9 @@ export function AlertsTable({
   // so every header sat one column right of its data. Deriving both from the
   // same flag makes that drift impossible.)
   const showCheckbox = !embedded;
-  const showDataSegnale = !embedded && isVisible("data_segnale");
-  const showRilevato = embedded || isVisible("rilevato");
+  // Anche la scheda del titolo mostra questa data, ed e' la stessa: prima
+  // mostrava «Rilevato», cioe' l'ultima revisione.
+  const showDataSegnale = embedded || isVisible("data_segnale");
   const showTitolo = !embedded;
   const showRegola = embedded || isVisible("regola");
   const showNatura = !embedded && isVisible("natura");
@@ -291,7 +304,7 @@ export function AlertsTable({
 
   // colSpan for the empty-state row must match the visible column count.
   const colSpan = [
-    showCheckbox, showDataSegnale, showRilevato, showTitolo, showRegola,
+    showCheckbox, showDataSegnale, showTitolo, showRegola,
     showNatura, showOrizzonte, showForza, showProbabilita,
     showEsito, showPiano, showArchive,
   ].filter(Boolean).length;
@@ -329,32 +342,16 @@ export function AlertsTable({
           {showDataSegnale && (
             onSort ? (
               <SortableHeader
-                column="signal_date"
-                label="Data segnale"
-                hint="Data della barra di mercato in cui la regola è scattata"
+                column="emissione"
+                label="Segnale"
+                hint={HINT_SEGNALE}
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className={TESTA} hint="Data della barra di mercato in cui la regola è scattata">
-                Data segnale
-              </TableHead>
-            )
-          )}
-          {showRilevato && (
-            onSort ? (
-              <SortableHeader
-                column="triggered_at"
-                label="Rilevato"
-                hint="Quando il sistema ha registrato il segnale"
-                sortBy={sortBy}
-                sortDir={sortDir}
-                onSort={onSort}
-              />
-            ) : (
-              <TableHead className={TESTA} hint="Quando il sistema ha registrato il segnale">
-                Rilevato
+              <TableHead className={TESTA} hint={HINT_SEGNALE}>
+                Segnale
               </TableHead>
             )
           )}
@@ -506,40 +503,32 @@ export function AlertsTable({
                 />
               </TableCell>
             )}
-            {/* Data segnale — non-embedded, toggleable */}
+            {/* Segnale — il giorno in cui e' comparso, uno solo */}
             {showDataSegnale && (
               <TableCell className="font-semibold tabular-nums">
-                {a.signal_date ? (
-                  formatShortDate(a.signal_date)
-                ) : (
-                  <span
-                    className="text-muted-foreground italic font-normal"
-                    title="Segnale legacy creato prima dell'introduzione della data segnale"
-                  >
-                    —
-                  </span>
-                )}
-              </TableCell>
-            )}
-            {/* Rilevato (detection timestamp) — first column in embedded mode */}
-            {showRilevato && (
-              <TableCell className="text-muted-foreground tabular-nums">
                 {(() => {
                   const delayed = isAlertDelayed(a);
                   const delta = alertDelayDays(a);
+                  const barra = barraDiversaDalSegnale(a);
                   return (
                     <span
                       className="inline-flex items-center gap-1"
-                      title={
+                      title={[
+                        `Comparso il ${giornoDelSegnale(a)}`,
+                        barra
+                          ? (barra < giornoDelSegnale(a)
+                              ? `candela del ${barra}`
+                              : `ancora valido sulla barra del ${barra}`)
+                          : null,
                         delayed && delta != null
-                          ? `Il sistema ha rilevato il segnale ${delta}g dopo la barra di mercato. Possibile backfill o scan saltato.`
-                          : "Quando lo scan ha registrato l'alert"
-                      }
+                          ? `rilevato ${delta}g dopo la candela: possibile backfill o scan saltato`
+                          : null,
+                      ].filter(Boolean).join(" · ")}
                     >
                       {delayed && (
                         <Clock className="h-3 w-3 text-amber-700 dark:text-amber-400 shrink-0" />
                       )}
-                      {formatShortDate(a.triggered_at)}
+                      {formatShortDate(giornoDelSegnale(a))}
                     </span>
                   );
                 })()}

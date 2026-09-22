@@ -49,9 +49,15 @@ export function SignalsView() {
     // rows by DETECTOR (the value is a per-detector constant), so the sort was
     // removed. An old link asking for it falls back to the default instead of
     // producing an order nothing on screen can explain.
+    //
+    // ⚠️ `triggered_at` cade nello stesso ripiego dal 2026-09-23: era
+    // l'ordine predefinito e la colonna che lo esprimeva non c'e' piu'. Quel
+    // campo e' l'ULTIMA REVISIONE, quindi ordinarci sopra portava in cima ogni
+    // giorno i segnali che PERSISTONO invece di quelli nuovi. La lista mostra
+    // il giorno in cui l'alert e' comparso, e ci si ordina sopra.
     () => {
       const sb = searchParams.get("sort_by");
-      return sb && sb !== "probability" ? sb : "triggered_at";
+      return sb && sb !== "probability" && sb !== "triggered_at" ? sb : "emissione";
     },
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">(() =>

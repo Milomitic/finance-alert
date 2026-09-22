@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   DELAYED_DETECTION_MIN_DAYS,
   alertDelayDays,
+  barraDiversaDalSegnale,
   daysBetween,
   detectionInstant,
   formatShortDate,
+  giornoDelSegnale,
   isAlertDelayed,
   isDelayedDetection,
 } from "@/lib/alertDates";
@@ -127,5 +129,64 @@ describe("l'istante della rilevazione", () => {
       const a = { triggered_at: "2026-09-14T19:40:56Z", signal_date: "2026-09-04", snapshot };
       expect(detectionInstant(a as never)).toBe("2026-09-14T19:40:56Z");
     }
+  });
+});
+
+
+/* ─── La data unica in evidenza ─────────────────────────────────────────── */
+
+/** ⚠️ `process.env` e non `@types/node`: qualunque scrittura npm su Windows
+ *  puo' togliere dal lockfile le dipendenze opzionali Linux, e il difetto si
+ *  vede solo in CI. Stessa scelta, con la stessa ragione, in
+ *  `earningsProximity.test.ts`. */
+function nodeEnv(): Record<string, string | undefined> {
+  return (globalThis as unknown as { process: { env: Record<string, string | undefined> } })
+    .process.env;
+}
+
+describe("giornoDelSegnale", () => {
+  const mrna = {
+    triggered_at: "2026-08-24T18:32:35Z",
+    signal_date: "2026-08-21",
+    snapshot: { first_emitted_at: "2026-08-12T23:32:48.467036+00:00", amend_count: 27 },
+  };
+
+  it("e' il giorno della PRIMA emissione, non la barra dell'ultima revisione", () => {
+    // Il caso MRNA: il riquadro diceva «21 ago» mentre il piano era costruito
+    // sulla barra del 12, che e' anche quella del prezzo mostrato accanto.
+    expect(giornoDelSegnale(mrna)).toBe("2026-08-12");
+    expect(barraDiversaDalSegnale(mrna)).toBe("2026-08-21");
+  });
+
+  it("quando la barra coincide non c'e' niente di secondario da dire", () => {
+    expect(barraDiversaDalSegnale({
+      triggered_at: "2026-08-12T23:32:48Z",
+      signal_date: "2026-08-12",
+      snapshot: { first_emitted_at: "2026-08-12T23:32:48Z" },
+    })).toBeNull();
+  });
+
+  it("⚠️ una scansione delle 23:32 UTC resta del suo giorno, anche a Roma", () => {
+    // Il controllo che giustifica lo `slice` invece di una `Date`: convertito
+    // in ora italiana quell'istante cade il giorno DOPO, cioe' un giorno dopo
+    // la barra su cui il piano e' costruito.
+    const env = nodeEnv();
+    const tz = env.TZ;
+    try {
+      env.TZ = "Europe/Rome";
+      expect(giornoDelSegnale(mrna)).toBe("2026-08-12");
+      // La forma sbagliata, fissata qui perche' la differenza esista davvero:
+      // senza, questo test sarebbe vero anche di una conversione locale.
+      expect(new Date(mrna.snapshot.first_emitted_at).toLocaleDateString("en-CA"))
+        .toBe("2026-08-13");
+    } finally {
+      env.TZ = tz;
+    }
+  });
+
+  it("senza prima emissione ripiega sul campo vecchio", () => {
+    const storico = { triggered_at: "2026-09-14T19:40:56Z", signal_date: "2026-09-04" };
+    expect(giornoDelSegnale(storico)).toBe("2026-09-14");
+    expect(barraDiversaDalSegnale(storico)).toBe("2026-09-04");
   });
 });

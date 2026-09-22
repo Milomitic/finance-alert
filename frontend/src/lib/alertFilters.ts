@@ -95,7 +95,7 @@ export function searchFromState(
   if (filters.archived) sp.set("archived", "true");
   if (filters.include_archived) sp.set("include_archived", "true");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
-  if (sortBy !== "triggered_at") sp.set("sort_by", sortBy);
+  if (sortBy !== "emissione") sp.set("sort_by", sortBy);
   if (sortDir !== "desc") sp.set("sort_dir", sortDir);
   return sp;
 }

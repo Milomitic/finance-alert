@@ -39,6 +39,24 @@ from app.services.ohlcv_service import (
 # query time via the dialect-portable json_text() (json_extract on SQLite,
 # ->>'key' on Postgres) so they sort correctly across all rows and backends.
 _SORTABLE: dict[str, Any] = {
+    # ⚠️ Il GIORNO in cui l'alert e' comparso, cioe' quello su cui poggiano il
+    # prezzo d'ingresso e il piano. E' la data che la lista mostra, quindi e'
+    # anche quella su cui si ordina: `triggered_at` descrive l'ultima
+    # revisione, e ordinandoci sopra tutti i segnali che PERSISTONO finiscono
+    # in cima ogni giorno a prescindere da quando sono nati.
+    #
+    # Il giorno e non l'istante, per due ragioni che si sommano: la colonna
+    # mostra un giorno, e i due campi coalescati hanno forme testuali diverse
+    # (ISO con la T contro il testo che Postgres rende da un timestamp), quindi
+    # oltre il decimo carattere il confronto non sarebbe piu' confrontabile.
+    # Il pareggio dentro la stessa giornata lo rompe `Alert.id`, gia' in coda
+    # all'ORDER BY.
+    "emissione": func.substr(
+        func.coalesce(
+            json_text(Alert.snapshot, "first_emitted_at"),
+            sqlalchemy.cast(Alert.triggered_at, sqlalchemy.String),
+        ), 1, 10,
+    ),
     "triggered_at": Alert.triggered_at,
     "signal_date": Alert.signal_date,
     "ticker": Stock.ticker,
@@ -254,7 +272,7 @@ def list_alerts(
     horizon: str | None = None,
     limit: int = 50,
     offset: int = 0,
-    sort_by: str = "triggered_at",
+    sort_by: str = "emissione",
     sort_dir: str = "desc",
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """List alerts with stock.ticker. Returns (items, total, has_more)."""

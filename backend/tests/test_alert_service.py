@@ -168,3 +168,67 @@ def test_filter_by_horizon(db):
     # Combined with outcome: nothing matured yet → hit+medium is empty.
     items, total, _ = list_alerts(db, horizon="medium", outcome="hit")
     assert items == [] and total == 0
+
+
+# ── l'ordine della lista: il giorno in cui il segnale e' COMPARSO ───────────
+#
+# ⚠️ Ordinare su `triggered_at` vuol dire ordinare sull'ULTIMA REVISIONE: un
+# segnale che persiste viene rivisto a ogni scansione, quindi torna in cima
+# ogni giorno a prescindere da quando e' nato. Misurato in produzione il
+# 2026-09-22: 7.296 alert su 8.910 hanno almeno una revisione, uno ne conta
+# 167. La lista mostra il giorno di nascita, quindi ci si ordina sopra.
+
+def _seed_emissione(db, ticker, *, prima_emissione: str | None, ultima_revisione: str):
+    from datetime import UTC, datetime
+
+    s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
+    db.add(s)
+    db.flush()
+    snap = {"tone": "bull", "confidence": 70, "chain": []}
+    if prima_emissione is not None:
+        snap["first_emitted_at"] = prima_emissione
+    db.add(Alert(
+        stock_id=s.id, trigger_price=100.0, signal_date=date(2026, 5, 1),
+        signal_name="volume_breakout", snapshot=json.dumps(snap),
+        triggered_at=datetime.fromisoformat(ultima_revisione).replace(tzinfo=UTC),
+    ))
+    db.commit()
+
+
+def test_la_lista_si_ordina_sul_giorno_in_cui_l_alert_e_COMPARSO(db):
+    # VECCHIO nasce prima e viene rivisto oggi; NUOVO nasce ieri e non e' mai
+    # stato rivisto. Sull'ultima revisione VECCHIO starebbe davanti.
+    _seed_emissione(db, "VECCHIO", prima_emissione="2026-05-02T23:30:00+00:00",
+                    ultima_revisione="2026-05-20T23:30:00")
+    _seed_emissione(db, "NUOVO", prima_emissione="2026-05-19T23:30:00+00:00",
+                    ultima_revisione="2026-05-19T23:30:00")
+
+    items, _, _ = list_alerts(db, sort_by="emissione", sort_dir="desc")
+    assert [i["ticker"] for i in items] == ["NUOVO", "VECCHIO"]
+
+    # Controllo negativo: sull'altro campo l'ordine si INVERTE. Senza, il test
+    # sopra sarebbe vero anche di un ordinamento che non distingue i due campi.
+    items, _, _ = list_alerts(db, sort_by="triggered_at", sort_dir="desc")
+    assert [i["ticker"] for i in items] == ["VECCHIO", "NUOVO"]
+
+
+def test_un_alert_senza_prima_emissione_si_ordina_sul_campo_vecchio(db):
+    """I 116 alert (1,3%) che precedono il campo: il ripiego li tiene nella
+    lista al posto giusto invece di spingerli tutti in fondo."""
+    _seed_emissione(db, "LEGACY", prima_emissione=None,
+                    ultima_revisione="2026-05-21T23:30:00")
+    _seed_emissione(db, "RECENTE", prima_emissione="2026-05-19T23:30:00+00:00",
+                    ultima_revisione="2026-05-19T23:30:00")
+
+    items, _, _ = list_alerts(db, sort_by="emissione", sort_dir="desc")
+    assert [i["ticker"] for i in items] == ["LEGACY", "RECENTE"]
+
+
+def test_l_ordine_predefinito_e_quello_dell_emissione(db):
+    _seed_emissione(db, "VECCHIO", prima_emissione="2026-05-02T23:30:00+00:00",
+                    ultima_revisione="2026-05-20T23:30:00")
+    _seed_emissione(db, "NUOVO", prima_emissione="2026-05-19T23:30:00+00:00",
+                    ultima_revisione="2026-05-19T23:30:00")
+
+    items, _, _ = list_alerts(db)
+    assert [i["ticker"] for i in items] == ["NUOVO", "VECCHIO"]

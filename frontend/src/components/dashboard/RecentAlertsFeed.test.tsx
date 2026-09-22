@@ -92,3 +92,22 @@ describe("RecentAlertsFeed — le etichette brevi", () => {
     expect(screen.getByText("Trend + Pullback")).toHaveClass("sr-only");
   });
 });
+
+/* La data della riga, dal 2026-09-23: il giorno in cui il segnale è comparso,
+ * cioè quello del prezzo d'ingresso su cui il target qui accanto è calcolato.
+ * Prima era `signal_date`, che per i detector di stato avanza con le
+ * revisioni: target e data potevano parlare di due giorni diversi. */
+describe("RecentAlertsFeed — la data", () => {
+  it("è il giorno in cui il segnale è comparso, non la barra dell'ultima revisione", () => {
+    const c = monta([alert(
+      { signal_date: "2026-08-21", triggered_at: "2026-08-24T18:32:35Z" },
+      { first_emitted_at: "2026-08-12T23:32:48+00:00", amend_count: 27 },
+    )]);
+    expect(c.textContent).toContain("12/08");
+    expect(c.textContent).not.toContain("21/08");
+    const cella = Array.from(c.querySelectorAll("[title]"))
+      .find((n) => (n.getAttribute("title") ?? "").startsWith("Comparso il"))!;
+    expect(cella.getAttribute("title")).toContain("2026-08-12");
+    expect(cella.getAttribute("title")).toContain("2026-08-21");
+  });
+});
