@@ -3058,6 +3058,48 @@ funzione sugli stessi dati — e `backfill_plan_inputs` MISURA il proprio
 ricalcolo sugli alert mai rivisti, dove la verità si conosce: scarto mediano
 0,93%, 138 su 1.839 oltre il 5%.
 
+### La data UNICA a schermo, e quali restano dietro (2026-09-23)
+
+Chiusura dello stesso caso dal lato di chi guarda. Un alert porta TRE date e
+il riquadro ne mostrava la peggiore:
+
+    1. la BARRA del match (`signal_date`)   ririmessa sull'ultima barra a ogni
+                                            revisione: 4.775 su 7.296 rivisti
+                                            ce l'hanno diversa dalla nascita
+    2. il GIORNO in cui e' comparso         qui stanno prezzo d'ingresso e piano
+    3. l'ultima osservazione                avanza finche' il segnale persiste
+
+In evidenza va la (2), e la prova che e' quella giusta e' una misura: il
+prezzo d'ingresso coincide al centesimo con la chiusura di quella barra in
+**8.892 casi su 8.910**. Su MRNA il riquadro diceva «21 ago» a un centimetro
+dal prezzo del 12 — ed e' cio' che ha fatto credere che il segnale fosse
+scattato a 145.
+
+⚠️ **Si prende la DATA DEL TESTO, non il giorno locale dell'istante.** Le
+scansioni girano alle 23:32 UTC: convertito in ora italiana quel momento cade
+il giorno DOPO, cioe' un giorno dopo la barra su cui il piano e' costruito. Il
+test lo fissa forzando `process.env.TZ` e asserendo dentro anche la forma
+sbagliata — senza, in CI (che gira in UTC) sarebbe vero di niente.
+
+⚠️ **Una candela PRECEDENTE e una barra SUCCESSIVA non si dicono con la
+stessa frase.** La prima e' una rilevazione tardiva («la candela e' del 4,
+rilevato 6 giorni dopo»), la seconda e' il segnale che persiste («poi rivisto
+27 volte, con la condizione ancora valida sulla barra del 21»). Fonderle
+rimette in testa al lettore la confusione che la data unica chiude.
+
+**L'ordinamento della lista e' passato a `emissione`**, il giorno di nascita
+(`substr(coalesce($.first_emitted_at, testo di triggered_at), 1, 10)`, col
+pareggio rotto da `Alert.id` gia' in coda all'ORDER BY). Su `triggered_at` i
+segnali che PERSISTONO tornavano in cima ogni giorno a prescindere da quando
+erano nati. Il giorno e non l'istante perche' i due campi coalescati hanno
+forme testuali diverse: oltre il decimo carattere il confronto non sarebbe
+piu' confrontabile.
+
+**`signal_date` nel database NON e' stato toccato**, e non va toccato alla
+leggera: ha cinque consumatori — raffreddamento dei duplicati, finestra di
+recenza, finestra di confluenza, magazzino a orizzonte fisso, monitor di
+deriva — e gli ultimi due producono ogni numero d'efficacia a schermo.
+
 ⚠️ Ordine delle operazioni, se si rifa: **prima il riempimento, poi la
 maturazione.** Una maturazione che gira fra il rilascio e il riempimento
 scrive righe alla versione nuova con la geometria vecchia, e non verrebbero
