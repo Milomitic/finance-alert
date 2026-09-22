@@ -3,6 +3,10 @@ import {
   ArrowUp,
   ArrowUpDown,
   Building2,
+  Landmark,
+  LayoutGrid,
+  Star,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -85,6 +89,16 @@ import { QueryError } from "@/components/ui/query-error";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { InfoHint } from "@/components/ui/info-hint";
+import { SchedePagina } from "@/components/ui/schede-pagina";
+
+/* Le schede per tipo di fondo. `tutti` e' l'assenza di filtro: il valore
+   `undefined` dello stato, che un id di scheda non puo' essere. */
+const TIPI_FONDO = [
+  { id: "tutti", label: "Tutti", icon: LayoutGrid },
+  { id: "superinvestor", label: "Superinvestor", icon: Star },
+  { id: "institutional", label: "Istituzionali", icon: Landmark },
+  { id: "hedge_fund", label: "Hedge fund", icon: TrendingUp },
+] as const;
 
 /* InstitutionalsPage — overview of all tracked institutional/superinvestor
  * portfolios.
@@ -345,56 +359,12 @@ export default function InstitutionalsPage() {
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1 text-sm">
-          <button
-            type="button"
-            className={cn(
-              "rounded border px-3 py-1.5",
-              typeFilter === undefined
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background hover:bg-muted",
-            )}
-            onClick={() => setTypeFilter(undefined)}
-          >
-            Tutti
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded border px-3 py-1.5",
-              typeFilter === "superinvestor"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background hover:bg-muted",
-            )}
-            onClick={() => setTypeFilter("superinvestor")}
-          >
-            Superinvestor
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded border px-3 py-1.5",
-              typeFilter === "institutional"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background hover:bg-muted",
-            )}
-            onClick={() => setTypeFilter("institutional")}
-          >
-            Istituzionali
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded border px-3 py-1.5",
-              typeFilter === "hedge_fund"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background hover:bg-muted",
-            )}
-            onClick={() => setTypeFilter("hedge_fund")}
-          >
-            Hedge fund
-          </button>
-        </div>
+        <SchedePagina
+          voci={TIPI_FONDO}
+          attiva={(typeFilter ?? "tutti") as (typeof TIPI_FONDO)[number]["id"]}
+          onCambia={(id) => setTypeFilter(id === "tutti" ? undefined : id)}
+          etichetta="Tipo di fondo"
+        />
       </header>
 
       {/* One banner for the whole page's 13F data — both the aggregate strip and

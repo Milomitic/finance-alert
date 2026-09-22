@@ -4,8 +4,8 @@ import { useSearchParams } from "react-router-dom";
 import { OutcomesView } from "@/components/alert/OutcomesView";
 import { SignalsView } from "@/components/alert/SignalsView";
 import { SetupsView } from "@/components/setups/SetupsView";
+import { SchedePagina } from "@/components/ui/schede-pagina";
 import { SCHEDE, schedaDa, type SchedaId } from "@/lib/schedeSegnali";
-import { cn } from "@/lib/utils";
 
 /* ─── Segnali: una destinazione, il ciclo di vita intero ──────────────────
  *
@@ -62,28 +62,9 @@ export default function AlertsPage() {
         </h2>
       </div>
 
-      <div
-        role="group"
-        aria-label="Scheda"
-        className="inline-flex overflow-hidden rounded-md border text-xs font-semibold"
-      >
-        {SCHEDE.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-pressed={scheda === s.id}
-            onClick={() => apri(s.id)}
-            className={cn(
-              "min-h-[36px] px-3 transition-colors",
-              scheda === s.id
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/40",
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {/* Lo stesso componente delle schede di Diagnostica, Superinvestor e
+          Calendario: vedi `components/ui/schede-pagina.tsx`. */}
+      <SchedePagina voci={SCHEDE} attiva={scheda} onCambia={apri} etichetta="Scheda" />
 
       {/* Una sola vista montata alla volta: `hidden` terrebbe in piedi due
           alberi e due serie di query, e quello nascosto verrebbe comunque

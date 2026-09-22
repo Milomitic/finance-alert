@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -76,27 +76,34 @@ describe("solo la scheda attiva viene montata", () => {
     at("/diagnostics");
     await screen.findByTestId("vista");
 
-    await userEvent.click(screen.getByRole("tab", { name: /motore/i }));
+    await userEvent.click(screen.getByRole("button", { name: /motore/i }));
 
     expect(await screen.findByTestId("vista")).toHaveTextContent("motore");
   });
 });
 
 describe("le schede sono annunciate come tali", () => {
-  it("hanno il ruolo e lo stato di selezione", async () => {
+  /* ⚠️ Erano `role="tab"`: dal 2026-09-22 sono il componente comune delle
+   * schede di pagina, bottoni con `aria-pressed`, perche' un gruppo di tab
+   * promette un tabpanel che qui non esiste. Lo stato si legge uguale. */
+  it("dicono quale e' attiva, e una sola", async () => {
     at("/diagnostics?vista=motore");
 
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(2);
-    expect(screen.getByRole("tab", { name: /motore/i })).toHaveAttribute(
-      "aria-selected",
+    const gruppo = screen.getByRole("group", { name: "Vista diagnostica" });
+    expect(within(gruppo).getAllByRole("button")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /motore/i })).toHaveAttribute(
+      "aria-pressed",
       "true",
     );
-    // Il controllo negativo: se entrambe risultassero selezionate, uno screen
+    // Il controllo negativo: se entrambe risultassero attive, uno screen
     // reader non saprebbe dire dove si e.
-    expect(screen.getByRole("tab", { name: /piattaforma/i })).toHaveAttribute(
-      "aria-selected",
+    expect(screen.getByRole("button", { name: /piattaforma/i })).toHaveAttribute(
+      "aria-pressed",
       "false",
+    );
+    // E la descrizione, che stava in un `title`, arriva agli assistivi.
+    expect(screen.getByRole("button", { name: /motore/i })).toHaveAccessibleDescription(
+      /calibrazione/,
     );
   });
 });

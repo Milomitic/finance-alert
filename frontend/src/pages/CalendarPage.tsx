@@ -25,6 +25,7 @@ import {
   formatWeekLabel,
   todayISO,
 } from "@/lib/calendarMeta";
+import { SchedePagina } from "@/components/ui/schede-pagina";
 import { toLocalIsoDate } from "@/lib/localDate";
 import { cn } from "@/lib/utils";
 
@@ -38,15 +39,14 @@ type CalendarView = "month" | "week";
  * taking focus to <body> with them, and re-announcing aria-pressed on a node
  * the screen reader had not been following. Same defect as DrawingToolbar; see
  * DrawingToolbar.test.tsx for the reproduction. */
-const VIEW_OPTIONS: {
-  value: CalendarView;
-  label: string;
-  icon: typeof CalendarDays;
-}[] = [
-  { value: "month", label: "Mese", icon: CalendarDays },
-  { value: "week", label: "Settimana", icon: Columns3 },
-];
+const VIEW_OPTIONS = [
+  { id: "month", label: "Mese", icon: CalendarDays },
+  { id: "week", label: "Settimana", icon: Columns3 },
+] as const satisfies readonly { id: CalendarView; label: string; icon: typeof CalendarDays }[];
 
+/* Lo stesso componente delle schede di Segnali, Diagnostica e Superinvestor
+   (2026-09-22). Non e' piu' dichiarato nel corpo di un altro componente: il
+   difetto descritto sopra resta chiuso. */
 function ViewToggle({
   view,
   onChange,
@@ -55,28 +55,13 @@ function ViewToggle({
   onChange: (v: CalendarView) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border bg-muted/40 p-1">
-      {VIEW_OPTIONS.map(({ value, label, icon: Icon }) => {
-        const active = view === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onChange(value)}
-            aria-pressed={active}
-            className={cn(
-              "inline-flex items-center gap-1.5 h-9 px-3.5 text-sm font-semibold rounded-md transition-colors",
-              active
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4" aria-hidden />
-            {label}
-          </button>
-        );
-      })}
-    </div>
+    <SchedePagina
+      voci={VIEW_OPTIONS}
+      attiva={view}
+      onCambia={onChange}
+      etichetta="Vista del calendario"
+      className="sm:w-auto"
+    />
   );
 }
 

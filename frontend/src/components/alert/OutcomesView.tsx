@@ -1,4 +1,4 @@
-import { Target, X } from "lucide-react";
+import { Layers, Target, X, Zap } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -8,6 +8,7 @@ import { SignalOutcomeList } from "@/components/alert/SignalOutcomeList";
 import { SetupsView } from "@/components/setups/SetupsView";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { MetricStrip, type MetricTileProps } from "@/components/ui/metric-tile";
+import { SchedePagina } from "@/components/ui/schede-pagina";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useAlert } from "@/hooks/useAlerts";
@@ -31,8 +32,8 @@ import { cn } from "@/lib/utils";
  */
 
 const SOTTOVISTE = [
-  { id: "segnali", label: "Segnali" },
-  { id: "setup", label: "Setup" },
+  { id: "segnali", label: "Segnali", icon: Zap },
+  { id: "setup", label: "Setup", icon: Layers },
 ] as const;
 
 type SottoVista = (typeof SOTTOVISTE)[number]["id"];
@@ -253,30 +254,16 @@ export function OutcomesView() {
 
   return (
     <div className="max-w-5xl space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div
-          role="group"
-          aria-label="Quali esiti"
-          className="inline-flex overflow-hidden rounded-md border text-xs font-semibold"
-        >
-          {SOTTOVISTE.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              aria-pressed={sotto === v.id}
-              onClick={() => cambiaPerimetro({ esiti: v.id === "segnali" ? null : v.id })}
-              className={cn(
-                "min-h-[36px] px-3 transition-colors",
-                sotto === v.id
-                  ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:bg-accent/40",
-              )}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Il selettore DENTRO la scheda Esiti: stesso componente delle schede
+          della pagina, nella taglia compatta, cosi' si legge come un livello
+          sotto e non come una seconda fila di schede. */}
+      <SchedePagina
+        dimensione="compatta"
+        voci={SOTTOVISTE}
+        attiva={sotto}
+        onCambia={(id) => cambiaPerimetro({ esiti: id === "segnali" ? null : id })}
+        etichetta="Quali esiti"
+      />
 
       {sotto === "setup" ? (
         <SetupsView vista="esiti" />

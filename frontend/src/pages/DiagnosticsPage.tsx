@@ -2,7 +2,7 @@ import { Activity, Stethoscope } from "lucide-react";
 import { Suspense, lazy } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { cn } from "@/lib/utils";
+import { SchedePagina } from "@/components/ui/schede-pagina";
 
 const PlatformHealthPage = lazy(() => import("@/pages/PlatformHealthPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
@@ -36,13 +36,13 @@ const TABS = [
     id: "piattaforma",
     label: "Piattaforma",
     icon: Activity,
-    hint: "Sorgenti dati, scheduler, scan e log",
+    descrizione: "Sorgenti dati, scheduler, scan e log",
   },
   {
     id: "motore",
     label: "Motore",
     icon: Stethoscope,
-    hint: "Efficacia dei segnali, calibrazione, studi",
+    descrizione: "Efficacia dei segnali, calibrazione, studi",
   },
 ] as const;
 
@@ -73,34 +73,20 @@ export default function DiagnosticsPage() {
           </h1>
         </div>
 
-        <div
-          role="tablist"
-          aria-label="Vista diagnostica"
-          className="inline-flex items-center gap-1 rounded-md border bg-muted/30 p-0.5"
-        >
-          {TABS.map(({ id, label, icon: Icon, hint }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={id === active}
-              title={hint}
-              // `replace` per non riempire la storia del browser di un passo
-              // per ogni cambio scheda: tornare indietro deve uscire da
-              // Diagnostica, non ripercorrere le schede una a una.
-              onClick={() => setParams({ vista: id }, { replace: true })}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium transition-colors",
-                id === active
-                  ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* ⚠️ Erano `role="tab"` con `aria-selected`: sono passate al
+            componente comune con `aria-pressed`, perche' un gruppo di tab
+            promette un tabpanel che qui non c'e' (vedi schede-pagina.tsx). La
+            descrizione, che stava in un `title` invisibile su un telefono, ora
+            e' a schermo da `md`. */}
+        <SchedePagina
+          voci={TABS}
+          attiva={active}
+          // `replace` per non riempire la storia del browser di un passo per
+          // ogni cambio scheda: tornare indietro deve uscire da Diagnostica,
+          // non ripercorrere le schede una a una.
+          onCambia={(id) => setParams({ vista: id }, { replace: true })}
+          etichetta="Vista diagnostica"
+        />
       </header>
 
       {/* Solo la scheda attiva viene montata. Non e' solo peso: la vista

@@ -1,3 +1,5 @@
+import { Flag, Hourglass, Zap } from "lucide-react";
+
 /* Le schede della pagina Segnali, come DATO.
  *
  * Vivono fuori dalla pagina per la stessa ragione di `lib/nav.ts`: un file che
@@ -10,9 +12,12 @@
  *  contrario, che e' esattamente il difetto che la barra laterale aveva prima
  *  del raggruppamento. */
 export const SCHEDE = [
-  { id: "formazione", label: "In formazione" },
-  { id: "segnali", label: "Segnali" },
-  { id: "esiti", label: "Esiti" },
+  {
+    id: "formazione", label: "In formazione", icon: Hourglass,
+    descrizione: "Condizioni che stanno convergendo",
+  },
+  { id: "segnali", label: "Segnali", icon: Zap, descrizione: "Segnali scattati" },
+  { id: "esiti", label: "Esiti", icon: Flag, descrizione: "Come si sono chiusi" },
 ] as const;
 
 export type SchedaId = (typeof SCHEDE)[number]["id"];
