@@ -29,6 +29,50 @@ const EPS_GAAP_TRIMESTRALE =
 const EPS_GAAP_ANNUALE =
   "EPS GAAP (conto economico) — include poste straordinarie (es. costi di fusione, impairment). Può divergere fortemente dalla somma degli EPS adjusted trimestrali.";
 
+/* ─── Le due tabelle su telefono (2026-09-22, richiesta dell'utente) ─────── *
+ *
+ * A 375px sette colonne compresse nella larghezza della scheda andavano a capo
+ * nelle intestazioni e schiacciavano le cifre. Sotto `sm` nessuna cella va a
+ * capo (`whitespace-nowrap`), quindi la tabella prende la sua larghezza
+ * NATURALE — una tabella non scende mai sotto il proprio contenuto minimo,
+ * anche con `w-full` — e scorre di lato dentro il contenitore che gia'
+ * scorreva in verticale: `overflow-y: auto` porta con se' anche l'asse x, per
+ * specifica.
+ *
+ * ⚠️ La prima colonna resta FERMA mentre il resto scorre: e' l'identita' della
+ * riga (l'anno, la data della trimestrale), e una riga di cifre senza sapere
+ * di quale trimestre sono e' rumore — la regola «quando manca lo spazio cede
+ * la decorazione, non l'etichetta». Una cella ferma ha bisogno di un fondo
+ * PIENO, altrimenti le cifre le scorrono sotto in trasparenza: le righe
+ * colorate passano la loro tinta in `--tinta`, che la cella dipinge sopra il
+ * fondo della scheda. Senza la variabile il gradiente non e' valido e resta
+ * il solo fondo della scheda, cioe' il caso di una riga normale.
+ *
+ * Il bordo destro e' un'ombra interna e non un `border`: con
+ * `border-collapse` il bordo di una cella ferma scorre via con la tabella.
+ *
+ * Letterali interi, per il purger di Tailwind. */
+const TABELLA = "w-full text-[0.7647rem] tabular-nums max-sm:whitespace-nowrap";
+const PRIMA_CELLA =
+  "max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:bg-card " +
+  "max-sm:bg-[linear-gradient(var(--tinta),var(--tinta))] " +
+  "max-sm:shadow-[inset_-1px_0_0_hsl(var(--border))]";
+const PRIMA_INTESTAZIONE =
+  "max-sm:sticky max-sm:left-0 max-sm:z-20 max-sm:bg-card " +
+  "max-sm:shadow-[inset_-1px_0_0_hsl(var(--border))]";
+/* EPS GAAP resta a schermo solo da `sm`: su telefono e' la colonna che si
+   legge meno — non e' confrontabile col consensus — e la spiegazione del
+   perche' sta comunque nel popup dell'intestazione, da desktop. */
+const SOLO_DA_SM = "hidden sm:table-cell";
+
+/* ⚠️ Due decimali AL MASSIMO in ogni colonna numerica, su richiesta
+   dell'utente. `formatMoney` concede quattro decimali sotto l'unita', ed e'
+   giusto per un prezzo da pochi centesimi; un utile per azione si legge al
+   centesimo, e «$0.2345» accanto a «$1.20» faceva sembrare le cifre di due
+   tabelle diverse. Decimali CHIESTI, quindi fissi: la colonna resta
+   allineata. */
+const EPS = { decimals: 2 } as const;
+
 interface Props {
   ticker: string;
   /** Valuta di quotazione: l'utile per azione e denaro come il prezzo. */
@@ -211,15 +255,15 @@ function AnnualTabBody({
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <table className="w-full text-[0.7647rem] tabular-nums">
+        <table className={TABELLA}>
           <thead className="text-[0.7059rem] tracking-wide text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
-              <th className="px-1.5 py-1 text-left">FY</th>
+              <th className={cn("px-1.5 py-1 text-left", PRIMA_INTESTAZIONE)}>FY</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
               <th className="px-1.5 py-1 text-right">YoY</th>
               <th className="px-1.5 py-1 text-right">Net Inc</th>
               <th
-                className="px-1.5 py-1 text-right"
+                className={cn("px-1.5 py-1 text-right", SOLO_DA_SM)}
               >
                 <HintLabel text={EPS_GAAP_ANNUALE}><span>
                     EPS
@@ -250,8 +294,8 @@ function AnnualTabBody({
                     ? yoy(currFyRevenueEstimate, lastActual.revenue)
                     : "—";
                 return (
-                  <tr className="border-t border-border/40 bg-muted/20 text-muted-foreground italic">
-                    <td className="px-1.5 py-1 font-mono not-italic whitespace-nowrap">
+                  <tr className="border-t border-border/40 bg-muted/20 text-muted-foreground italic [--tinta:hsl(var(--muted)/0.2)]">
+                    <td className={cn("px-1.5 py-1 font-mono not-italic whitespace-nowrap", PRIMA_CELLA)}>
                       <span className="inline-flex items-center gap-1">
                         FY{String(currFy).slice(2, 4)}
                         <span className="not-italic px-1 py-px rounded border border-blue-400/40 text-blue-500 dark:text-blue-400 text-[0.6471rem] uppercase tracking-wider font-semibold">
@@ -264,10 +308,10 @@ function AnnualTabBody({
                     </td>
                     <td className="px-1.5 py-1 text-right">{yoyEst}</td>
                     <td className="px-1.5 py-1 text-right">—</td>
-                    <td className="px-1.5 py-1 text-right">—</td>
+                    <td className={cn("px-1.5 py-1 text-right", SOLO_DA_SM)}>—</td>
                     <td className="px-1.5 py-1 text-right">—</td>
                     <td className="px-1.5 py-1 text-right font-semibold not-italic">
-                      {formatMoney(currFyEpsEstimate, currency)}
+                      {formatMoney(currFyEpsEstimate, currency, EPS)}
                     </td>
                     <td className="px-1.5 py-1 text-right">—</td>
                   </tr>
@@ -291,7 +335,7 @@ function AnnualTabBody({
               const epsAdjTone = beatTone(epsAdj, agg?.eps_est);
               return (
                 <tr key={a.fiscal_year_end} className="border-t border-border/40 hover:bg-muted/30">
-                  <td className="px-1.5 py-1 font-mono whitespace-nowrap">{shortYear(a.fiscal_year_end)}</td>
+                  <td className={cn("px-1.5 py-1 font-mono whitespace-nowrap", PRIMA_CELLA)}>{shortYear(a.fiscal_year_end)}</td>
                   <td className="px-1.5 py-1 text-right">{fmtBig(a.revenue)}</td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
                     {prevYear ? yoy(a.revenue, prevYear.revenue) : "—"}
@@ -300,14 +344,14 @@ function AnnualTabBody({
                   {/* GAAP EPS — neutral/muted: it's the audited legal
                       figure but NOT comparable to the adjusted consensus,
                       so no beat/miss colour claim here. */}
-                  <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {formatMoney(a.eps, currency)}
+                  <td className={cn("px-1.5 py-1 text-right text-muted-foreground", SOLO_DA_SM)}>
+                    {formatMoney(a.eps, currency, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsAdjTone)}>
-                    {formatMoney(epsAdj, currency)}
+                    {formatMoney(epsAdj, currency, EPS)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {formatMoney(agg?.eps_est ?? null, currency)}
+                    {formatMoney(agg?.eps_est ?? null, currency, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -414,14 +458,14 @@ function QuarterlyTabBody({
         </Suspense>
       </div>
       <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
-        <table className="w-full text-[0.7647rem] tabular-nums">
+        <table className={TABELLA}>
           <thead className="text-[0.7059rem] tracking-wide text-muted-foreground uppercase sticky top-0 bg-card z-10">
             <tr>
-              <th className="px-1.5 py-1 text-left">Data</th>
+              <th className={cn("px-1.5 py-1 text-left", PRIMA_INTESTAZIONE)}>Data</th>
               <th className="px-1.5 py-1 text-right">Rev</th>
               <th className="px-1.5 py-1 text-right">Est Rev</th>
               <th
-                className="px-1.5 py-1 text-right"
+                className={cn("px-1.5 py-1 text-right", SOLO_DA_SM)}
               >
                 <HintLabel text={EPS_GAAP_TRIMESTRALE}><span>
                     EPS
@@ -443,13 +487,13 @@ function QuarterlyTabBody({
                 Subtle blue tint + italic to set it apart from confirmed rows. */}
             {hasNextRow && (
               <tr
-                className="border-t border-border/40 bg-blue-50/60 dark:bg-blue-950/20"
+                className="border-t border-border/40 bg-blue-50/60 dark:bg-blue-950/20 [--tinta:rgb(239_246_255/0.6)] dark:[--tinta:rgb(23_37_84/0.2)]"
                 title="Prossima trimestrale: solo le stime, i risultati non ci sono ancora"
               >
                 {/* `whitespace-nowrap` su OGNI prima cella delle due tabelle: la
                     colonna e' l'identita' della riga, e a capo si leggeva come
                     due righe diverse. */}
-                <td className="px-1.5 py-1 whitespace-nowrap">
+                <td className={cn("px-1.5 py-1 whitespace-nowrap", PRIMA_CELLA)}>
                   <span className="inline-flex items-center gap-1 font-mono text-blue-700 dark:text-blue-300">
                     {shortDate(nextEarningsDate!)}
                   </span>
@@ -482,10 +526,10 @@ function QuarterlyTabBody({
                   {nextRevenueEstimate != null ? fmtBig(nextRevenueEstimate) : "—"}
                 </td>
                 {/* GAAP EPS + adj. EPS — both empty (no actuals yet). */}
-                <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
+                <td className={cn("px-1.5 py-1 text-right text-muted-foreground italic", SOLO_DA_SM)}>—</td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
                 <td className="px-1.5 py-1 text-right text-blue-700 dark:text-blue-300 font-semibold">
-                  {formatMoney(nextEpsEstimate, currency)}
+                  {formatMoney(nextEpsEstimate, currency, EPS)}
                 </td>
                 <td className="px-1.5 py-1 text-right text-muted-foreground italic">—</td>
               </tr>
@@ -499,9 +543,17 @@ function QuarterlyTabBody({
               const epsTone = beatTone(e.eps_reported, e.eps_estimate);
               return (
                 <tr key={e.date} className="border-t border-border/40 hover:bg-muted/30">
-                  <td className="px-1.5 py-1 whitespace-nowrap">
-                    <span className="font-mono">{shortQuarter(`${fq.slice(0, 4)}-${(parseInt(fq.slice(6), 10) * 3).toString().padStart(2, "0")}-01`)}</span>
-                    <span className="text-muted-foreground ml-1">({shortDate(e.date)})</span>
+                  {/* Su telefono solo la DATA della trimestrale (richiesta
+                      dell'utente): il trimestre fiscale e' una deduzione
+                      (`data - 45 giorni`), la data e' il fatto. Da `sm` tornano
+                      entrambi, il trimestre per primo e la data fra parentesi. */}
+                  <td className={cn("px-1.5 py-1 whitespace-nowrap", PRIMA_CELLA)}>
+                    <span className="hidden font-mono sm:inline">{shortQuarter(`${fq.slice(0, 4)}-${(parseInt(fq.slice(6), 10) * 3).toString().padStart(2, "0")}-01`)}</span>
+                    <span className="font-mono sm:ml-1 sm:font-sans sm:text-muted-foreground">
+                      <span className="hidden sm:inline">(</span>
+                      {shortDate(e.date)}
+                      <span className="hidden sm:inline">)</span>
+                    </span>
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", revTone)}>
                     {fmtBig(revActual)}
@@ -513,17 +565,17 @@ function QuarterlyTabBody({
                       statement) — muted, no beat/miss claim (not
                       consensus-comparable). "—" when yfinance has no
                       quarterly statement row for this fiscal quarter. */}
-                  <td className="px-1.5 py-1 text-right text-muted-foreground">
+                  <td className={cn("px-1.5 py-1 text-right text-muted-foreground", SOLO_DA_SM)}>
                     {(() => {
                       const g = epsGaapByQuarter.get(fq);
-                      return formatMoney(g, currency);
+                      return formatMoney(g, currency, EPS);
                     })()}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", epsTone)}>
-                    {formatMoney(e.eps_reported, currency)}
+                    {formatMoney(e.eps_reported, currency, EPS)}
                   </td>
                   <td className="px-1.5 py-1 text-right text-muted-foreground">
-                    {formatMoney(e.eps_estimate, currency)}
+                    {formatMoney(e.eps_estimate, currency, EPS)}
                   </td>
                   <td className={cn("px-1.5 py-1 text-right font-semibold", surp.color)}>
                     <span className="inline-flex items-center gap-0.5 justify-end">
@@ -648,11 +700,14 @@ export function FundamentalsCard({ ticker, currency = null }: Props) {
               {f.next_earnings_date ? (
                 <span
                   className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
-                  title={`Prossima earnings — EPS atteso: ${formatMoney(f.next_eps_estimate, currency)}`}
+                  title={`Prossima earnings — EPS atteso: ${formatMoney(f.next_eps_estimate, currency, EPS)}`}
                 >
                   <CalendarClock className="h-3 w-3" />
                   {shortDate(f.next_earnings_date)}
-                  {f.next_eps_estimate != null && <> · est ${f.next_eps_estimate.toFixed(2)}</>}
+                  {/* ⚠️ Era `est ${...}` in JSX, cioe' un DOLLARO letterale
+                      davanti alla cifra: un titolo in euro leggeva «est $1.23».
+                      Il simbolo viene da `formatMoney`, mai scritto a mano. */}
+                  {f.next_eps_estimate != null && <> · est {formatMoney(f.next_eps_estimate, currency, EPS)}</>}
                 </span>
               ) : null}
               <CardUpdatedAt updatedAt={q.data?.fetched_at} />
