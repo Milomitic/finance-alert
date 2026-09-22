@@ -317,11 +317,22 @@ def mature_plan_outcomes(
     db: Session, *, commit: bool = True, ricostruisci: bool = False,
 ) -> int:
     """Scrive una riga di `plan_outcomes` per ogni alert il cui piano si e'
-    risolto e che non ne ha una ALLA VERSIONE CORRENTE. Rende le righe scritte.
+    risolto e che non ne ha una ALLA VERSIONE CORRENTE, e AGGIORNA quelle la
+    cui finestra delle gambe non era ancora completa. Rende le righe scritte o
+    aggiornate.
 
-    Idempotente a parita' di versione: un alert gia' etichettato con
-    `PLAN_METHOD_VERSION` non viene riesaminato, e l'unicita' e' comunque
-    imposta dal database.
+    Idempotente: una riga alla versione corrente con la finestra completa non
+    viene riesaminata, una con la finestra aperta viene rimisurata ma
+    riscritta solo se qualcosa e' cambiato, e l'unicita' e' comunque imposta
+    dal database.
+
+    ⚠️ La seconda meta' chiude un difetto vero (2026-09-22). La riga nasce
+    appena la gara si risolve, di regola molto prima della fine
+    dell'orizzonte, e la maturazione non la riguardava piu': un target toccato
+    dopo lo stop — la diagnosi «stop troppo stretto», la ragione per cui le
+    date di tocco esistono — non veniva mai scritto. La colonna «Poi» della
+    scheda Esiti era piena solo per i segnali vecchi, misurati a finestra gia'
+    chiusa.
 
     ⚠️ La passata guarda TUTTI gli alert, non solo quelli nati oggi: un esito
     di piano e' una funzione delle barre e dello snapshot, quindi lo storico si
@@ -340,14 +351,31 @@ def mature_plan_outcomes(
     # revisione alla prima emissione — e una maturazione che salta ogni alert
     # gia' etichettato avrebbe tenuto quelle righe sulla regola vecchia per
     # sempre, in un magazzino dove le due popolazioni sono indistinguibili.
+    #
+    # E una riga alla versione corrente resta candidata finche' la sua finestra
+    # delle gambe non e' completa (`legs_window_complete`).
     candidati = db.execute(
         select(Alert)
         .where(~exists().where(
             (PlanOutcome.alert_id == Alert.id)
             & (PlanOutcome.method_version == PLAN_METHOD_VERSION)
+            & (PlanOutcome.legs_window_complete.is_(True))
         ))
         .order_by(Alert.stock_id, Alert.id)
     ).scalars().all()
+    # Le righe alla versione corrente ancora da completare: si AGGIORNANO sul
+    # posto invece di essere tolte e riscritte, cosi' una passata che non
+    # trova niente di nuovo non tocca niente.
+    da_completare = {
+        r.alert_id: r
+        for r in db.execute(
+            select(PlanOutcome).where(
+                PlanOutcome.method_version == PLAN_METHOD_VERSION,
+                or_(PlanOutcome.legs_window_complete.is_(None),
+                    PlanOutcome.legs_window_complete.is_(False)),
+            )
+        ).scalars()
+    }
     # Gli alert cui va TOLTA una riga vecchia prima di scriverne una nuova.
     da_riscrivere = set(db.execute(
         select(PlanOutcome.alert_id).where(or_(
@@ -423,14 +451,8 @@ def mature_plan_outcomes(
         if esito is None:
             continue   # ancora aperto, o senza barre
 
-        # ⚠️ La riga vecchia si toglie SOLO ora, non quando il candidato viene
-        # scelto: se la regola nuova non producesse un esito — piano non piu'
-        # costruibile, barre sparite — cancellarla in anticipo avrebbe perso
-        # una misura senza sostituirla. Lo scambio e' l'unica forma sicura.
-        if a.id in da_riscrivere:
-            db.execute(delete(PlanOutcome).where(PlanOutcome.alert_id == a.id))
-        db.add(PlanOutcome(
-            alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name or "",
+        valori = dict(
+            stock_id=a.stock_id, detector=a.signal_name or "",
             signal_date=a.signal_date or ancora, tone=snap.get("tone") or "",
             horizon_days=orizzonte,
             entry_date=date.fromisoformat(ingresso.data), entry=piano.entry, stop=piano.stop,
@@ -445,8 +467,30 @@ def mature_plan_outcomes(
             tp1_hit_date=_giorno(esito.data_tp1),
             tp2_hit_date=_giorno(esito.data_tp2),
             source=fonte, method_version=PLAN_METHOD_VERSION,
-            matured_at=datetime.now(UTC),
-        ))
+            # Le barre coprono l'orizzonte intero: le date sono definitive.
+            legs_window_complete=len(barre) >= orizzonte,
+        )
+
+        esistente = da_completare.get(a.id)
+        if esistente is not None:
+            # ⚠️ Solo se qualcosa e' cambiato. Una passata a vuoto che
+            # riscrivesse comunque renderebbe `matured_at` l'ora dell'ultima
+            # scansione invece che l'ora dell'ultima misura nuova.
+            if all(getattr(esistente, k) == v for k, v in valori.items()):
+                continue
+            for k, v in valori.items():
+                setattr(esistente, k, v)
+            esistente.matured_at = datetime.now(UTC)
+            scritte += 1
+            continue
+
+        # ⚠️ La riga vecchia si toglie SOLO ora, non quando il candidato viene
+        # scelto: se la regola nuova non producesse un esito — piano non piu'
+        # costruibile, barre sparite — cancellarla in anticipo avrebbe perso
+        # una misura senza sostituirla. Lo scambio e' l'unica forma sicura.
+        if a.id in da_riscrivere:
+            db.execute(delete(PlanOutcome).where(PlanOutcome.alert_id == a.id))
+        db.add(PlanOutcome(alert_id=a.id, matured_at=datetime.now(UTC), **valori))
         scritte += 1
 
     if scritte:

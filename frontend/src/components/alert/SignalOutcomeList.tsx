@@ -30,7 +30,8 @@ import { cn } from "@/lib/utils";
  * per una lista che si legge scorrendo. Stessa aritmetica che ha tolto la
  * doppia riga dall'identita' dei setup: 50 righe x 66px erano 3.300px.
  *
- * ⚠️ E la colonna «Poi» e' la ragione per cui questa vista esiste. La
+ * ⚠️ E la colonna «Dopo chiusura» (era «Poi» fino al 2026-09-22) e' la
+ * ragione per cui questa vista esiste. La
  * posizione si chiude alla PRIMA gamba toccata — e' una gara, non un «ha mai
  * toccato il target» — ma se lo stop e' arrivato il 5 e il target il 18, il
  * trade vale -1R *ed* era nel verso giusto con lo stop troppo stretto. Quel
@@ -59,8 +60,12 @@ const PASTIGLIA: Record<string, string> = {
  * occupa una traccia. Stessa forma della tabella dei setup.
  *
  *   < sm    titolo · esito · R · sequenza
- *   >= sm   + chiusa, poi
+ *   >= sm   + chiusa, e «dopo chiusura» in fondo
  *   >= xl   + condizione, sedute
+ *
+ * «Dopo chiusura» sta DOPO la sequenza dal 2026-09-22, su richiesta
+ * dell'utente: e' il testo che dice in date cio' che il disegno accanto
+ * mostra in forme, e si legge meglio subito dopo di esso.
  *
  * ⚠️ Condizione e sedute stanno da `xl` e non da `lg` dal 2026-09-22, quando
  * e' arrivata la sequenza. Il conto a 1024px: 240 di barra laterale, 48 di
@@ -69,8 +74,8 @@ const PASTIGLIA: Record<string, string> = {
  * decorazione, l'errore che questo repo ha gia' pagato tre volte. */
 const COLONNE =
   "grid grid-cols-[minmax(0,1fr)_auto_auto_64px] items-center gap-x-2 " +
-  "sm:grid-cols-[minmax(0,1fr)_116px_68px_100px_64px_96px] sm:gap-x-3 " +
-  "xl:grid-cols-[minmax(0,1fr)_124px_116px_68px_100px_64px_60px_120px]";
+  "sm:grid-cols-[minmax(0,1fr)_116px_68px_64px_96px_112px] sm:gap-x-3 " +
+  "xl:grid-cols-[minmax(0,1fr)_124px_116px_68px_64px_60px_120px_112px]";
 
 const INTESTAZIONE = "text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground";
 
@@ -123,8 +128,15 @@ function Esito({ riga }: { riga: PlanOutcomeRow }) {
   );
 }
 
-/** Le gambe toccate DOPO la chiusura. Quasi sempre nessuna o una. */
-function Poi({ riga }: { riga: PlanOutcomeRow }) {
+/** Le gambe toccate DOPO la chiusura. Quasi sempre nessuna o una.
+ *
+ *  ⚠️ Fino al 2026-09-22 questa colonna era vuota per quasi ogni segnale
+ *  recente, e non per mancanza di tocchi: la riga di `plan_outcomes` nasceva
+ *  alla chiusura e non veniva piu' rimisurata, quindi un target arrivato dopo
+ *  lo stop non entrava mai. Ora la maturazione segue la finestra fino alla
+ *  fine dell'orizzonte (`legs_window_complete`). Un «—» su un segnale chiuso
+ *  da poco vuol dire «non ancora», non «mai». */
+function DopoChiusura({ riga }: { riga: PlanOutcomeRow }) {
   const dopo = sequenzaGambe(riga).filter((g) => g.dopo);
   if (dopo.length === 0) {
     return <span className="hidden text-xs text-muted-foreground sm:block">—</span>;
@@ -258,8 +270,6 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
           {giornoBreve(riga.resolved_date)}
         </span>
 
-        <Poi riga={riga} />
-
         <span
           className={cn(
             "justify-self-end text-sm font-bold tabular-nums",
@@ -278,6 +288,8 @@ function Riga({ riga, onApri }: { riga: PlanOutcomeRow; onApri?: (id: number) =>
         </span>
 
         <Sequenza riga={riga} />
+
+        <DopoChiusura riga={riga} />
       </button>
     </li>
   );
@@ -290,18 +302,6 @@ function Intestazione() {
       <span className={cn(INTESTAZIONE, "hidden xl:block")}>Condizione</span>
       <span className={INTESTAZIONE}>Esito</span>
       <span className={cn(INTESTAZIONE, "hidden sm:block")}>Chiusa</span>
-      <span className={cn(INTESTAZIONE, "hidden sm:block")}>
-        {/* La prosa sta qui, una volta, e non su ogni riga: e' una
-            spiegazione, non un dato. Il dato — la data — resta a schermo. */}
-        <HintLabel
-          text={
-            "Le gambe toccate DOPO che la posizione si era chiusa. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
-            "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito."
-          }
-        >
-          Poi
-        </HintLabel>
-      </span>
       <span className={cn(INTESTAZIONE, "justify-self-end")}>R</span>
       <span className={cn(INTESTAZIONE, "hidden justify-self-end xl:block")}>
         <HintLabel text="Sedute dall'ingresso alla chiusura della posizione.">Sedute</HintLabel>
@@ -314,6 +314,19 @@ function Intestazione() {
           }
         >
           Sequenza
+        </HintLabel>
+      </span>
+      <span className={cn(INTESTAZIONE, "hidden sm:block")}>
+        {/* La prosa sta qui, una volta, e non su ogni riga: e' una
+            spiegazione, non un dato. Il dato — la data — resta a schermo. */}
+        <HintLabel
+          text={
+            "Le gambe toccate DOPO che la posizione si era chiusa, fino alla fine dell'orizzonte del segnale. La posizione si chiude alla prima fra stop e target, quindi qui non c'è mai la gamba che ha chiuso. " +
+            "Quando è un target dopo uno stop, il verso del segnale era giusto e la distanza dello stop no: è la sola diagnosi che questo magazzino sa dare, e non è ricavabile dall'esito. " +
+            "«—» su un segnale chiuso da poco vuol dire «non ancora»: la finestra resta aperta fino alla fine dell'orizzonte."
+          }
+        >
+          Dopo chiusura
         </HintLabel>
       </span>
     </li>

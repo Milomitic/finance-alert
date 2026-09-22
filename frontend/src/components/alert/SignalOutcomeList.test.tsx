@@ -42,9 +42,10 @@ describe("SignalOutcomeList", () => {
     monta([riga()]);
     // «Sequenza» per ruolo: la parola compare anche nella legenda sotto.
     expect(screen.getByRole("button", { name: "Sequenza" })).toBeInTheDocument();
-    for (const nome of ["Titolo", "Esito", "Chiusa", "Poi", "R"]) {
+    for (const nome of ["Titolo", "Esito", "Chiusa", "R"]) {
       expect(screen.getByText(nome)).toBeInTheDocument();
     }
+    expect(screen.getByRole("button", { name: "Dopo chiusura" })).toBeInTheDocument();
     expect(screen.getByText("AAA")).toBeInTheDocument();
     expect(screen.getByText("Target")).toBeInTheDocument();
     expect(screen.getByText("+2.4R")).toBeInTheDocument();
@@ -65,6 +66,26 @@ describe("SignalOutcomeList", () => {
     expect(screen.getByText("5 mar")).toBeInTheDocument();          // chiusa
     const poi = screen.getByText("target 18 mar");                   // poi
     expect(poi).toHaveAttribute("title", expect.stringContaining("la distanza dello stop no"));
+  });
+
+  it("«Dopo chiusura» e' l'ultima colonna, subito dopo la sequenza", () => {
+    // Richiesta dell'utente (2026-09-22): le date accanto al disegno che le
+    // mostra in forme. L'ordine del DOM e' l'ordine della griglia, quindi e'
+    // quello che si fissa — in intestazione E nella riga, o le colonne
+    // scivolerebbero sotto l'intestazione sbagliata.
+    monta([riga({
+      esito: "stop", r_multiple: -1, resolved_date: "2026-03-05",
+      stop_hit_date: "2026-03-05", tp1_hit_date: "2026-03-18",
+    })]);
+    const intestazione = Array.from(
+      screen.getByRole("button", { name: "Sequenza" }).closest("li")!.children,
+    ).map((c) => c.textContent);
+    expect(intestazione.slice(-2)).toEqual(["Sequenza", "Dopo chiusura"]);
+
+    const dopo = screen.getByText("target 18 mar");
+    const celle = Array.from(dopo.closest("button")!.children);
+    expect(celle[celle.length - 1]).toBe(dopo);
+    expect(celle[celle.length - 2]).toHaveAttribute("role", "img");
   });
 
   it("non annuncia uno stop troppo stretto quando l'ordine e' l'altro", () => {

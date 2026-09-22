@@ -142,6 +142,15 @@ class PlanOutcome(Base):
     stop_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     tp1_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     tp2_hit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    #: Le barre coprivano l'orizzonte INTERO quando la riga e' stata scritta,
+    #: cioe' le tre date qui sopra sono definitive.
+    #:
+    #: ⚠️ Senza, le date erano vere solo fino al giorno della risoluzione: la
+    #: riga nasce appena stop o target vengono toccati, e un target toccato
+    #: dopo — il caso per cui le date esistono — non veniva mai registrato.
+    #: False o NULL = la maturazione la rimisura a ogni passata, e la riscrive
+    #: solo se qualcosa e' cambiato; True = congelata.
+    legs_window_complete: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # ── Provenienza ────────────────────────────────────────────────────────
     source: Mapped[str] = mapped_column(String(16), nullable=False,

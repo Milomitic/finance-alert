@@ -513,3 +513,97 @@ def test_una_riga_ALLA_VERSIONE_CORRENTE_non_viene_toccata(db: Session) -> None:
 
     assert mature_plan_outcomes(db, commit=False) == 0
     assert db.query(PlanOutcome).one().matured_at == prima
+
+
+# ─── 7. Le gambe DOPO la chiusura: la finestra si segue fino in fondo ──────
+# ⚠️ Il difetto che questi test chiudono (2026-09-22): la riga nasceva appena
+# la gara si risolveva e non veniva piu' riguardata, quindi un target toccato
+# DOPO lo stop — la diagnosi «stop troppo stretto», la ragione per cui le date
+# di tocco esistono — non veniva mai scritto. Nella scheda Esiti la colonna
+# «Poi» era piena solo per i segnali misurati a finestra gia' chiusa.
+
+@pytest.fixture
+def orizzonte_5(monkeypatch):
+    """Un orizzonte corto, cosi' la finestra si chiude in poche barre."""
+    monkeypatch.setattr("app.services.signal_drift_service._horizon_days", lambda d: 5)
+
+
+def test_un_target_toccato_DOPO_lo_stop_entra_nella_riga_gia_nata(db: Session, orizzonte_5) -> None:
+    s = _titolo(db)
+    _alert(db, s)   # ingresso 100, stop 96, 1° target 104
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 100, 95, 96)])
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.esito == "stop"
+    assert riga.tp1_hit_date is None
+    assert riga.legs_window_complete is False
+
+    # Il target arriva DOPO: la posizione era chiusa, ma il verso era giusto.
+    _barre(db, s, [("2026-03-04", 101, 97, 100), ("2026-03-05", 106, 100, 105)])
+    assert mature_plan_outcomes(db, commit=False) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.tp1_hit_date == date(2026, 3, 5), "il tocco dopo la chiusura non e' stato scritto"
+    # L'esito e' quello della GARA, e non cambia.
+    assert riga.esito == "stop"
+    assert riga.r_multiple == pytest.approx(-1.0)
+    assert riga.resolved_date == date(2026, 3, 3)
+    assert riga.legs_window_complete is False
+
+
+def test_a_finestra_chiusa_la_riga_si_congela(db: Session, orizzonte_5) -> None:
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 100, 95, 96)])
+    mature_plan_outcomes(db, commit=False)
+
+    # Le cinque barre dell'orizzonte: la finestra si chiude.
+    _barre(db, s, [("2026-03-04", 99, 97, 98), ("2026-03-05", 99, 97, 98),
+                   ("2026-03-06", 99, 97, 98), ("2026-03-09", 99, 97, 98)])
+    assert mature_plan_outcomes(db, commit=False) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.legs_window_complete is True
+    congelata = riga.matured_at
+
+    # Oltre l'orizzonte non si guarda: un tocco del target dopo non entra, e
+    # la riga non viene nemmeno riesaminata.
+    _barre(db, s, [("2026-03-10", 110, 99, 108)])
+    assert mature_plan_outcomes(db, commit=False) == 0
+    riga = db.query(PlanOutcome).one()
+    assert riga.tp1_hit_date is None
+    assert riga.matured_at == congelata
+
+
+def test_una_passata_senza_novita_non_riscrive(db: Session, orizzonte_5) -> None:
+    """Controllo negativo del primo: la riga aperta si RIMISURA a ogni
+    passata, ma si scrive solo se qualcosa e' cambiato."""
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 100, 95, 96)])
+    mature_plan_outcomes(db, commit=False)
+    prima = db.query(PlanOutcome).one().matured_at
+
+    assert mature_plan_outcomes(db, commit=False) == 0
+    assert db.query(PlanOutcome).one().matured_at == prima
+
+
+def test_una_riga_nata_prima_della_colonna_viene_completata(db: Session, orizzonte_5) -> None:
+    """Le righe esistenti hanno `legs_window_complete` NULL — «non lo so» —
+    e la passata successiva le rimisura: e' cosi' che quelle scritte col
+    difetto si correggono da sole."""
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 100, 95, 96),
+                   ("2026-03-04", 106, 100, 105), ("2026-03-05", 99, 97, 98),
+                   ("2026-03-06", 99, 97, 98), ("2026-03-09", 99, 97, 98)])
+    mature_plan_outcomes(db, commit=False)
+    riga = db.query(PlanOutcome).one()
+    # Come l'avrebbe lasciata la maturazione di prima: data del target persa.
+    riga.tp1_hit_date = None
+    riga.legs_window_complete = None
+    db.flush()
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    riga = db.query(PlanOutcome).one()
+    assert riga.tp1_hit_date == date(2026, 3, 4)
+    assert riga.legs_window_complete is True
