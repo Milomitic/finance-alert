@@ -24,7 +24,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Alert, PlanOutcome, Stock
-from app.models.plan_outcome import FONTE_EMESSO, FONTE_RICOSTRUITO
 from app.services.plan_outcome_service import ESITI
 
 
@@ -44,11 +43,6 @@ def _non_entrano(colonna: str, valori: tuple[str, ...]) -> list[str]:
 def test_ogni_esito_entra_nella_sua_colonna() -> None:
     troppo_lunghi = _non_entrano("esito", tuple(sorted(ESITI)))
     assert not troppo_lunghi, f"esiti che non entrano in plan_outcomes.esito: {troppo_lunghi}"
-
-
-def test_ogni_fonte_entra_nella_sua_colonna() -> None:
-    troppo_lunghi = _non_entrano("source", (FONTE_EMESSO, FONTE_RICOSTRUITO))
-    assert not troppo_lunghi, f"fonti che non entrano in plan_outcomes.source: {troppo_lunghi}"
 
 
 def test_gli_esiti_sono_quelli_che_la_gara_sa_produrre() -> None:
@@ -82,7 +76,7 @@ def _riga(alert: Alert, **kw) -> PlanOutcome:
         entry_date=date(2026, 3, 2), entry=100.0, stop=96.0, tp1=108.0, tp2=112.0,
         r=4.0, esito="tp1", resolved_date=date(2026, 3, 10), bars_to_outcome=6,
         r_multiple=2.0, mae_r=0.25, mfe_r=2.25, tp2_reached=False,
-        source=FONTE_EMESSO, method_version="1", matured_at=datetime.now(UTC),
+        method_version="1", matured_at=datetime.now(UTC),
     )
     return PlanOutcome(**{**base, **kw})
 

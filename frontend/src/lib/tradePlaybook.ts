@@ -102,6 +102,48 @@ function classifyHorizon(name: string | null, chain: { date?: string }[]): Horiz
   return (name && PRIOR[name]) || "medium";
 }
 
+/* ─── Gli ingressi del piano, e da QUALE istante vengono ─────────────────── *
+ *
+ * ⚠️ `atr`, `invalidation` e `horizon` vivono nello snapshot, che ogni
+ * scansione sostituisce per intero finché il segnale persiste: descrivono
+ * l'ULTIMA revisione. L'ingresso invece è fissato alla prima emissione
+ * (`entryPrice`), quindi il piano mescolava due momenti diversi.
+ *
+ * Misurato su MRNA il 2026-09-22: rottura di struttura del 12 agosto a
+ * 63,67, +177% in una seduta il 19, alert ancora vivo il 21 e ATR da 3,96 a
+ * 14,89. Lo stop a schermo finiva a 26,46 — il 58% sotto un ingresso che
+ * nessuno avrebbe più potuto prendere — e i due target collassavano entrambi
+ * sul tetto del +95%. Su 7.296 alert rivisti, 296 hanno uno scarto di ATR
+ * oltre il 25%.
+ *
+ * Il vincolo non è «l'ATR non deve muoversi»: è che tutti gli ingressi del
+ * piano vengano dallo stesso istante dell'ingresso. Il resto dello snapshot
+ * — Forza, catena, regime — continua a descrivere l'analisi di ADESSO.
+ *
+ * Gemella di `ingressi_del_piano` in `backend/app/signals/trade_plan.py`; i
+ * vettori d'oro le tengono d'accordo. */
+export interface IngressiDelPiano {
+  atr?: number;
+  invalidation?: { level?: number; reason?: string } | null;
+  horizon?: string;
+}
+
+/** Gli ingressi della PRIMA EMISSIONE quando ci sono, coi correnti come
+ *  ripiego dichiarato per gli alert che precedono i campi. */
+export function ingressiDelPiano(
+  snapshot: Record<string, unknown> | null | undefined,
+): IngressiDelPiano {
+  const s = (snapshot ?? {}) as Record<string, unknown>;
+  const scegli = (congelato: string, vivo: string) =>
+    s[congelato] != null ? s[congelato] : s[vivo];
+  return {
+    atr: scegli("first_atr", "atr") as number | undefined,
+    invalidation: scegli("first_invalidation", "invalidation") as
+      { level?: number; reason?: string } | null | undefined,
+    horizon: scegli("first_horizon", "horizon") as string | undefined,
+  };
+}
+
 /* Rule-based, volatility-anchored action plan for a signal. Pure: derives from
    the alert snapshot + trigger price. Returns null when there is no usable
    structural level. Educational only.
@@ -121,18 +163,23 @@ export function buildPlaybook(
   const tone = s.tone;
   if (tone !== "bull" && tone !== "bear") return null;
   if (!Number.isFinite(entry) || entry <= 0) return null;
-  const structStop = s.invalidation && typeof s.invalidation.level === "number" ? s.invalidation.level : NaN;
+  // Gli ingressi dell'ISTANTE D'INGRESSO, non quelli dell'ultima revisione.
+  const ing = ingressiDelPiano(snapshot);
+  const structStop = ing.invalidation && typeof ing.invalidation.level === "number" ? ing.invalidation.level : NaN;
   if (!Number.isFinite(structStop) || structStop <= 0) return null;
 
   const side: "long" | "short" = tone === "bull" ? "long" : "short";
   const sign = side === "long" ? 1 : -1;
 
   // Volatility anchor (absolute price units). Fallback keeps every formula uniform.
-  const atr = typeof s.atr === "number" && s.atr > 0 ? s.atr : entry * 0.02;
+  const atr = typeof ing.atr === "number" && ing.atr > 0 ? ing.atr : entry * 0.02;
 
   // Prefer the horizon stamped at scan time (shared source of truth); fall
   // back to local classification only for legacy alerts that predate it.
-  const hz: Horizon = (s.horizon as Horizon | undefined)
+  // ⚠️ La catena resta quella VIVA: è l'ultimo ripiego per gli alert che
+  // precedono sia `first_horizon` sia `horizon`, e di quelli la catena
+  // originale non esiste più da nessuna parte.
+  const hz: Horizon = (ing.horizon as Horizon | undefined)
     ?? classifyHorizon(name ?? null, (s.chain ?? []) as { date?: string }[]);
   const P = HZ[hz];
 

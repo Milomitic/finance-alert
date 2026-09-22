@@ -20,18 +20,17 @@ di quel momento non era conservato da nessuna parte: una volta sovrascritto,
 dall'alert non si recuperava piu'. Da adesso il motore lo fissa alla
 creazione; questo script lo ricostruisce all'indietro per gli alert esistenti.
 
-⚠️ E' una RICOSTRUZIONE, non un recupero, ed e' marcata
-=======================================================
-Il valore e' la chiusura dell'ultima barra non successiva alla prima
-emissione. Combacia con quello che l'alert mostrava, TRANNE quando la
-scansione girava prima della chiusura di quel giorno: li' l'alert mostrava la
-chiusura del giorno precedente, e questa ricostruzione prende quella del
-giorno stesso. Uno scarto di una barra, e non determinabile dall'alert.
+Da dove viene il valore
+=======================
+E' la chiusura dell'ultima barra non successiva alla prima emissione.
+Misurato in produzione il 2026-09-22: combacia al centesimo con il prezzo che
+l'alert mostrava su 8.892 casi su 8.910. I diciotto che si discostano vengono
+da scansioni girate a mercato aperto, che vedevano una barra ancora in
+formazione.
 
-Per questo ogni valore ricostruito porta `first_price_ricostruito: true` e
-resta escludibile con un controllo per sempre. Una ricostruzione sbagliata e'
-indistinguibile da una giusta finche' nessuno guarda il campo — la stessa
-ragione per cui esiste `plan_outcomes.source`.
+⚠️ Il vecchio marcatore `first_price_ricostruito` non si scrive piu' e questa
+passata lo TOGLIE dove c'e': era una distinzione fra due popolazioni che la
+base non ha piu' motivo di portare.
 
 ⚠️ NON si tocca `trigger_price`. Quello descrive il segnale VIVO ed e' giusto
 che avanzi: sono due numeri diversi che fino a oggi erano lo stesso campo.
@@ -50,7 +49,8 @@ from app.core.db import SessionLocal
 from app.models import Alert, OhlcvDaily
 
 CHIAVE = "first_price"
-MARCATORE = "first_price_ricostruito"
+#: Il marcatore di un tempo, che questa passata rimuove ovunque lo trovi.
+MARCATORE_VECCHIO = "first_price_ricostruito"
 
 
 def _ancora(snap: dict, alert: Alert) -> date | None:
@@ -64,9 +64,10 @@ def _ancora(snap: dict, alert: Alert) -> date | None:
     return alert.triggered_at.date() if alert.triggered_at else None
 
 
-def riempi(db: Session) -> tuple[int, int]:
-    """Rende (riempiti, saltati). Non fa commit: lo decide il chiamante."""
-    riempiti = saltati = 0
+def riempi(db: Session) -> tuple[int, int, int]:
+    """Rende (riempiti, saltati, marcatori tolti). Non fa commit: lo decide il
+    chiamante."""
+    riempiti = saltati = ripuliti = 0
     # Ordinati per titolo: la cache delle chiusure ne tiene uno alla volta.
     candidati = db.execute(select(Alert).order_by(Alert.stock_id, Alert.id)).scalars().all()
     chiusure: dict[int, list[tuple[str, float]]] = {}
@@ -76,7 +77,13 @@ def riempi(db: Session) -> tuple[int, int]:
         except (ValueError, TypeError):
             saltati += 1
             continue
-        if not isinstance(snap, dict) or CHIAVE in snap:
+        if not isinstance(snap, dict):
+            saltati += 1
+            continue
+        if snap.pop(MARCATORE_VECCHIO, None) is not None:
+            a.snapshot = json.dumps(snap)
+            ripuliti += 1
+        if CHIAVE in snap:
             continue
         ancora = _ancora(snap, a)
         if ancora is None:
@@ -101,17 +108,17 @@ def riempi(db: Session) -> tuple[int, int]:
             saltati += 1
             continue
         snap[CHIAVE] = prezzo
-        snap[MARCATORE] = True
         a.snapshot = json.dumps(snap)
         riempiti += 1
-    return riempiti, saltati
+    return riempiti, saltati, ripuliti
 
 
 def run(applica: bool = False) -> None:
     db = SessionLocal()
     try:
-        riempiti, saltati = riempi(db)
-        logger.info(f"da riempire: {riempiti}   senza una barra utile: {saltati}")
+        riempiti, saltati, ripuliti = riempi(db)
+        logger.info(f"da riempire: {riempiti}   senza una barra utile: {saltati}"
+                    f"   marcatori tolti: {ripuliti}")
         if applica:
             db.commit()
             logger.info("scritti.")

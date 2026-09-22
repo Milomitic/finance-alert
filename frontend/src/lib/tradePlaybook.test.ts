@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildPlaybook, pianoDelSegnale, primoTarget } from "./tradePlaybook";
+import { buildPlaybook, ingressiDelPiano, pianoDelSegnale, primoTarget } from "./tradePlaybook";
 
 /* The plan used to size positions off Forza: risk budget ran 0.5% -> 1.5%
  * linearly in `strength`, and leverage followed it, so it committed the most
@@ -148,5 +148,59 @@ describe("primoTarget", () => {
     const t = primoTarget(pb);
     expect(t.prezzo).toBeLessThan(100);
     expect(t.variazionePct).toBeLessThan(0);
+  });
+});
+
+/* ─── Gli ingressi del piano vengono da UN SOLO istante ──────────────────── *
+ *
+ * Il prezzo era già fissato alla prima emissione; ATR, invalidazione e
+ * orizzonte no, e venivano sostituiti a ogni revisione. Su MRNA (2026-09-22)
+ * il piano mostrava l'ingresso del 12 agosto con l'ATR del 21, dopo un +177%
+ * in una seduta: stop il 58% sotto l'ingresso e i due target sullo stesso
+ * numero. */
+describe("ingressiDelPiano", () => {
+  const vivo = {
+    tone: "bull",
+    atr: 12,
+    horizon: "short",
+    invalidation: { level: 59 },
+    first_atr: 3,
+    first_horizon: "medium",
+    first_invalidation: { level: 90 },
+  };
+
+  it("i valori della prima emissione battono quelli correnti", () => {
+    expect(ingressiDelPiano(vivo)).toEqual({
+      atr: 3, horizon: "medium", invalidation: { level: 90 },
+    });
+  });
+
+  it("la scelta è campo per campo, non tutto-o-niente", () => {
+    const { first_horizon: _h, first_invalidation: _i, ...soloAtr } = vivo;
+    expect(ingressiDelPiano(soloAtr)).toEqual({
+      atr: 3, horizon: "short", invalidation: { level: 59 },
+    });
+  });
+
+  it("senza i campi fissati ripiega sui correnti, e lo fa per gli alert vecchi", () => {
+    const { first_atr: _a, first_horizon: _h, first_invalidation: _i, ...vecchio } = vivo;
+    expect(ingressiDelPiano(vecchio)).toEqual({
+      atr: 12, horizon: "short", invalidation: { level: 59 },
+    });
+    expect(ingressiDelPiano(null)).toEqual({
+      atr: undefined, horizon: undefined, invalidation: undefined,
+    });
+  });
+
+  it("il piano nasce dai valori fissati, e il controllo negativo mostra che cambia", () => {
+    const congelato = buildPlaybook(vivo, 100, "sr_flip")!;
+    const { first_atr: _a, first_horizon: _h, first_invalidation: _i, ...soloVivi } = vivo;
+    const corrente = buildPlaybook(soloVivi, 100, "sr_flip")!;
+    // Congelato: invalidazione 90, distanza 10, sopra il pavimento di 2,5
+    // ATR su ATR 3 → R = 10. Corrente: invalidazione 59 e ATR 12 → R = 41.
+    // Due geometrie diverse, non due arrotondamenti.
+    expect(congelato.stop).toBeCloseTo(90, 9);
+    expect(congelato.horizon).toBe("Medio");
+    expect(corrente.stop).toBeCloseTo(59, 9);
   });
 });

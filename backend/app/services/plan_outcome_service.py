@@ -29,7 +29,6 @@ from typing import TYPE_CHECKING, NamedTuple
 from sqlalchemy import delete, exists, or_, select
 
 from app.models import Alert, OhlcvDaily, PlanOutcome
-from app.models.plan_outcome import FONTE_EMESSO, FONTE_RICOSTRUITO
 from app.signals.trade_plan import PianoDiTrade, costruisci_piano
 
 if TYPE_CHECKING:
@@ -222,7 +221,13 @@ def _esito(
 #:        quindi le righe scritte prima sono rimaste ancorate al campo che una
 #:        scansione riscrive — il difetto che quella correzione chiudeva,
 #:        sopravvissuto dentro il magazzino che doveva ripararlo.
-PLAN_METHOD_VERSION = "2"
+#:   "3"  anche ATR, invalidazione e orizzonte vengono dalla prima emissione,
+#:        non dall'ultima revisione. La "2" aveva fissato il solo PREZZO,
+#:        quindi la gara correva con un ingresso di un giorno e una
+#:        volatilita' di un altro: su MRNA stop il 58% sotto l'ingresso e i
+#:        due target sullo stesso numero. Misura e ragione in
+#:        `trade_plan._CONGELATI`.
+PLAN_METHOD_VERSION = "3"
 
 
 def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:
@@ -260,8 +265,8 @@ def _prima_emissione(snapshot: dict) -> date | None:
         return None
 
 
-#: I detector il cui livello di invalidazione si RICOSTRUISCE in modo esatto
-#: da un fatto delle barre, per gli alert storici che non ce l'hanno:
+#: I detector il cui livello di invalidazione si ricava in modo ESATTO da un
+#: fatto delle barre, per gli alert che non ce l'hanno nello snapshot:
 #:
 #:   gap_and_go          la chiusura della barra precedente al gap
 #:   le tre divergenze   l'estremo della barra del segnale, che e' l'ultimo
@@ -275,19 +280,20 @@ def _prima_emissione(snapshot: dict) -> date | None:
 #: questo repo ha gia' pagato quella lezione su SOXS: un fattore dedotto e
 #: applicato all'indietro «sembra perfettamente sano ed e' silenziosamente
 #: sbagliato».
-RICOSTRUIBILI: frozenset[str] = frozenset({
+LIVELLO_DALLE_BARRE: frozenset[str] = frozenset({
     "gap_and_go", "rsi_divergence", "macd_divergence", "hidden_divergence",
 })
 
 
-def _invalidazione_ricostruita(
+def _invalidazione_dalle_barre(
     db: Session, *, stock_id: int, detector: str, signal_date: date, tone: str,
 ) -> dict | None:
-    """Il livello che quell'alert AVREBBE avuto, letto dalle barre.
+    """Il livello di quell'alert, letto dalle barre.
 
-    None quando il detector non e' fra i ricostruibili o la barra non c'e'.
+    None quando il detector non e' fra quelli in `LIVELLO_DALLE_BARRE` o la
+    barra non c'e'.
     """
-    if detector not in RICOSTRUIBILI:
+    if detector not in LIVELLO_DALLE_BARRE:
         return None
     if detector == "gap_and_go":
         chiusura = db.execute(
@@ -314,7 +320,7 @@ def _invalidazione_ricostruita(
 
 
 def mature_plan_outcomes(
-    db: Session, *, commit: bool = True, ricostruisci: bool = False,
+    db: Session, *, commit: bool = True,
 ) -> int:
     """Scrive una riga di `plan_outcomes` per ogni alert il cui piano si e'
     risolto e che non ne ha una ALLA VERSIONE CORRENTE, e AGGIORNA quelle la
@@ -422,19 +428,16 @@ def mature_plan_outcomes(
         # ⚠️ Non su `a.trigger_price`: quello viene riscritto a ogni revisione
         # insieme a `triggered_at`, quindi l'esito dipenderebbe dal momento in
         # cui gira questa passata.
-        fonte = FONTE_EMESSO
         piano = costruisci_piano(snap, ingresso.chiusura, a.signal_name)
-        if piano is None and ricostruisci and a.signal_date is not None:
-            # Solo per gli alert che un livello non ce l'hanno: uno EMESSO non
-            # viene mai scavalcato, altrimenti `source` smetterebbe di dire la
-            # verita' proprio sulle righe di cui ci si fida di piu'.
-            livello = _invalidazione_ricostruita(
+        if piano is None and a.signal_date is not None:
+            # Solo per gli alert che un livello nello snapshot non ce l'hanno:
+            # uno emesso dal detector non viene mai scavalcato.
+            livello = _invalidazione_dalle_barre(
                 db, stock_id=a.stock_id, detector=a.signal_name or "",
                 signal_date=a.signal_date, tone=snap.get("tone") or "")
             if livello is not None:
                 piano = costruisci_piano({**snap, "invalidation": livello},
                                          ingresso.chiusura, a.signal_name)
-                fonte = FONTE_RICOSTRUITO
         if piano is None:
             continue   # nessun livello strutturale: niente piano, niente gara
 
@@ -466,7 +469,7 @@ def mature_plan_outcomes(
             stop_hit_date=_giorno(esito.data_stop),
             tp1_hit_date=_giorno(esito.data_tp1),
             tp2_hit_date=_giorno(esito.data_tp2),
-            source=fonte, method_version=PLAN_METHOD_VERSION,
+            method_version=PLAN_METHOD_VERSION,
             # Le barre coprono l'orizzonte intero: le date sono definitive.
             legs_window_complete=len(barre) >= orizzonte,
         )

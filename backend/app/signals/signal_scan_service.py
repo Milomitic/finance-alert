@@ -17,6 +17,7 @@ from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
 from app.signals.horizon import classify_horizon
 from app.signals.runner import detect_signals_and_setups
+from app.signals.trade_plan import INGRESSI_CONGELATI
 
 # --- Quality gates (reduce false positives) --------------------------------
 # Trend-following signals: their direction should agree with the prevailing
@@ -310,6 +311,18 @@ def evaluate_signals(
                     snapshot["first_price"] = _prior_snap["first_price"]
                 else:
                     snapshot.pop("first_price", None)
+                # ⚠️ E con il prezzo si conservano gli ALTRI ingressi del
+                # piano — ATR, invalidazione, orizzonte. Fissare il solo
+                # prezzo lasciava il piano con un ingresso di un giorno e una
+                # volatilita' di un altro: su MRNA lo stop finiva il 58% sotto
+                # l'ingresso e i due target collassavano sullo stesso numero.
+                # La ragione per esteso, coi numeri, sta in
+                # `trade_plan._CONGELATI`.
+                for _chiave in INGRESSI_CONGELATI:
+                    if _chiave in _prior_snap:
+                        snapshot[_chiave] = _prior_snap[_chiave]
+                    else:
+                        snapshot.pop(_chiave, None)
                 snapshot["amended_at"] = now_iso
                 snapshot["amend_count"] = int(_prior_snap.get("amend_count") or 0) + 1
                 prior.trigger_price = last_close
@@ -333,6 +346,17 @@ def evaluate_signals(
         # Il prezzo di quel momento, fissato insieme all'istante: `trigger_price`
         # lo perdera' alla prima revisione.
         snapshot["first_price"] = float(last_close)
+        # E accanto al prezzo gli altri ingressi della geometria, cosi' che il
+        # piano descriva UN SOLO istante invece di due. Si scrivono solo se
+        # esistono: un detector o un livello strutturale lo produce o non lo
+        # produce, e una chiave assente significa «ripiega sul corrente»,
+        # mentre una chiave nulla non si distinguerebbe da un valore.
+        if _atr is not None:
+            snapshot["first_atr"] = _atr
+        if m.invalidation is not None:
+            snapshot["first_invalidation"] = m.invalidation
+        if snapshot.get("horizon") is not None:
+            snapshot["first_horizon"] = snapshot["horizon"]
         alert = Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,

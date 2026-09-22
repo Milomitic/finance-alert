@@ -106,7 +106,6 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
       <p className="text-xs text-muted-foreground">
         {meta.rows} esiti su {meta.detectors_present} detector
         {meta.date_range.from && ` · dal ${meta.date_range.from} al ${meta.date_range.to}`}
-        {meta.reconstructed > 0 && ` · ${meta.reconstructed} con livello ricostruito`}
       </p>
 
       <div className="overflow-x-auto">

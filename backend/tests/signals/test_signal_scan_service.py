@@ -5,6 +5,7 @@ import pandas as pd
 
 from app.models import Alert, SignalOutcome, Stock
 from app.signals.signal_scan_service import evaluate_signals
+from app.signals.trade_plan import INGRESSI_CONGELATI, costruisci_piano
 
 
 def _confirmed_df():
@@ -431,3 +432,88 @@ def test_una_revisione_su_un_alert_storico_senza_first_price_non_ne_inventa_uno(
 
     snap = json.loads(_vb_rows(db, s)[0].snapshot)
     assert "first_price" not in snap
+
+
+# ─── Gli ALTRI ingressi del piano, fissati come il prezzo ──────────────────
+#
+# ⚠️ Fissare il solo prezzo lasciava il piano a cavallo di due istanti: ATR,
+# invalidazione e orizzonte venivano sostituiti a ogni revisione insieme al
+# resto dello snapshot. Misurato su MRNA il 2026-09-22 (rottura di struttura
+# del 12 agosto a 63,67, +177% in una seduta il 19, alert vivo fino al 21):
+# ATR da 3,96 a 14,89, stop del piano a 26,46 — il 58% sotto un ingresso che
+# nessuno avrebbe piu' potuto prendere — e i due target entrambi sul tetto del
+# +95%. Su 7.296 alert rivisti, 296 hanno uno scarto di ATR oltre il 25%.
+
+def test_un_alert_nuovo_fissa_atr_invalidazione_e_orizzonte(db, monkeypatch):
+    _relax(monkeypatch)
+    s = Stock(ticker="PIANO_NEW", exchange="NASDAQ", name="Piano", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    # Alla nascita i due insiemi coincidono: e' la revisione a separarli.
+    assert snap["first_atr"] == snap["atr"]
+    assert snap["first_invalidation"] == snap["invalidation"]
+    assert snap["first_horizon"] == snap["horizon"]
+    # Pavimento: valori veri, non chiavi presenti e vuote.
+    assert snap["first_atr"] > 0
+    assert snap["first_invalidation"]["level"] > 0
+
+
+def test_una_revisione_NON_sovrascrive_gli_ingressi_del_piano(db, monkeypatch):
+    """Il test che chiude il difetto: il piano deve restare quello dell'istante
+    d'ingresso anche dopo che il mercato si e' mosso sotto l'alert."""
+    _relax(monkeypatch)
+    s = Stock(ticker="PIANO_AMEND", exchange="NASDAQ", name="Piano", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    snap0 = json.loads(prior.snapshot)
+    snap0["first_price"] = 50.0
+    snap0["first_atr"] = 1.25
+    snap0["first_invalidation"] = {"level": 47.0, "reason": "quella di allora"}
+    snap0["first_horizon"] = "long"
+    prior.snapshot = json.dumps(snap0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    assert snap["first_atr"] == 1.25
+    assert snap["first_invalidation"] == {"level": 47.0, "reason": "quella di allora"}
+    assert snap["first_horizon"] == "long"
+    # E l'analisi VIVA e' avanzata lo stesso: sono due letture, non una sola
+    # congelata. Senza questa meta' il test passerebbe anche se la revisione
+    # avesse smesso di aggiornare lo snapshot.
+    assert snap["atr"] != 1.25
+    assert snap["invalidation"] != snap["first_invalidation"]
+
+    # E il piano che ne esce e' quello della prima emissione, non quello di
+    # oggi: e' il fatto che l'utente vede.
+    piano = costruisci_piano(snap, 50.0, "volume_breakout")
+    assert piano is not None
+    atteso = costruisci_piano(
+        {"tone": "bull", "atr": 1.25, "horizon": "long",
+         "invalidation": {"level": 47.0}}, 50.0, "volume_breakout")
+    assert (piano.stop, piano.r) == (atteso.stop, atteso.r)
+
+
+def test_una_revisione_su_un_alert_storico_non_inventa_gli_ingressi_del_piano(
+    db, monkeypatch,
+):
+    """Gli alert che precedono i campi non ricevono i valori di OGGI spacciati
+    per quelli della prima emissione: restano assenti, e il piano ripiega sui
+    correnti dichiarandolo."""
+    _relax(monkeypatch)
+    s = Stock(ticker="PIANO_LEGACY", exchange="NASDAQ", name="Piano", country="US")
+    db.add(s); db.flush()
+    _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    for chiave in INGRESSI_CONGELATI:
+        assert chiave not in snap

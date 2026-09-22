@@ -182,8 +182,6 @@ export interface PlanBrief {
   stop_hit_date: string | null;
   tp1_hit_date: string | null;
   tp2_hit_date: string | null;
-  /** emesso | ricostruito */
-  source: string;
 }
 
 export interface Alert {
@@ -341,9 +339,12 @@ export interface SignalSnapshot {
    *  produzione, nel 18% dei casi dista oltre il 2% dalla chiusura della barra
    *  del segnale. Vedi `lib/alertEntry.entryPrice`. */
   first_price?: number;
-  /** Vero quando `first_price` è stato RICOSTRUITO all'indietro dalla barra
-   *  invece che registrato: uno scarto di una barra è possibile. */
-  first_price_ricostruito?: boolean;
+  /** ATR, invalidazione e orizzonte FISSATI alla prima emissione: gli altri
+   *  ingressi del piano, che senza questi verrebbero dall'ultima revisione.
+   *  Vedi `lib/tradePlaybook.ingressiDelPiano`. */
+  first_atr?: number;
+  first_invalidation?: { level?: number; reason?: string } | null;
+  first_horizon?: string;
   amended_at?: string;
   amend_count?: number;
 }

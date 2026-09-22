@@ -342,8 +342,6 @@ export type PlanCoverage = {
 
 export type PlanPerfMeta = {
   rows: number;
-  /** Righe il cui livello di invalidazione e' stato ricostruito all'indietro. */
-  reconstructed: number;
   detectors_present: number;
   date_range: { from: string | null; to: string | null };
   /** ⚠️ Quanti alert di ogni detector NON hanno un piano. Senza, la classifica

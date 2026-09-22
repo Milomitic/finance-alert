@@ -32,7 +32,7 @@ const RISPOSTA: PlanOutcomeList = {
       tp1: 108, tp2: null, r: 4, horizon_days: 21, esito: "tp1",
       resolved_date: "2026-03-10", bars_to_outcome: 6, r_multiple: 2.4, mae_r: 0.3,
       mfe_r: 2.1, tp2_reached: false, stop_hit_date: null, tp1_hit_date: "2026-03-10",
-      tp2_hit_date: null, source: "emesso",
+      tp2_hit_date: null,
     },
   ],
   total: 1,

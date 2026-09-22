@@ -15,7 +15,7 @@ function piano(p: Partial<PlanBrief> = {}): PlanBrief {
     entry: 100, stop: 96, tp1: 108, tp2: 112, r: 4, r_multiple: 2.4,
     bars_to_outcome: 6, horizon_days: 21, mae_r: 0.3, mfe_r: 2.1,
     tp2_reached: false, stop_hit_date: null, tp1_hit_date: "2026-03-10",
-    tp2_hit_date: null, source: "emesso",
+    tp2_hit_date: null,
     ...p,
   };
 }
@@ -70,16 +70,5 @@ describe("PlanOutcomeBlock", () => {
     const testo = screen.getByText(/Nessun piano risolto/).textContent ?? "";
     expect(testo).toMatch(/livello di invalidazione/);
     expect(testo).toMatch(/non si è ancora chiusa/);
-  });
-
-  it("un livello ricostruito resta dichiarato", () => {
-    render(<PlanOutcomeBlock plan={piano({ source: "ricostruito" })} />);
-    expect(screen.getByText("livello ricostruito")).toBeInTheDocument();
-  });
-
-  it("senza ricostruzione la dichiarazione non compare", () => {
-    // Controllo negativo: una nota sempre presente non distingue più niente.
-    render(<PlanOutcomeBlock plan={piano()} />);
-    expect(screen.queryByText("livello ricostruito")).not.toBeInTheDocument();
   });
 });

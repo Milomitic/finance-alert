@@ -68,6 +68,57 @@ class PianoDiTrade:
     targets: list[Target]
 
 
+#: I tre ingressi della geometria e il nome che portano una volta FISSATI alla
+#: prima emissione.
+#:
+#: ⚠️ L'ingresso era gia' fissato (`snapshot.first_price`), questi no: `atr`,
+#: `invalidation` e `horizon` vengono sostituiti a OGNI revisione insieme al
+#: resto dello snapshot, e un alert su cinque non ne ha nemmeno una. Il piano
+#: leggeva quindi un prezzo di un giorno e una volatilita' di un altro.
+#:
+#: Misurato in produzione il 2026-09-22 su MRNA (alert 18192, rottura di
+#: struttura del 12 agosto a 63,67): il 19 agosto il titolo ha fatto +177% in
+#: una seduta, l'alert e' rimasto vivo fino al 21 e l'ATR e' passato da 3,96 a
+#: 14,89. Lo stop del piano finiva a 26,46 — il 58% sotto un ingresso che
+#: nessuno avrebbe piu' potuto prendere — e i due target collassavano
+#: entrambi sul tetto del +95%. Con l'ATR del 12 agosto: stop 53,76, target
+#: 83,48 e 93,39, entrambi toccati dal gap del 19. Su 7.296 alert rivisti,
+#: 296 hanno uno scarto di ATR oltre il 25% e 37 oltre il doppio.
+#:
+#: Il vincolo non e' «l'ATR non deve muoversi»: e' che TUTTI gli ingressi del
+#: piano vengano dallo stesso istante di quello d'ingresso. Il resto dello
+#: snapshot — Forza, catena, regime — continua a descrivere l'analisi di
+#: adesso, ed e' giusto cosi': quello che mancava era la separazione fra le
+#: due letture, non il congelamento di entrambe.
+_CONGELATI: dict[str, str] = {
+    "atr": "first_atr",
+    "invalidation": "first_invalidation",
+    "horizon": "first_horizon",
+}
+
+
+#: I nomi dei campi fissati, per chi li SCRIVE (lo scan) e per chi li riempie
+#: all'indietro (`app.scripts.backfill_plan_inputs`). Un elenco copiato si
+#: dimentica del campo successivo che si aggiunge, e il difetto sarebbe di
+#: nuovo un piano che mescola due istanti.
+INGRESSI_CONGELATI: tuple[str, ...] = tuple(_CONGELATI.values())
+
+
+def ingressi_del_piano(snapshot: dict) -> dict:
+    """ATR, invalidazione e orizzonte con cui il piano si costruisce.
+
+    Quelli della PRIMA EMISSIONE quando ci sono, coi correnti come ripiego
+    DICHIARATO per gli alert che precedono i campi: il meglio disponibile, non
+    una stima. Gemella di `ingressiDelPiano` in `lib/tradePlaybook.ts`.
+    """
+    return {
+        vivo: (snapshot.get(congelato)
+               if snapshot.get(congelato) is not None
+               else snapshot.get(vivo))
+        for vivo, congelato in _CONGELATI.items()
+    }
+
+
 def _numero(v: object) -> float | None:
     """Un numero vero e finito, o None. `bool` e' escluso perche' in Python e'
     un `int` e `True` passerebbe per 1.0 — un livello di invalidazione pari a
@@ -117,7 +168,10 @@ def costruisci_piano(
     if prezzo is None or prezzo <= 0:
         return None
 
-    inval = snapshot.get("invalidation")
+    # Gli ingressi dell'ISTANTE D'INGRESSO, non quelli dell'ultima revisione.
+    ing = ingressi_del_piano(snapshot)
+
+    inval = ing.get("invalidation")
     livello = _numero(inval.get("level")) if isinstance(inval, dict) else None
     if livello is None or livello <= 0:
         return None
@@ -127,7 +181,7 @@ def costruisci_piano(
 
     # Ancora di volatilita'. Il ripiego al 2% del prezzo tiene uniformi tutte
     # le formule per gli alert storici senza ATR nello snapshot.
-    atr_dichiarato = _numero(snapshot.get("atr"))
+    atr_dichiarato = _numero(ing.get("atr"))
     atr = atr_dichiarato if atr_dichiarato and atr_dichiarato > 0 else prezzo * 0.02
 
     # L'orizzonte stampato dallo scan ha la precedenza; la classificazione
@@ -137,7 +191,11 @@ def costruisci_piano(
     # raccoglierebbe l'ErrorBoundary, ma questo modulo gira in un ciclo su
     # migliaia di alert, dove un'eccezione fermerebbe la maturazione di tutti
     # gli altri. La divergenza riguarda solo dati gia' corrotti.
-    hz = snapshot.get("horizon")
+    # ⚠️ La catena resta quella VIVA: e' l'ultimo ripiego per gli alert che
+    # precedono sia `first_horizon` sia `horizon`, e per quelli la catena
+    # originale non esiste piu' da nessuna parte. Un ripiego dichiarato batte
+    # un valore inventato.
+    hz = ing.get("horizon")
     if hz not in _HZ:
         hz = _orizzonte_dalla_catena(name, snapshot.get("chain"))
     P = _HZ[hz]

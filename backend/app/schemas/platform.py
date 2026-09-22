@@ -404,10 +404,6 @@ class PlanCoverageOut(BaseModel):
 
 class PlanPerfMetaOut(BaseModel):
     rows: int
-    #: Righe il cui livello di invalidazione e' stato RICOSTRUITO all'indietro.
-    #: Dichiarato perche' una ricostruzione sbagliata e' indistinguibile da una
-    #: giusta finche' nessuno guarda il campo.
-    reconstructed: int
     detectors_present: int
     date_range: dict[str, str | None]
     coverage: list[PlanCoverageOut]

@@ -184,18 +184,6 @@ export function PlanOutcomeBlock({ plan }: { plan: PlanBrief | null | undefined 
         <span title="Quanto il prezzo è andato a FAVORE prima che la posizione si chiudesse">
           a favore {formatR(plan.mfe_r)}
         </span>
-        {plan.source === "ricostruito" && (
-          <span className="italic">
-            livello ricostruito
-            <InfoHint
-              label="Livello ricostruito"
-              text={
-                "Questo detector non emetteva un livello di invalidazione quando il segnale è scattato: lo stop è stato ricostruito all'indietro da un fatto delle barre — la chiusura precedente di un gap, l'estremo del pivot di una divergenza. " +
-                "Resta dichiarato per sempre, perché una ricostruzione sbagliata è indistinguibile da una giusta finché nessuno guarda questo campo."
-              }
-            />
-          </span>
-        )}
       </div>
     </div>
   );

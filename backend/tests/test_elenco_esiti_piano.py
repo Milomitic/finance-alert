@@ -57,7 +57,7 @@ def _esito(
         tp2_reached=False,
         stop_hit_date=date.fromisoformat(stop_hit) if stop_hit else None,
         tp1_hit_date=date.fromisoformat(tp1_hit) if tp1_hit else None,
-        tp2_hit_date=None, source="emesso", method_version="2",
+        tp2_hit_date=None, method_version="2",
         matured_at=datetime.now(UTC),
     )
     db.add(riga)

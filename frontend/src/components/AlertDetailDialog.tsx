@@ -56,7 +56,7 @@ import {
   type AlertTone,
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
-import { pianoDelSegnale } from "@/lib/tradePlaybook";
+import { ingressiDelPiano, pianoDelSegnale } from "@/lib/tradePlaybook";
 
 export type { AlertChartLink };
 
@@ -207,9 +207,10 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
     firstEmittedAt != null &&
     alert.signal_date != null &&
     firstEmittedAt.slice(0, 10) !== alert.signal_date;
-  const inv =
-    (alert.snapshot as { invalidation?: { level?: number; reason?: string } | null })
-      .invalidation ?? null;
+  // ⚠️ Il livello del PIANO, cioè quello della prima emissione: il riquadro
+  // sta accanto al prezzo d'ingresso e allo stop, e mostrarne uno di un altro
+  // istante rimetterebbe a schermo la mescolanza che `ingressiDelPiano` chiude.
+  const inv = ingressiDelPiano(alert.snapshot).invalidation ?? null;
   const invLevel = inv && typeof inv.level === "number" ? inv.level : null;
 
   return (

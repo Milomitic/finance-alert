@@ -47,11 +47,11 @@ describe("vettori d'oro del piano di trade", () => {
     for (const atteso of [
       "long_breve", "short_breve", "stop_al_pavimento", "stop_al_tetto",
       "senza_atr_ripiego_2pct", "target_degeneri_tp2_uguale_tp1",
-      "senza_invalidazione_nessun_piano",
+      "senza_invalidazione_nessun_piano", "ingressi_congelati_battono_i_correnti",
     ]) {
       expect(nomi.has(atteso), `manca il caso limite «${atteso}»`).toBe(true);
     }
-    expect(nomi.size).toBeGreaterThanOrEqual(12);
+    expect(nomi.size).toBeGreaterThanOrEqual(14);
   });
 
   it.each(casi.map((c) => [c.nome, c] as const))(

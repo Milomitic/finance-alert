@@ -396,6 +396,81 @@
         "chain": []
       },
       "atteso": null
+    },
+    {
+      "nome": "ingressi_congelati_battono_i_correnti",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "first_atr": 8,
+        "horizon": "short",
+        "first_horizon": "medium",
+        "invalidation": {
+          "level": 96
+        },
+        "first_invalidation": {
+          "level": 90
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 80,
+        "stopPct": 20,
+        "stopCapped": false,
+        "horizon": "Medio",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 140,
+            "rr": 2
+          },
+          {
+            "label": "Target 2",
+            "price": 160,
+            "rr": 3
+          }
+        ]
+      }
+    },
+    {
+      "nome": "ingresso_congelato_parziale_solo_atr",
+      "name": "sr_flip",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "first_atr": 5,
+        "horizon": "short",
+        "invalidation": {
+          "level": 96
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 96,
+        "stopPct": 4,
+        "stopCapped": false,
+        "horizon": "Breve",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 110,
+            "rr": 2.5
+          },
+          {
+            "label": "Target 2",
+            "price": 118,
+            "rr": 4.5
+          }
+        ]
+      }
     }
-  ]
+  ],
+  "_ingressi_congelati": "I casi `ingressi_congelati_battono_i_correnti` e `ingresso_congelato_parziale_solo_atr` fissano la precedenza: `first_atr`, `first_invalidation` e `first_horizon` sono gli ingressi della PRIMA EMISSIONE e battono i campi correnti, campo per campo. Senza questa regola il piano mescola due istanti \u2014 ingresso di un giorno, volatilita' di un altro \u2014 e su MRNA produceva uno stop il 58% sotto l'ingresso. Un'implementazione che li ignora rende qui i numeri dei campi vivi, quindi il rosso nomina la meta' rimasta indietro."
 }

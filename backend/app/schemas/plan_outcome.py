@@ -56,10 +56,6 @@ class PlanOutcomeRowOut(BaseModel):
     tp1_hit_date: date | None = None
     tp2_hit_date: date | None = None
 
-    #: emesso | ricostruito. Una ricostruzione sbagliata e' indistinguibile da
-    #: una giusta finche' nessuno guarda questo campo.
-    source: str
-
 
 class PlanOutcomeSummaryOut(BaseModel):
     """Il riassunto della popolazione FILTRATA, mai della pagina."""

@@ -31,15 +31,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
 
-#: Il livello di invalidazione l'ha EMESSO il detector al momento dello scatto.
-FONTE_EMESSO = "emesso"
-#: Il livello e' stato RICOSTRUITO all'indietro da dati storici esatti (la
-#: chiusura precedente di un gap, i pivot nella catena dello snapshot). ⚠️ Va
-#: tenuto distinguibile per sempre: un'analisi deve poter escludere le righe
-#: ricostruite con un WHERE, perche' una ricostruzione sbagliata e' del tutto
-#: indistinguibile da una giusta finche' nessuno guarda questo campo.
-FONTE_RICOSTRUITO = "ricostruito"
-
 
 class PlanOutcome(Base):
     """L'esito della gara stop-contro-target per UN alert."""
@@ -153,8 +144,6 @@ class PlanOutcome(Base):
     legs_window_complete: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # ── Provenienza ────────────────────────────────────────────────────────
-    source: Mapped[str] = mapped_column(String(16), nullable=False,
-                                        default=FONTE_EMESSO)
     #: Con quale versione della regola questa riga e' stata etichettata. Senza,
     #: una modifica al metodo mescolerebbe in silenzio le popolazioni di prima
     #: e di dopo — la stessa ragione per cui esiste `OUTCOME_METHOD_VERSION`.

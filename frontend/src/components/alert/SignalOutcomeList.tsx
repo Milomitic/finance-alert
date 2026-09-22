@@ -156,17 +156,6 @@ function Identita({ riga }: { riga: PlanOutcomeRow }) {
           {riga.name}
         </span>
       )}
-      {riga.source === "ricostruito" && (
-        /* Una ricostruzione sbagliata e' indistinguibile da una giusta finche'
-           nessuno guarda il campo: quindi il campo si guarda, su ogni riga. Il
-           perche' sta nella nota sotto la tabella, scritto una volta. */
-        <span
-          className="shrink-0 rounded border border-border px-1 text-[0.6176rem] font-semibold text-muted-foreground"
-          title="Livello di invalidazione ricostruito all'indietro da un fatto delle barre"
-        >
-          ric
-        </span>
-      )}
     </span>
   );
 }
@@ -493,7 +482,6 @@ export function SignalOutcomeList({
       </Card>
     );
   }
-  const ricostruiti = righe.filter((r) => r.source === "ricostruito").length;
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-0">
@@ -541,14 +529,6 @@ export function SignalOutcomeList({
             <span aria-hidden className="inline-block h-3 w-px bg-foreground/60" /> chiusura della posizione
           </span>
         </p>
-        {ricostruiti > 0 && (
-          <p className="border-t bg-muted/20 px-3 py-1.5 text-[0.7059rem] text-muted-foreground">
-            <b className="tabular-nums text-foreground">{ricostruiti}</b> righe marcate{" "}
-            <b>ric</b>: il detector non emetteva un livello di invalidazione quando il segnale è
-            scattato, e lo stop è stato ricostruito all'indietro da un fatto delle barre — la
-            chiusura precedente di un gap, l'estremo del pivot di una divergenza.
-          </p>
-        )}
       </CardContent>
     </Card>
   );

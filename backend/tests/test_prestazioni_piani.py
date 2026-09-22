@@ -33,7 +33,7 @@ def _titolo(db: Session, ticker: str) -> Stock:
 def _riga(db: Session, stock: Stock, *, detector: str = "sr_flip",
           giorno: int = 1, esito: str = "tp1", r_mult: float = 2.0,
           orizzonte: int = 21, stop_il: int | None = None, tp1_il: int | None = None,
-          mae: float = 0.3, mfe: float = 2.2, fonte: str = "emesso") -> PlanOutcome:
+          mae: float = 0.3, mfe: float = 2.2) -> PlanOutcome:
     d = date(2026, 1, 1) + timedelta(days=giorno)
     a = Alert(stock_id=stock.id, signal_name=detector, signal_date=d,
               triggered_at=datetime.combine(d, datetime.min.time(), tzinfo=UTC),
@@ -48,7 +48,7 @@ def _riga(db: Session, stock: Stock, *, detector: str = "sr_flip",
         r_multiple=r_mult, mae_r=mae, mfe_r=mfe, tp2_reached=False,
         stop_hit_date=(d + timedelta(days=stop_il)) if stop_il is not None else None,
         tp1_hit_date=(d + timedelta(days=tp1_il)) if tp1_il is not None else None,
-        source=fonte, method_version="1", matured_at=datetime.now(UTC),
+        method_version="1", matured_at=datetime.now(UTC),
     )
     db.add(riga)
     db.flush()
@@ -175,18 +175,6 @@ def test_i_detector_senza_nessun_piano_compaiono_nella_copertura(db: Session) ->
     assert copertura["squeeze_expansion"]["with_plan"] == 0
     assert copertura["squeeze_expansion"]["alerts"] == 1
     assert copertura["sr_flip"]["with_plan"] == 1
-
-
-def test_le_righe_ricostruite_sono_contate_a_parte(db: Session) -> None:
-    """Una ricostruzione sbagliata e' indistinguibile da una giusta finche'
-    nessuno guarda il campo: il totale va dichiarato a schermo."""
-    s = _titolo(db, "AAA")
-    _riga(db, s, giorno=1, fonte="emesso")
-    _riga(db, s, giorno=40, fonte="ricostruito")
-
-    meta = compute_plan_performance(db)["meta"]
-    assert meta["rows"] == 2
-    assert meta["reconstructed"] == 1
 
 
 def test_un_magazzino_vuoto_non_esplode_e_non_inventa_numeri(db: Session) -> None:

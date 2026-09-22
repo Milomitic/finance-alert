@@ -80,8 +80,6 @@ class PlanBriefOut(BaseModel):
     stop_hit_date: date | None = None
     tp1_hit_date: date | None = None
     tp2_hit_date: date | None = None
-    #: emesso | ricostruito.
-    source: str
 
 
 class AlertOut(BaseModel):

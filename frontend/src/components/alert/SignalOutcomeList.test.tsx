@@ -20,7 +20,7 @@ function riga(p: Partial<PlanOutcomeRow> = {}): PlanOutcomeRow {
     tp1: 108, tp2: null, r: 4, horizon_days: 21, esito: "tp1",
     resolved_date: "2026-03-10", bars_to_outcome: 6, r_multiple: 2.4, mae_r: 0.3,
     mfe_r: 2.1, tp2_reached: false, stop_hit_date: null, tp1_hit_date: "2026-03-10",
-    tp2_hit_date: null, source: "emesso",
+    tp2_hit_date: null,
     ...p,
   };
 }
@@ -184,26 +184,6 @@ describe("SignalOutcomeList", () => {
     // e non e' successo».
     monta([riga()]);
     expect(screen.getByText("—")).toBeInTheDocument();
-  });
-
-  it("un livello ricostruito e' marcato sulla riga E contato sotto la tabella", () => {
-    // Una ricostruzione sbagliata e' indistinguibile da una giusta finche'
-    // nessuno guarda il campo: quindi il campo si guarda. Il marcatore per
-    // riga e' il DATO, la spiegazione in prosa sta una volta sola.
-    monta([riga({ source: "ricostruito" }), riga({ alert_id: 8, source: "emesso" })]);
-    // Per titolo, non per testo: «ric» compare anche nella nota sotto, e un
-    // `getByText` che pesca due nodi non distingue il marcatore dalla
-    // spiegazione — passerebbe anche se il marcatore sparisse dalla riga.
-    expect(screen.getByTitle(/ricostruito all'indietro/)).toBeInTheDocument();
-    expect(screen.getByText(/il detector non emetteva un livello/)).toBeInTheDocument();
-  });
-
-  it("senza righe ricostruite ne' marcatore ne' nota compaiono", () => {
-    // Controllo negativo del test sopra: una nota sempre presente non
-    // distingue piu' niente.
-    monta([riga()]);
-    expect(screen.queryByTitle(/ricostruito all'indietro/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/il detector non emetteva un livello/)).not.toBeInTheDocument();
   });
 
   it("la riga apre il SEGNALE, che e' la domanda che solleva", () => {

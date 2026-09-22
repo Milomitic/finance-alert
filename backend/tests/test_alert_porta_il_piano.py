@@ -58,7 +58,7 @@ def _piano(db: Session, a: Alert, **extra) -> PlanOutcome:
         r=4.0, esito="stop", resolved_date=date(2026, 3, 5), bars_to_outcome=3,
         r_multiple=-1.0, mae_r=1.0, mfe_r=0.4, tp2_reached=False,
         stop_hit_date=date(2026, 3, 5), tp1_hit_date=date(2026, 3, 18),
-        tp2_hit_date=None, source="emesso", method_version="2",
+        tp2_hit_date=None, method_version="2",
         matured_at=datetime.now(UTC),
         **extra,
     )

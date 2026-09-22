@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Alert, OhlcvDaily, Stock
-from app.scripts.backfill_first_price import CHIAVE, MARCATORE, riempi
+from app.scripts.backfill_first_price import CHIAVE, MARCATORE_VECCHIO, riempi
 
 
 def _titolo(db: Session, ticker: str = "AAA") -> Stock:
@@ -47,11 +47,11 @@ def test_il_prezzo_ricostruito_e_la_chiusura_alla_prima_emissione(db: Session) -
                    ("2026-09-11", 985.39), ("2026-09-14", 1001.50)])
     _alert(db, s, prima_emissione="2026-09-04", scattato="2026-09-14", prezzo=985.39)
 
-    riempiti, saltati = riempi(db)
+    riempiti, saltati, _ = riempi(db)
     assert (riempiti, saltati) == (1, 0)
     snap = json.loads(db.query(Alert).one().snapshot)
     assert snap[CHIAVE] == pytest.approx(932.26)
-    assert snap[MARCATORE] is True
+    assert MARCATORE_VECCHIO not in snap
 
 
 def test_un_first_price_gia_presente_NON_viene_toccato(db: Session) -> None:
@@ -65,7 +65,7 @@ def test_un_first_price_gia_presente_NON_viene_toccato(db: Session) -> None:
     assert riempi(db)[0] == 0
     snap = json.loads(db.query(Alert).one().snapshot)
     assert snap[CHIAVE] == pytest.approx(777.0)
-    assert MARCATORE not in snap
+    assert MARCATORE_VECCHIO not in snap
 
 
 def test_senza_first_emitted_at_si_ripiega_su_triggered_at(db: Session) -> None:
@@ -82,7 +82,7 @@ def test_senza_una_barra_utile_si_salta_invece_di_inventare(db: Session) -> None
     _barre(db, s, [("2026-09-11", 985.39)])   # tutte DOPO la prima emissione
     _alert(db, s, prima_emissione="2026-09-04", scattato="2026-09-14", prezzo=985.39)
 
-    riempiti, saltati = riempi(db)
+    riempiti, saltati, _ = riempi(db)
     assert (riempiti, saltati) == (0, 1)
     assert CHIAVE not in json.loads(db.query(Alert).one().snapshot)
 
@@ -140,3 +140,22 @@ def test_main_inoltra_il_flag(monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["backfill_first_price", "--applica"])
     backfill_first_price.main()
     assert visti == [False, True]
+
+
+def test_il_vecchio_marcatore_viene_TOLTO_dove_c_e(db: Session) -> None:
+    """La base non porta piu' la distinzione fra un prezzo fissato dal motore e
+    uno ricalcolato: una passata ripulisce gli snapshot che la portano ancora.
+
+    ⚠️ Il controllo negativo e' il conteggio: senza, un `pop` che non trova
+    niente e un `pop` che non viene mai eseguito sono indistinguibili.
+    """
+    s = _titolo(db)
+    _barre(db, s, [("2026-09-04", 932.26)])
+    _alert(db, s, prima_emissione="2026-09-04", scattato="2026-09-14",
+           prezzo=985.39, extra={CHIAVE: 932.26, MARCATORE_VECCHIO: True})
+
+    riempiti, _, ripuliti = riempi(db)
+    assert (riempiti, ripuliti) == (0, 1)
+    snap = json.loads(db.query(Alert).one().snapshot)
+    assert MARCATORE_VECCHIO not in snap
+    assert snap[CHIAVE] == pytest.approx(932.26)   # il valore resta

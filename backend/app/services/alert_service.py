@@ -414,7 +414,6 @@ def _piano_dict(piano: PlanOutcome | None) -> dict[str, Any] | None:
         "stop_hit_date": piano.stop_hit_date,
         "tp1_hit_date": piano.tp1_hit_date,
         "tp2_hit_date": piano.tp2_hit_date,
-        "source": piano.source,
     }
 
 

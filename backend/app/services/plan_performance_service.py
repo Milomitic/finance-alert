@@ -23,7 +23,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Alert, PlanOutcome, Stock
-from app.models.plan_outcome import FONTE_RICOSTRUITO
 from app.stats.media import mean_interval
 from app.stats.sizing import independent_blocks
 
@@ -146,7 +145,6 @@ def compute_plan_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dic
     return {
         "meta": {
             "rows": len(righe),
-            "reconstructed": sum(1 for r in righe if r.source == FONTE_RICOSTRUITO),
             "detectors_present": len(per_detector),
             "date_range": {
                 "from": min(date_segnale).isoformat() if date_segnale else None,
@@ -190,7 +188,6 @@ def _riga(esito: PlanOutcome, ticker: str, nome: str | None) -> dict:
         "stop_hit_date": esito.stop_hit_date,
         "tp1_hit_date": esito.tp1_hit_date,
         "tp2_hit_date": esito.tp2_hit_date,
-        "source": esito.source,
     }
 
 

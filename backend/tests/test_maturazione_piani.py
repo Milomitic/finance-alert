@@ -192,13 +192,13 @@ def test_un_titolo_senza_barre_non_impedisce_agli_altri_di_maturare(db: Session)
     assert db.query(PlanOutcome).one().stock_id == s2.id
 
 
-# ─── 6. Il ricalcolo storico: ricostruire SOLO dove e' esatto ──────────────
+# ─── 6. Il livello letto dalle barre: SOLO dove e' esatto ──────────────────
 #
 # I sei detector scoperti emettono il livello da adesso. I loro ~2.508 alert
 # storici hanno `invalidation: None` nello snapshot per sempre, e resterebbero
 # fuori dalla misura per settimane.
 #
-# Per QUATTRO di loro il livello si ricostruisce da un FATTO delle barre:
+# Per QUATTRO di loro il livello si ricava da un FATTO delle barre:
 #   gap_and_go          la chiusura della barra precedente al gap
 #   le tre divergenze   il minimo/massimo della barra del segnale, che e'
 #                       l'ultimo pivot per costruzione (l'evento porta
@@ -210,7 +210,7 @@ def test_un_titolo_senza_barre_non_impedisce_agli_altri_di_maturare(db: Session)
 # esattamente cio' che questo repo ha imparato a non fare su SOXS: sembra
 # perfettamente sano ed e' silenziosamente sbagliato.
 
-def test_il_gap_storico_si_ricostruisce_dalla_chiusura_precedente(db: Session) -> None:
+def test_il_gap_prende_il_livello_dalla_chiusura_precedente(db: Session) -> None:
     s = _titolo(db)
     _alert(db, s, detector="gap_and_go", invalidazione=None, scattato="2026-03-02")
     _barre(db, s, [
@@ -220,13 +220,11 @@ def test_il_gap_storico_si_ricostruisce_dalla_chiusura_precedente(db: Session) -
         ("2026-03-04", 109, 101, 108),
     ])
 
-    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
-    riga = db.query(PlanOutcome).one()
-    assert riga.source == "ricostruito"
-    assert riga.stop == pytest.approx(95.2)
+    assert mature_plan_outcomes(db, commit=False) == 1
+    assert db.query(PlanOutcome).one().stop == pytest.approx(95.2)
 
 
-def test_la_divergenza_storica_si_ricostruisce_dall_estremo_della_barra(db: Session) -> None:
+def test_la_divergenza_prende_il_livello_dall_estremo_della_barra(db: Session) -> None:
     s = _titolo(db)
     _alert(db, s, detector="rsi_divergence", invalidazione=None, scattato="2026-03-02")
     _barre(db, s, [
@@ -235,16 +233,14 @@ def test_la_divergenza_storica_si_ricostruisce_dall_estremo_della_barra(db: Sess
         ("2026-03-04", 109, 101, 108),
     ])
 
-    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
-    riga = db.query(PlanOutcome).one()
-    assert riga.source == "ricostruito"
-    assert riga.stop == pytest.approx(88.5)
+    assert mature_plan_outcomes(db, commit=False) == 1
+    assert db.query(PlanOutcome).one().stop == pytest.approx(88.5)
 
 
-def test_adx_e_squeeze_NON_si_ricostruiscono(db: Session) -> None:
+def test_adx_e_squeeze_NON_prendono_il_livello_dalle_barre(db: Session) -> None:
     """⚠️ L'esclusione e' la parte importante, ed e' deliberata.
 
-    Ricostruire un livello Donchian o una finestra di compressione vorrebbe
+    Ricavare un livello Donchian o una finestra di compressione vorrebbe
     dire ricalcolarli con parametri che potrebbero essere cambiati. Il
     risultato sarebbe indistinguibile da un livello misurato — che e'
     precisamente la ragione per cui non si fa.
@@ -255,36 +251,20 @@ def test_adx_e_squeeze_NON_si_ricostruiscono(db: Session) -> None:
     for s in (s1, s2):
         _barre(db, s, [("2026-03-01", 101, 88, 100), ("2026-03-03", 109, 99, 108)])
 
-    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 0
+    assert mature_plan_outcomes(db, commit=False) == 0
     assert db.query(PlanOutcome).count() == 0
 
 
-def test_la_ricostruzione_e_SPENTA_per_la_scansione_normale(db: Session) -> None:
-    """⚠️ Il percorso incrementale non deve mai ricostruire.
-
-    Da adesso i sei detector emettono il livello, quindi un alert nuovo senza
-    invalidazione e' un alert che non ne ha una — e riempirlo all'indietro
-    renderebbe `source='emesso'` una promessa falsa. Il ricalcolo storico e'
-    un'operazione dichiarata e una tantum.
-    """
-    s = _titolo(db)
-    _alert(db, s, detector="gap_and_go", invalidazione=None)
-    _barre(db, s, [("2026-02-27", 96, 94, 95.2), ("2026-03-03", 109, 99, 108)])
-
-    assert mature_plan_outcomes(db, commit=False) == 0
-
-
-def test_un_livello_EMESSO_non_viene_mai_sovrascritto_da_una_ricostruzione(db: Session) -> None:
+def test_il_livello_dello_snapshot_non_viene_mai_scavalcato(db: Session) -> None:
     s = _titolo(db)
     _alert(db, s, detector="gap_and_go", invalidazione=96.0)
     _barre(db, s, [("2026-02-27", 96, 94, 80.0),    # il livello che la ricostruzione userebbe
                    ("2026-03-02", 101, 99, 100.0),  # la barra d'ingresso
                    ("2026-03-03", 109, 99, 108)])
 
-    assert mature_plan_outcomes(db, commit=False, ricostruisci=True) == 1
+    assert mature_plan_outcomes(db, commit=False) == 1
     riga = db.query(PlanOutcome).one()
-    assert riga.source == "emesso"
-    assert riga.stop == pytest.approx(96.0), "la ricostruzione ha scavalcato il livello vero"
+    assert riga.stop == pytest.approx(96.0), "le barre hanno scavalcato il livello vero"
 
 
 # ─── 7. Lo script di ricalcolo ─────────────────────────────────────────────
@@ -339,17 +319,16 @@ def test_main_inoltra_i_flag_alla_run(monkeypatch) -> None:
 
     from app.scripts import backfill_plan_outcomes
 
-    visti: list[tuple[bool, bool]] = []
+    visti: list[bool] = []
     monkeypatch.setattr(backfill_plan_outcomes, "run",
-                        lambda applica=False, ricostruisci=False:
-                            visti.append((applica, ricostruisci)))
+                        lambda applica=False: visti.append(applica))
 
     monkeypatch.setattr(sys, "argv", ["backfill_plan_outcomes"])
     backfill_plan_outcomes.main()
-    monkeypatch.setattr(sys, "argv", ["backfill_plan_outcomes", "--applica", "--ricostruisci"])
+    monkeypatch.setattr(sys, "argv", ["backfill_plan_outcomes", "--applica"])
     backfill_plan_outcomes.main()
 
-    assert visti == [(False, False), (True, True)]
+    assert visti == [False, True]
 
 
 # ─── 8. L'ancora e' la PRIMA emissione, non l'ultima revisione ─────────────
@@ -443,7 +422,7 @@ def test_la_misura_NON_dipende_da_quando_gira_la_maturazione(db: Session) -> Non
 
 def test_senza_first_emitted_at_si_ripiega_su_triggered_at(db: Session) -> None:
     """I 116 alert storici (l'1,3%) che precedono il campo. Il ripiego e'
-    dichiarato: e' il meglio disponibile, non una ricostruzione."""
+    dichiarato: e' il meglio disponibile."""
     s = _titolo(db)
     _alert(db, s, scattato="2026-03-02")   # `_alert` non mette first_emitted_at
     _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 109, 99, 108)])
@@ -487,7 +466,7 @@ def test_una_riga_di_versione_vecchia_viene_RIMISURATA(db: Session) -> None:
         entry_date=date(2026, 3, 2), entry=999.0, stop=888.0, tp1=1111.0, tp2=None,
         r=111.0, esito="scaduto", resolved_date=date(2026, 3, 3),
         bars_to_outcome=1, r_multiple=-1.0, mae_r=0.0, mfe_r=0.0,
-        tp2_reached=False, source="emesso", method_version="1",
+        tp2_reached=False, method_version="1",
         matured_at=datetime.now(UTC),
     ))
     db.flush()

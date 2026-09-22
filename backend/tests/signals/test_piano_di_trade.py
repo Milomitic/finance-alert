@@ -46,9 +46,10 @@ def test_i_vettori_coprono_i_casi_limite_e_non_solo_quelli_facili() -> None:
     nomi = {c["nome"] for c in _casi()}
     for atteso in ("long_breve", "short_breve", "stop_al_pavimento", "stop_al_tetto",
                    "senza_atr_ripiego_2pct", "target_degeneri_tp2_uguale_tp1",
-                   "senza_invalidazione_nessun_piano"):
+                   "senza_invalidazione_nessun_piano",
+                   "ingressi_congelati_battono_i_correnti"):
         assert atteso in nomi, f"manca il caso limite «{atteso}»"
-    assert len(nomi) >= 12
+    assert len(nomi) >= 14
 
 
 @pytest.mark.parametrize("caso", _casi(), ids=lambda c: c["nome"])

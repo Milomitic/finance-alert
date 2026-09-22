@@ -41,8 +41,6 @@ export interface PlanOutcomeRow {
   stop_hit_date: string | null;
   tp1_hit_date: string | null;
   tp2_hit_date: string | null;
-  /** emesso | ricostruito */
-  source: string;
 }
 
 export interface PlanOutcomeSummary {

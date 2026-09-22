@@ -6,9 +6,6 @@
     # e poi, per scrivere davvero
     ... -m app.scripts.backfill_plan_outcomes --applica
 
-    # includendo la ricostruzione degli storici dove e' ESATTA
-    ... -m app.scripts.backfill_plan_outcomes --applica --ricostruisci
-
 Sola lettura per default, come `repair_price_basis`: un rapporto si legge, e
 solo dopo si decide.
 
@@ -21,24 +18,21 @@ dello stesso calcolo divergono al primo ritocco e qui la divergenza
 produrrebbe uno storico misurato con una regola e un incrementale misurato con
 un'altra — indistinguibili una volta nella stessa tabella.
 
-La ricostruzione, e perche' e' limitata
-=======================================
-Con `--ricostruisci` gli alert storici dei detector che NON emettevano un
-livello ne ricevono uno, ma solo dove e' un FATTO delle barre:
+Il livello letto dalle barre, e perche' e' limitato
+===================================================
+Gli alert dei detector che non emettono un livello di invalidazione ne
+ricevono uno, ma solo dove e' un FATTO delle barre:
 
     gap_and_go          la chiusura della barra precedente al gap
     le tre divergenze   l'estremo della barra del segnale, che e' l'ultimo
                         pivot per costruzione
 
-⚠️ `adx_confirmation` e `squeeze_expansion` restano fuori. Ricostruirli
+⚠️ `adx_confirmation` e `squeeze_expansion` restano fuori. Ricavarli
 vorrebbe dire RICALCOLARE un livello Donchian o una finestra di compressione
 con parametri che potrebbero essere cambiati, e il risultato sarebbe
 indistinguibile da uno misurato. E' la lezione di SOXS: un fattore dedotto e
 applicato all'indietro «sembra perfettamente sano ed e' silenziosamente
 sbagliato».
-
-Le righe ricostruite portano `source='ricostruito'` e restano escludibili con
-un WHERE per sempre.
 """
 from __future__ import annotations
 
@@ -67,10 +61,6 @@ def _rapporto(db) -> None:
         .group_by(PlanOutcome.esito).order_by(func.count().desc())
     ):
         logger.info(f"   {esito:10s} {n:6d}   R medio {r_medio:+.2f}")
-    for fonte, n in db.execute(
-        select(PlanOutcome.source, func.count()).group_by(PlanOutcome.source)
-    ):
-        logger.info(f"   provenienza {fonte:12s} {n:6d}")
     # ⚠️ Il numero che questo magazzino esiste per produrre e che nessun altro
     # sa dare: quante volte lo stop e' stato colpito PRIMA di un target che poi
     # e' arrivato lo stesso. E' la misura di uno stop troppo stretto.
@@ -83,12 +73,12 @@ def _rapporto(db) -> None:
     logger.info(f"   stop colpito PRIMA di un target poi raggiunto: {stretti}")
 
 
-def run(applica: bool = False, ricostruisci: bool = False) -> None:
+def run(applica: bool = False) -> None:
     db = SessionLocal()
     try:
         logger.info("prima:")
         _rapporto(db)
-        scritte = mature_plan_outcomes(db, commit=False, ricostruisci=ricostruisci)
+        scritte = mature_plan_outcomes(db, commit=False)
         logger.info(f"righe che la passata produce: {scritte}")
         if applica:
             db.commit()
@@ -109,10 +99,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--applica", action="store_true",
                     help="scrive davvero (default: solo rapporto)")
-    ap.add_argument("--ricostruisci", action="store_true",
-                    help="ricostruisce il livello degli storici dove e' esatto")
-    args = ap.parse_args()
-    run(applica=args.applica, ricostruisci=args.ricostruisci)
+    run(applica=ap.parse_args().applica)
 
 
 if __name__ == "__main__":
