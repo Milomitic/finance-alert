@@ -3690,8 +3690,11 @@ batte l'attuale in walk-forward. Sopravvivono due cose, entrambe SOTTRAZIONI:
 il piano breve ha lo stop troppo stretto (0,5 ATR: ~0,05 R di costi a
 operazione e skill sotto il caso; ipotesi pre-registrata e confermata su 274
 titoli mai visti), e `adx_confirmation` ha anti-skill di direzione (q 0,02).
-L'ML non trova direzione in modo robusto; trova la VOLATILITA' (R² +0,17
-sull'ATR, 7 anni su 7).
+L'ML trova la VOLATILITA' (R² +0,17 sull'ATR, 7 anni su 7). Sulla direzione un
+solo effetto regge a tutte le prove, ed e' piccolo: un GBM che sceglie il 30%
+dei match PRIMA dei cancelli porta la skill da −0,009 a +0,009 R a parita' di
+volume (t 4,06; replicato a 2,95 e 3,42 sui gruppi disgiunti e dentro ciascun
+detector). Come cancello seleziona un po'; la soglia di Forza non seleziona.
 
 **Cinque cose da sapere prima di rifare uno studio cosi'**, ognuna pagata:
 

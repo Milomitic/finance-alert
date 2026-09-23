@@ -7,7 +7,10 @@ Per le etichette 'mn' e 'sk', senza variabili di mercato:
     detector evitare — cosa che una regola da una riga fa gia'
   - su tre popolazioni di titoli: tutti, i 176 della pre-analisi, i 274 nuovi
 
-Uso: python ml_robustezza2.py <mn|sk> <tutti|pre|nuovi>
+Uso: python ml_robustezza2.py <mn|sk> <tutti|pre|nuovi> [live|all]
+
+`all` = i match che passano la sola eta' (ep_all): 4 volte le righe, e la
+popolazione su cui l'effetto e' comparso piu' netto (t 4 sul totale).
 """
 import json
 import os
@@ -21,12 +24,13 @@ from ml_study import ANNI_TEST, QUOTA, prepara, split
 
 from percorsi import DATI as SW  # noqa: E402 — i dati stanno fuori da git
 etichetta, gruppo = sys.argv[1], sys.argv[2]
+pop = sys.argv[3] if len(sys.argv) > 3 else "live"
 
 d = pd.read_csv(os.path.join(SW, "dataset.csv.gz"))
 d["dt"] = pd.to_datetime(d.date)
 d["mese"] = d.date.str.slice(0, 7)
 pre = set(json.load(open(os.path.join(SW, "preregistrazione.json")))["titoli_preanalisi"])
-m = d.ep_live & d.R.notna() & d.exc_H.notna() & d.R_skill.notna()
+m = (d.ep_live if pop == "live" else d.ep_all) & d.R.notna() & d.exc_H.notna() & d.R_skill.notna()
 if gruppo == "pre":
     m &= d.stock_id.isin(pre)
 elif gruppo == "nuovi":
@@ -67,9 +71,9 @@ def t(x):
     return x.mean() / (x.std(ddof=1) / np.sqrt(len(x)))
 
 
-res = dict(etichetta=etichetta, gruppo=gruppo, righe=len(D), auc=float(np.mean(aucs)),
+res = dict(etichetta=etichetta, gruppo=gruppo, pop=pop, righe=len(D), auc=float(np.mean(aucs)),
            guadagno_totale=float(np.mean(tot)), t_totale=float(t(tot)),
            guadagno_dentro_detector=float(np.mean(dentro)), t_dentro_detector=float(t(dentro)), mesi=len(tot))
 print(json.dumps(res))
-with open(os.path.join(SW, f"rob2_{etichetta}_{gruppo}.json"), "w") as fh:
+with open(os.path.join(SW, f"rob2_{etichetta}_{gruppo}_{pop}.json"), "w") as fh:
     json.dump(res, fh)

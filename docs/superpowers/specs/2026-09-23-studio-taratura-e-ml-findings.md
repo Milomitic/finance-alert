@@ -24,10 +24,13 @@ fuori da git, in `backend/data/studio_taratura/`; come rigenerarli è scritto in
    - `candle_reversal` e `adx_confirmation` sono i soli detector con skill
      negativa che sopravvive alla correzione per test multipli. Il primo per
      colpa della geometria, il secondo per la direzione.
-4. **Il machine learning non trova direzione** (vedi §6). **Trova invece la
-   volatilità**: il range delle 10 barre successive si prevede meglio dell'ATR
-   in tutti e 7 gli anni di test. L'ML qui ha presa sul rischio, non sul
-   rendimento.
+4. **Il machine learning trova la volatilità, e sulla direzione solo un
+   effetto piccolo** (§6, §7). Il range delle 10 barre successive si prevede
+   meglio dell'ATR in tutti e 7 gli anni di test. Sulla direzione, un modello
+   che sceglie fra TUTTI i match prima dei cancelli porta la skill da −0,009 a
+   +0,009 R a parità di volume — replicato su due gruppi di titoli disgiunti.
+   Poco, ma è più di quanto faccia la soglia di Forza, che non seleziona
+   affatto.
 5. **Tre difetti di misura** trovati lungo la strada (§8), uno dei quali
    ribalta il segno di un detector sul pannello Prestazioni.
 
@@ -196,9 +199,30 @@ Tre letture:
    detector del §5» — e l'AUC sta sopra i controlli permutati in tutti gli
    anni. Ma a ogni prova uno dei due gruppi cade sotto la significatività: il
    profilo di un effetto al bordo di ciò che dieci anni sanno vedere.
-3. **Anche preso per vero, non vale la complessità.** +0,02 R a operazione sul
-   30% dei segnali: meno della metà di ciò che il solo piano breve perde in
-   costi (0,05 R), buttando il 70% dei segnali.
+3. **Sugli alert di oggi, da solo, non vale la complessità.** +0,02 R a
+   operazione sul 30% dei segnali: meno della metà di ciò che il solo piano
+   breve perde in costi (0,05 R), buttando il 70% dei segnali.
+
+**Sulla popolazione estesa — tutti i match, PRIMA dei cancelli, 401.181 righe
+— lo stesso effetto regge a ogni prova**, con l'etichetta «batte il
+controllo»:
+
+| | guadagno del 30% scelto | t | dentro ciascun detector, t |
+|---|---|---|---|
+| tutti i titoli | +0,023 | **4,06** | 3,88 |
+| gruppo 176 | +0,019 | **2,95** | 3,28 |
+| gruppo 274 | +0,024 | **3,42** | 3,21 |
+
+Sopra la banda del caso, replicato su entrambi i gruppi disgiunti, positivo
+in tutti e 7 gli anni, e presente DENTRO ciascun detector: è l'unico effetto
+ML sulla direzione che passa tutte le prove di questo studio. Con l'etichetta
+«batte la mediana» lo stesso segno ma più debole (t 2,30; gruppi 2,19 e 2,02).
+
+Piccolo, ma con un uso preciso. Il 30% scelto dal modello fra TUTTI i match ha
+lo stesso volume degli alert che il motore emette oggi (~120mila contro
+~105mila in dieci anni), e skill **+0,009 R contro −0,009** degli alert
+attuali. Cioè: **come cancello di emissione, un meta-modello seleziona un po';
+la soglia di Forza non seleziona affatto** (§3).
 
 ⚠️ **L'etichetta «vince / perde» inganna.** AUC 0,638 contro 0,615 della base,
 e sembra il risultato migliore: il modello impara a scegliere i trade coi
@@ -339,10 +363,13 @@ trend: **da non toccare** — le alternative non battono l'attuale fuori campion
     legge artefatti già calcolati, e nessuno dei suoi harness misura la
     geometria del piano contro un controllo. Ogni cambio di soglie, geometria o modello ci passa
     prima di andare in produzione.
-12. **Meta-labeling: rimandato, non scartato.** Il segnale debole del §6 va
-    rimisurato quando il punto 2 avrà accumulato 12+ mesi di variabili
-    puntuali: i dati live sono fuori campione per costruzione, ed è l'unica
-    cosa che può ribaltare questo verdetto.
+12. **Meta-modello al posto della soglia di Forza, in ombra.** Il §6 mostra
+    che un GBM che sceglie fra tutti i match il 30% con più probabilità di
+    battere il controllo porta la skill da −0,009 a +0,009 R a parità di
+    volume, replicato su gruppi disgiunti. Piccolo, e il costo di un modello
+    in produzione non è piccolo: si parte calcolandone il punteggio accanto
+    alla Forza, senza usarlo, e lo si promuove solo quando gli esiti live —
+    con le variabili fissate all'emissione del punto 2 — confermano il replay.
 
 ## 10. Cosa non rifare
 
