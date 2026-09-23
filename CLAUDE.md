@@ -3727,10 +3727,15 @@ detector). Come cancello seleziona un po'; la soglia di Forza non seleziona.
 5. **Etichetta «vince/perde» = trappola.** Premia i target vicini: AUC piu'
    alta di tutte, rendimento no.
 
-⚠️ E una sulle barre: il motore emette su titoli SOSPESI (BMPS.MI 2017, prezzo
-piatto a volume zero). ATR → 0, stop → 0, e 162 righe su 453mila spostavano
-una media da −0,02 a −0,85 R. Nessun detector controlla che il titolo stia
-scambiando.
+⚠️ E una sulle barre: il motore emetteva su titoli SOSPESI (BMPS.MI 2017,
+prezzo piatto a volume zero). ATR → 0, stop → 0, e 162 righe su 453mila
+spostavano una media da −0,02 a −0,85 R. **Chiuso il 2026-09-24** da
+`app.signals.negoziazione` (ATR sotto lo 0,3% del prezzo, o 20 sedute a volume
+zero), prima del runner e dei setup. ⚠️ Misurata prima di spedirla, la regola
+fermava sei titoli e NESSUNO era sospeso: erano tutti ANCORATI a un'offerta
+d'acquisto (Iveco, Beazley, Intertek, Schroders, EA, Catalyst), con 44 alert
+emessi su quelle barre. Un titolo sotto OPA scambia, ma non si muove: e' lo
+stesso difetto con un'altra causa.
 
 ⚠️ E una sugli strumenti: **le serie complete NON si esportano dal container
 dell'app.** Una SELECT di 2,5M righe li' dentro e' finita in OOM (exit 137,

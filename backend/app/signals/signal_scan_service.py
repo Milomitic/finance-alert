@@ -16,6 +16,7 @@ from app.models import Alert, SignalOutcome, Stock
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
 from app.signals.horizon import classify_horizon
+from app.signals.negoziazione import motivo_non_negoziato
 from app.signals.runner import detect_signals_and_setups
 from app.signals.trade_plan import INGRESSI_CONGELATI
 
@@ -153,6 +154,14 @@ def evaluate_signals(
     # ATR at the signal bar: lets the frontend Trade Playbook anchor the stop
     # floor + target cap to volatility (validated 2026-05-25). NaN-guarded.
     _atr = float(_ctx.atr) if (_ctx.atr is not None and _ctx.atr == _ctx.atr) else None
+    # ⚠️ Un titolo che non scambia — sospeso, o ancorato al prezzo di
+    # un'offerta — ha comunque una serie, e su una serie si trova sempre una
+    # forma. La guardia sta PRIMA del runner, setup compresi: vedi
+    # `app.signals.negoziazione` per le misure che l'hanno motivata.
+    motivo = motivo_non_negoziato(atr=_atr, prezzo=last_close, volumi=ohlcv["volume"].tolist())
+    if motivo is not None:
+        logger.info(f"[signals] {stock.ticker}: nessun segnale, titolo non negoziato ({motivo})")
+        return 0
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
     # UN contesto per titolo (FA-065): il runner riceve quello gia' costruito
