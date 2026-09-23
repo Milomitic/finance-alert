@@ -43,7 +43,32 @@ def _mediana(valori: Sequence[float]) -> float | None:
     return v[meta] if len(v) % 2 else (v[meta - 1] + v[meta]) / 2.0
 
 
+def _chiusa(riga: PlanOutcome) -> bool:
+    """La finestra della riga e' CHIUSA: l'orizzonte e' trascorso, quindi il
+    suo esito non puo' piu' dipendere da quando la si guarda.
+
+    ⚠️ Solo le chiuse entrano in una media, ed e' la regola che questo modulo
+    esiste per applicare. Una riga nasce appena la gara si risolve, di solito
+    molto prima della fine dell'orizzonte: fra i segnali RECENTI ci sono
+    quindi solo le uscite VELOCI, e le veloci sono soprattutto gli stop — gli
+    scaduti arrivano per ultimi per definizione. Misurato il 2026-09-23: il
+    18% del magazzino stava cosi', e `structure_break` leggeva −0,20 R contro
+    +0,06 a finestre chiuse. Il segno ribaltato da una popolazione parziale.
+
+    `None` (righe scritte prima della colonna) conta come aperta: il dubbio va
+    dalla parte che non distorce, e la maturazione successiva la riesamina.
+    """
+    return riga.legs_window_complete is True
+
+
 def _cella(detector: str, righe: Sequence[PlanOutcome], min_n: int) -> dict:
+    """Le misure di un gruppo di righe, calcolate sulle sole finestre CHIUSE.
+
+    ⚠️ Il chiamante garantisce che almeno una lo sia: una media di zero righe
+    non e' un numero, e i due chiamanti la dichiarano in altro modo (il
+    pannello in `only_open`, l'elenco con un riassunto assente)."""
+    aperte = sum(1 for r in righe if not _chiusa(r))
+    righe = [r for r in righe if _chiusa(r)]
     n = len(righe)
     erre = [r.r_multiple for r in righe]
     attesa = sum(erre) / n
@@ -102,6 +127,9 @@ def _cella(detector: str, righe: Sequence[PlanOutcome], min_n: int) -> dict:
         "mfe_r_on_losses": _mediana([r.mfe_r for r in perse]),
         "median_bars": _mediana([float(r.bars_to_outcome) for r in righe]),
         "low_confidence": n < min_n,
+        # Le escluse si DICONO: sparire in silenzio sarebbe lo stesso difetto
+        # della copertura, con un'altra popolazione.
+        "open_excluded": aperte,
     }
 
 
@@ -121,8 +149,19 @@ def compute_plan_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dic
     for r in righe:
         per_detector[r.detector].append(r)
 
-    celle = [_cella(d, rs, min_n) for d, rs in sorted(per_detector.items())]
+    # Un detector con le sole finestre aperte non ha una media — sarebbe una
+    # media di zero righe — quindi non entra in classifica. Ma NON sparisce:
+    # sta in `only_open` col suo conteggio, per la stessa ragione per cui
+    # esiste la copertura qui sotto.
+    celle = [_cella(d, rs, min_n) for d, rs in sorted(per_detector.items())
+             if any(_chiusa(r) for r in rs)]
     celle.sort(key=lambda c: c["expectancy_r"], reverse=True)
+    solo_aperte = [
+        {"detector": d, "open": len(rs)}
+        for d, rs in sorted(per_detector.items())
+        if not any(_chiusa(r) for r in rs)
+    ]
+    chiuse = [r for r in righe if _chiusa(r)]
 
     # Copertura: per ogni detector che ha prodotto alert, quanti hanno un
     # esito di piano. Si legge dagli ALERT, non dalle righe di esito, perche'
@@ -141,11 +180,15 @@ def compute_plan_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dic
         })
     copertura.sort(key=lambda c: c["without_plan"], reverse=True)
 
-    date_segnale = [r.signal_date for r in righe]
+    date_segnale = [r.signal_date for r in chiuse]
     return {
         "meta": {
-            "rows": len(righe),
-            "detectors_present": len(per_detector),
+            # Le righe che le MEDIE usano. Le aperte si contano a parte: un
+            # numero solo, «5.540 esiti», direbbe che la tabella li misura tutti.
+            "rows": len(chiuse),
+            "open_excluded": len(righe) - len(chiuse),
+            "only_open": solo_aperte,
+            "detectors_present": len(celle),
             "date_range": {
                 "from": min(date_segnale).isoformat() if date_segnale else None,
                 "to": max(date_segnale).isoformat() if date_segnale else None,
@@ -274,7 +317,13 @@ def elenco_esiti_piano(
         chiave = ORDINAMENTI_ESITI[ordina]
         righe = sorted(righe, key=lambda r: chiave(r[0], r[1]), reverse=verso == "desc")
 
-    riassunto = _cella("tutti", esiti, min_n) if esiti else None
+    # ⚠️ L'ELENCO resta completo e il RIASSUNTO no, e non e' un'incoerenza:
+    # una riga dice che cosa e' successo a quel trade — uno stop colpito e' uno
+    # stop colpito anche se l'orizzonte non e' finito — mentre la media fa una
+    # domanda sulla popolazione, e le finestre aperte ne sono una parte
+    # distorta (vedi `_chiusa`).
+    aperte = sum(1 for e in esiti if not _chiusa(e))
+    riassunto = _cella("tutti", esiti, min_n) if len(esiti) > aperte else None
     if riassunto is not None:
         riassunto.pop("detector", None)
 
@@ -285,4 +334,7 @@ def elenco_esiti_piano(
         "has_more": offset + len(fetta) < len(righe),
         "counts_by_detector": dict(per_detector),
         "summary": riassunto,
+        # Fuori dal riassunto, perche' serve anche quando il riassunto non
+        # c'e': sole finestre aperte si dice «in corso», non «vuoto».
+        "open_excluded": aperte,
     }

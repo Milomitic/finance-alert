@@ -41,6 +41,7 @@ def _esito(
     db: Session, stock: Stock, *, esito: str = "tp1", risolto: str = "2026-03-10",
     detector: str = "sr_flip", tono: str = "bull", r_mult: float = 2.0,
     stop_hit: str | None = None, tp1_hit: str | None = "2026-03-10",
+    chiusa: bool | None = True,
 ) -> PlanOutcome:
     a = Alert(stock_id=stock.id, signal_name=detector,
               signal_date=date(2026, 3, 1),
@@ -58,7 +59,7 @@ def _esito(
         stop_hit_date=date.fromisoformat(stop_hit) if stop_hit else None,
         tp1_hit_date=date.fromisoformat(tp1_hit) if tp1_hit else None,
         tp2_hit_date=None, method_version="2",
-        matured_at=datetime.now(UTC),
+        matured_at=datetime.now(UTC), legs_window_complete=chiusa,
     )
     db.add(riga)
     db.flush()
@@ -155,6 +156,40 @@ def test_un_filtro_che_non_seleziona_niente_non_ha_un_attesa(db: Session) -> Non
     assert dati["summary"] is None
 
 
+def test_l_elenco_mostra_le_finestre_aperte_ma_il_riassunto_no(db: Session) -> None:
+    """⚠️ Due domande diverse, e la regola vale per UNA sola.
+
+    Una riga dice che cosa e' successo a QUEL trade, e uno stop colpito e' uno
+    stop colpito anche se l'orizzonte non e' finito: nell'elenco resta. La
+    media invece fa una domanda sulla POPOLAZIONE, e una popolazione di
+    finestre aperte contiene solo le uscite veloci — cioe' gli stop.
+    """
+    s = _titolo(db, "OPN")
+    _esito(db, s, esito="tp1", r_mult=2.0)
+    _esito(db, s, esito="stop", r_mult=-1.0, stop_hit="2026-03-04", tp1_hit=None, chiusa=False)
+
+    dati = elenco_esiti_piano(db)
+
+    assert dati["total"] == 2, "l'elenco deve restare completo"
+    assert dati["summary"]["n"] == 1
+    assert dati["summary"]["expectancy_r"] == pytest.approx(2.0)
+    assert dati["open_excluded"] == 1
+
+
+def test_sole_finestre_aperte_nessun_riassunto_ma_si_dice_quante(db: Session) -> None:
+    """Nessuna finestra chiusa: niente attesa (sarebbe una media di zero
+    righe), ma il conteggio delle aperte c'e', cosi' lo schermo puo' dire
+    «in corso» invece di sembrare vuoto."""
+    s = _titolo(db, "OPN")
+    _esito(db, s, esito="stop", r_mult=-1.0, stop_hit="2026-03-04", tp1_hit=None, chiusa=False)
+
+    dati = elenco_esiti_piano(db)
+
+    assert dati["total"] == 1
+    assert dati["summary"] is None
+    assert dati["open_excluded"] == 1
+
+
 # ─── L'endpoint ────────────────────────────────────────────────────────────
 
 def test_la_rotta_letterale_non_e_scambiata_per_un_id(client: TestClient, db: Session) -> None:
@@ -169,6 +204,22 @@ def test_la_rotta_letterale_non_e_scambiata_per_un_id(client: TestClient, db: Se
 
     assert r.status_code == 200
     assert r.json()["items"][0]["ticker"] == "GGG"
+
+
+def test_le_escluse_attraversano_lo_schema(client: TestClient, db: Session) -> None:
+    """Il conteggio delle finestre aperte deve arrivare al frontend: un campo
+    che il servizio calcola e lo schema Pydantic non dichiara sparisce dalla
+    risposta senza un errore."""
+    s = _titolo(db, "SCH")
+    _esito(db, s, esito="tp1", r_mult=2.0)
+    _esito(db, s, esito="stop", r_mult=-1.0, stop_hit="2026-03-04", tp1_hit=None, chiusa=False)
+    db.commit()
+
+    dati = client.get("/api/alerts/plan-outcomes").json()
+
+    assert dati["open_excluded"] == 1
+    assert dati["summary"]["open_excluded"] == 1
+    assert dati["summary"]["n"] == 1
 
 
 def test_un_esito_inventato_e_un_400_che_dice_quali_esistono(client: TestClient) -> None:

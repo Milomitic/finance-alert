@@ -123,6 +123,21 @@ function Segmentato<T extends string | null>({
   );
 }
 
+/** Perché una parte dell'elenco non entra nelle misure. Detto a schermo e non
+ *  solo nel codice: una media che esclude righe visibili senza dirlo sembra
+ *  sbagliata a chi le conta. */
+function NotaAperti({ n }: { n: number }) {
+  return (
+    <>
+      {" "}
+      {n === 1 ? "Un altro piano è" : `Altri ${n.toLocaleString("it-IT")} piani sono`} ancora
+      in corso e restano fuori finché il loro orizzonte non è trascorso: fino ad allora
+      contengono solo le uscite rapide, cioè soprattutto gli stop, e porterebbero la media
+      sotto il vero.
+    </>
+  );
+}
+
 /** Le misure della popolazione filtrata.
  *
  *  ⚠️ L'intestazione e' l'ATTESA IN R, non la quota di target, e non e' una
@@ -262,6 +277,11 @@ export function OutcomesView() {
 
   const righe = q.data?.items ?? [];
   const totale = q.data?.total ?? 0;
+  /** ⚠️ Righe dell'elenco a finestra ancora aperta: restano nella lista (quello
+   *  stop è stato colpito davvero) ma fuori dalle misure, perché fra i segnali
+   *  recenti ci sono solo le uscite veloci — cioè soprattutto gli stop — e
+   *  contarli insieme agli altri peggiorava la media. */
+  const apertiEsclusi = q.data?.open_excluded ?? 0;
   const detectors = Object.entries(q.data?.counts_by_detector ?? {})
     .map(([d, n]) => ({ detector: d, count: n, label: detectorLabel(d) }))
     .sort((a, b) => a.label.localeCompare(b.label));
@@ -308,10 +328,18 @@ export function OutcomesView() {
             <section aria-label="Misure dei piani risolti" className="space-y-2">
               <Misure s={q.data.summary} />
               <p className="text-xs text-muted-foreground">
-                Le misure contano <strong>tutti i piani risolti</strong> che passano i filtri
-                attivi ({totale.toLocaleString("it-IT")}), non le righe di questa pagina.
+                Le misure contano i <strong>piani a finestra chiusa</strong> che passano i
+                filtri attivi ({q.data.summary.n.toLocaleString("it-IT")}), non le righe di
+                questa pagina.
+                {apertiEsclusi > 0 && <NotaAperti n={apertiEsclusi} />}
               </p>
             </section>
+          ) : apertiEsclusi > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nessun piano a finestra chiusa fra quelli filtrati: le misure compaiono quando
+              trascorre il primo orizzonte.
+              <NotaAperti n={apertiEsclusi} />
+            </p>
           ) : null}
 
           {/* I controlli, per dimensione. Vedi la nota sopra `Segmentato`. */}

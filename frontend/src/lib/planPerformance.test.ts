@@ -9,7 +9,7 @@ function riga(over: Partial<PlanPerfRow> = {}): PlanPerfRow {
     expectancy_r: 0.25, expectancy_ci: null, verdict: "inconclusive",
     win_rate: 25, esiti: { tp1: 10, stop: 30, ambigua: 0, scaduto: 0 },
     stop_too_tight: 4, mae_r_on_wins: 0.3, mfe_r_on_losses: 1.2,
-    median_bars: 6, low_confidence: false, ...over,
+    median_bars: 6, low_confidence: false, open_excluded: 0, ...over,
   };
 }
 

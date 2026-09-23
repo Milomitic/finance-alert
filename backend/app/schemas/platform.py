@@ -402,8 +402,20 @@ class PlanCoverageOut(BaseModel):
     without_plan: int
 
 
+class PlanOnlyOpenOut(BaseModel):
+    """Un detector i cui piani sono TUTTI in finestre ancora aperte: fuori dalla
+    classifica (una media di zero righe non e' un numero), ma dichiarato."""
+    detector: str
+    open: int
+
+
 class PlanPerfMetaOut(BaseModel):
+    #: Le righe a finestra CHIUSA, cioe' quelle che le medie usano.
     rows: int
+    #: Le righe a finestra aperta, escluse dalle medie: contengono solo le
+    #: uscite veloci, cioe' soprattutto gli stop (misurato 2026-09-23).
+    open_excluded: int = 0
+    only_open: list[PlanOnlyOpenOut] = []
     detectors_present: int
     date_range: dict[str, str | None]
     coverage: list[PlanCoverageOut]
@@ -432,6 +444,8 @@ class PlanPerfRowOut(BaseModel):
     mfe_r_on_losses: float | None = None
     median_bars: float | None = None
     low_confidence: bool
+    #: Le righe di questo detector escluse perche' a finestra ancora aperta.
+    open_excluded: int = 0
 
 
 class PlanPerformanceOut(BaseModel):

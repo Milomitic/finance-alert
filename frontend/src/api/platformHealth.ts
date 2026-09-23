@@ -341,7 +341,14 @@ export type PlanCoverage = {
 };
 
 export type PlanPerfMeta = {
+  /** Le righe a finestra CHIUSA: quelle che le medie usano. */
   rows: number;
+  /** ⚠️ Le righe a finestra ancora aperta, ESCLUSE dalle medie. Contengono solo
+   *  le uscite veloci — cioè soprattutto gli stop — e contate insieme alle
+   *  altre ribaltavano il segno di un detector (misurato 2026-09-23). */
+  open_excluded: number;
+  /** I detector con le SOLE finestre aperte: fuori classifica, ma dichiarati. */
+  only_open: { detector: string; open: number }[];
   detectors_present: number;
   date_range: { from: string | null; to: string | null };
   /** ⚠️ Quanti alert di ogni detector NON hanno un piano. Senza, la classifica
@@ -369,6 +376,8 @@ export type PlanPerfRow = {
   mfe_r_on_losses: number | null;
   median_bars: number | null;
   low_confidence: boolean;
+  /** Righe di questo detector escluse perché a finestra ancora aperta. */
+  open_excluded: number;
 };
 
 export type PlanPerformance = { meta: PlanPerfMeta; rows: PlanPerfRow[] };

@@ -28,6 +28,15 @@ import { cn } from "@/lib/utils";
  *
  * Collassato di default: il fetch parte alla prima apertura.
  */
+/** Perché le finestre aperte restano fuori. Una riga nasce appena la gara si
+ *  risolve, quindi fra i segnali recenti ci sono solo le uscite veloci — cioè
+ *  soprattutto gli stop. Contate insieme alle altre, il 2026-09-23 facevano
+ *  leggere −0,20 R a un detector che a finestre chiuse ne valeva +0,06. */
+const TESTO_APERTI =
+  "Piani il cui orizzonte non è ancora trascorso. Restano fuori dalle medie finché la finestra non si chiude: " +
+  "fino ad allora contengono solo le uscite rapide, cioè soprattutto gli stop, e porterebbero l'attesa sotto il vero. " +
+  "Rientrano da soli quando il loro orizzonte finisce.";
+
 export function PlanPerformancePanel() {
   const [aperto, setAperto] = useState(false);
   const q = usePlanPerformance(aperto);
@@ -92,9 +101,9 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
   if (meta.rows === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        Nessun esito di piano ancora maturato. Una riga nasce quando il prezzo tocca
-        lo stop o il target, quindi le prime compaiono entro pochi giorni dai segnali
-        con un piano.
+        {meta.open_excluded > 0
+          ? `${meta.open_excluded} piani ancora in corso e nessuno a finestra chiusa: le misure compaiono quando trascorre il primo orizzonte.`
+          : "Nessun esito di piano ancora maturato. Una riga nasce quando il prezzo tocca lo stop o il target, quindi le prime compaiono entro pochi giorni dai segnali con un piano."}
       </p>
     );
   }
@@ -104,8 +113,14 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        {meta.rows} esiti su {meta.detectors_present} detector
+        {meta.rows} esiti a finestra chiusa su {meta.detectors_present} detector
         {meta.date_range.from && ` · dal ${meta.date_range.from} al ${meta.date_range.to}`}
+        {meta.open_excluded > 0 && (
+          <>
+            {" · "}
+            <HintLabel text={TESTO_APERTI}>{meta.open_excluded} ancora in corso, esclusi</HintLabel>
+          </>
+        )}
       </p>
 
       <div className="overflow-x-auto">
@@ -126,6 +141,25 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
           </tbody>
         </table>
       </div>
+
+      {meta.only_open.length > 0 && (
+        <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Solo piani in corso</p>
+          <p className="mt-1">
+            Questi detector hanno piani, ma nessuno a finestra chiusa: una media di zero
+            esiti non è un numero, quindi non sono in tabella. Compaiono quando trascorre il
+            loro primo orizzonte.
+          </p>
+          <ul className="mt-2 space-y-0.5">
+            {meta.only_open.map((c) => (
+              <li key={c.detector} className="flex flex-wrap justify-between gap-2">
+                <span className="min-w-0 break-words">{c.detector}</span>
+                <span className="shrink-0 tabular-nums">{c.open} in corso</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {scoperti.length > 0 && (
         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
@@ -170,6 +204,9 @@ function Riga({ r }: { r: PlanPerfRow }) {
         {r.n}
         <span className="text-xs"> ({r.effective_n})</span>
         <div className="text-xs">{r.win_rate.toFixed(0)}% al target</div>
+        {r.open_excluded > 0 && (
+          <div className="text-xs">+{r.open_excluded} in corso</div>
+        )}
       </td>
       <td className="py-2 pr-3 text-right text-xs tabular-nums text-muted-foreground">
         {r.esiti.tp1 ?? 0}·{r.esiti.stop ?? 0}·{r.esiti.ambigua ?? 0}·{r.esiti.scaduto ?? 0}

@@ -78,6 +78,8 @@ class PlanOutcomeSummaryOut(BaseModel):
     mfe_r_on_losses: float | None = None
     median_bars: float | None = None
     low_confidence: bool
+    #: Le righe filtrate escluse dalle misure perche' a finestra ancora aperta.
+    open_excluded: int = 0
 
 
 class PlanOutcomeListOut(BaseModel):
@@ -89,3 +91,7 @@ class PlanOutcomeListOut(BaseModel):
     #: un'attesa, e stampare 0,00 R sarebbe un'affermazione invece di
     #: un'assenza.
     summary: PlanOutcomeSummaryOut | None = None
+    #: Quante righe dell'elenco sono a finestra aperta, e quindi fuori dal
+    #: riassunto. Fuori da `summary` perche' serve anche quando il riassunto
+    #: manca: sole finestre aperte si dice «in corso», non «vuoto».
+    open_excluded: int = 0

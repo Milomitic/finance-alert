@@ -33,7 +33,7 @@ def _titolo(db: Session, ticker: str) -> Stock:
 def _riga(db: Session, stock: Stock, *, detector: str = "sr_flip",
           giorno: int = 1, esito: str = "tp1", r_mult: float = 2.0,
           orizzonte: int = 21, stop_il: int | None = None, tp1_il: int | None = None,
-          mae: float = 0.3, mfe: float = 2.2) -> PlanOutcome:
+          mae: float = 0.3, mfe: float = 2.2, chiusa: bool | None = True) -> PlanOutcome:
     d = date(2026, 1, 1) + timedelta(days=giorno)
     a = Alert(stock_id=stock.id, signal_name=detector, signal_date=d,
               triggered_at=datetime.combine(d, datetime.min.time(), tzinfo=UTC),
@@ -49,6 +49,7 @@ def _riga(db: Session, stock: Stock, *, detector: str = "sr_flip",
         stop_hit_date=(d + timedelta(days=stop_il)) if stop_il is not None else None,
         tp1_hit_date=(d + timedelta(days=tp1_il)) if tp1_il is not None else None,
         method_version="1", matured_at=datetime.now(UTC),
+        legs_window_complete=chiusa,
     )
     db.add(riga)
     db.flush()
@@ -183,6 +184,65 @@ def test_un_magazzino_vuoto_non_esplode_e_non_inventa_numeri(db: Session) -> Non
     assert dati["meta"]["rows"] == 0
 
 
+# ─── 4bis. Le finestre APERTE non entrano nelle medie ──────────────────────
+
+def test_le_finestre_aperte_non_entrano_nell_attesa(db: Session) -> None:
+    """⚠️ Il difetto misurato in produzione il 2026-09-23.
+
+    Una riga nasce appena la gara si risolve, di solito molto prima della fine
+    dell'orizzonte. Quindi fra le righe dei segnali RECENTI ci sono solo le
+    uscite VELOCI — e le veloci sono soprattutto gli stop: gli scaduti arrivano
+    per ultimi per definizione. Il 18% del magazzino stava cosi', e
+    `structure_break` leggeva −0,20 R sul pannello contro +0,06 a finestre
+    chiuse: il segno ribaltato da una popolazione parziale.
+    """
+    s = _titolo(db, "AAA")
+    _riga(db, s, giorno=1, esito="tp1", r_mult=2.0)
+    _riga(db, s, giorno=40, esito="stop", r_mult=-1.0, chiusa=False)
+    _riga(db, s, giorno=41, esito="stop", r_mult=-1.0, chiusa=False)
+
+    riga = _per_detector(compute_plan_performance(db))["sr_flip"]
+
+    assert riga["expectancy_r"] == pytest.approx(2.0)
+    assert riga["n"] == 1
+    assert riga["esiti"]["stop"] == 0
+    # Le escluse si DICONO: sparire in silenzio sarebbe lo stesso difetto
+    # della copertura, con un'altra popolazione.
+    assert riga["open_excluded"] == 2
+
+
+def test_una_finestra_senza_marcatura_conta_come_aperta(db: Session) -> None:
+    """Le righe scritte prima che la colonna esistesse la portano NULL. Non si
+    sa se la loro finestra fosse chiusa, e il dubbio va dalla parte che non
+    distorce: fuori dalla media finche' la maturazione non le riesamina."""
+    s = _titolo(db, "AAA")
+    _riga(db, s, giorno=1, esito="tp1", r_mult=2.0)
+    _riga(db, s, giorno=40, esito="stop", r_mult=-1.0, chiusa=None)
+
+    riga = _per_detector(compute_plan_performance(db))["sr_flip"]
+
+    assert riga["expectancy_r"] == pytest.approx(2.0)
+    assert riga["open_excluded"] == 1
+
+
+def test_un_detector_con_sole_finestre_aperte_si_dichiara_invece_di_sparire(db: Session) -> None:
+    """`squeeze_expansion` e `adx_confirmation` emettono il livello solo dal
+    2026-09-17: TUTTI i loro piani sono in finestre aperte. Una media di zero
+    righe non e' un numero, quindi nella classifica non entrano — ma una
+    classifica che li omette senza dirlo sembrerebbe completa."""
+    s = _titolo(db, "AAA")
+    _riga(db, s, detector="sr_flip", giorno=1)
+    _riga(db, s, detector="squeeze_expansion", giorno=40, esito="stop", r_mult=-1.0, chiusa=False)
+    _riga(db, s, detector="squeeze_expansion", giorno=41, esito="stop", r_mult=-1.0, chiusa=False)
+
+    dati = compute_plan_performance(db)
+
+    assert set(_per_detector(dati)) == {"sr_flip"}
+    assert dati["meta"]["only_open"] == [{"detector": "squeeze_expansion", "open": 2}]
+    assert dati["meta"]["rows"] == 1
+    assert dati["meta"]["open_excluded"] == 2
+
+
 # ─── 5. L'endpoint ─────────────────────────────────────────────────────────
 
 def test_l_endpoint_risponde_e_dichiara_la_copertura(db: Session) -> None:
@@ -197,6 +257,9 @@ def test_l_endpoint_risponde_e_dichiara_la_copertura(db: Session) -> None:
 
     s = _titolo(db, "AAA")
     _riga(db, s, giorno=1, esito="stop", r_mult=-1.0, stop_il=3, tp1_il=12)
+    # E una a finestra aperta di un altro detector: i campi che la dichiarano
+    # devono attraversare lo schema, non solo il servizio.
+    _riga(db, s, detector="squeeze_expansion", giorno=40, esito="stop", r_mult=-1.0, chiusa=False)
     utente = User(username="admin", password_hash="x")
     db.add(utente)
     db.commit()
@@ -215,3 +278,6 @@ def test_l_endpoint_risponde_e_dichiara_la_copertura(db: Session) -> None:
     assert riga["expectancy_r"] == _pytest.approx(-1.0)
     assert riga["stop_too_tight"] == 1
     assert riga["verdict"] == "inconclusive", "una riga sola non puo' dare un verdetto"
+    assert riga["open_excluded"] == 0
+    assert dati["meta"]["open_excluded"] == 1
+    assert dati["meta"]["only_open"] == [{"detector": "squeeze_expansion", "open": 1}]

@@ -57,6 +57,8 @@ export interface PlanOutcomeSummary {
   mfe_r_on_losses: number | null;
   median_bars: number | null;
   low_confidence: boolean;
+  /** Righe filtrate escluse dalle misure perché a finestra ancora aperta. */
+  open_excluded: number;
 }
 
 export interface PlanOutcomeList {
@@ -67,6 +69,10 @@ export interface PlanOutcomeList {
   /** `null` quando il filtro non seleziona niente: zero righe non hanno
    *  un'attesa, e 0,00 R sarebbe un'affermazione invece di un'assenza. */
   summary: PlanOutcomeSummary | null;
+  /** ⚠️ Quante righe dell'elenco sono a finestra ancora aperta, e quindi fuori
+   *  dal riassunto. Fuori da `summary` perché serve anche quando il riassunto
+   *  manca: sole finestre aperte si dice «in corso», non «vuoto». */
+  open_excluded: number;
 }
 
 export interface PlanOutcomeParams {

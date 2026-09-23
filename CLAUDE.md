@@ -3701,8 +3701,11 @@ detector). Come cancello seleziona un po'; la soglia di Forza non seleziona.
 1. **Il magazzino dei piani va letto a finestre CHIUSE.** Il 18% delle righe
    viene da finestre aperte, che contengono per costruzione solo le uscite
    veloci — cioè gli stop. Sul pannello Prestazioni `structure_break` leggeva
-   −0,20 R; a finestre chiuse +0,06. La colonna c'e' gia':
-   `legs_window_complete`.
+   −0,20 R; a finestre chiuse +0,06. **Chiuso il 2026-09-24**: ogni media passa
+   da `plan_performance_service._chiusa` (`legs_window_complete is True`, NULL
+   conta come aperta), le escluse si dichiarano (`open_excluded`,
+   `only_open`), e l'ELENCO resta completo — uno stop colpito e' vero anche a
+   finestra aperta, e' la MEDIA che distorce.
 2. **Forza e fattori del magazzino NON sono dell'ingresso.** Lo snapshot si
    sostituisce a ogni revisione (80% degli alert): la Forza negli esiti
    coincide con quella dello snapshot attuale nel 99,7% dei casi. Qualunque

@@ -42,8 +42,9 @@ const RISPOSTA: PlanOutcomeList = {
     n: 1, effective_n: 1, horizon_days: 21, expectancy_r: 2.4, expectancy_ci: null,
     verdict: "inconclusive", win_rate: 100, esiti: { tp1: 1, stop: 0, ambigua: 0, scaduto: 0 },
     stop_too_tight: 0, mae_r_on_wins: 0.3, mfe_r_on_losses: null, median_bars: 6,
-    low_confidence: true,
+    low_confidence: true, open_excluded: 0,
   },
+  open_excluded: 0,
 };
 
 function Posizione() {
@@ -162,6 +163,54 @@ describe("OutcomesView — i controlli", () => {
 /* L'ordinamento (2026-09-22): come nella tabella Segnali, ma ⚠️ lo fa il
  * SERVER sull'intera popolazione filtrata — la lista e' paginata, e ordinare la
  * pagina ricevuta metterebbe in cima il migliore di cinquanta righe. */
+describe("OutcomesView — le finestre ancora aperte", () => {
+  /* ⚠️ L'elenco le mostra e le misure no (2026-09-23): fra i segnali recenti
+     ci sono solo le uscite veloci, cioè soprattutto gli stop. Una media che
+     esclude righe visibili senza dirlo sembra sbagliata a chi le conta. */
+  it("dice quante righe dell'elenco restano fuori dalle misure, e perché", async () => {
+    mockGet.mockResolvedValue({
+      ...RISPOSTA,
+      open_excluded: 3,
+      summary: { ...RISPOSTA.summary!, open_excluded: 3 },
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/alerts?vista=esiti"]}>
+          <OutcomesView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const nota = await screen.findByText(/Altri 3 piani sono ancora/);
+    expect(nota.textContent).toMatch(/soprattutto gli stop/);
+    expect(nota.textContent).toMatch(/piani a finestra chiusa/);
+  });
+
+  it("senza finestre chiuse non inventa un'attesa ma dice «in corso»", async () => {
+    mockGet.mockResolvedValue({ ...RISPOSTA, summary: null, open_excluded: 1 });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/alerts?vista=esiti"]}>
+          <OutcomesView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(/Nessun piano a finestra chiusa/)).toBeInTheDocument();
+    expect(screen.getByText(/Un altro piano è ancora/)).toBeInTheDocument();
+    // Controllo negativo: nessuna tessera d'attesa, che sarebbe una media di
+    // zero righe.
+    expect(screen.queryByText("Attesa per segnale")).not.toBeInTheDocument();
+  });
+
+  it("con zero finestre aperte la nota non compare", async () => {
+    // Senza questo, la nota potrebbe comparire sempre e non direbbe niente.
+    monta();
+    await screen.findByText("AAA");
+    expect(screen.queryByText(/ancora in corso/)).not.toBeInTheDocument();
+  });
+});
+
 describe("OutcomesView — l'ordinamento", () => {
   it("un clic sull'intestazione chiede l'ordine al server; un secondo lo inverte", async () => {
     monta();
