@@ -207,6 +207,9 @@ BERSAGLI: dict[str, list[str]] = {
         # (colpo a rendimento nullo, maturazione, segno market-neutral,
         # ricorrenza della EMA, prezzi sotto l'unita').
         "tests/test_signal_outcome_mutanti.py",
+        # La maturazione degli SCARTATI dai cancelli, con la stessa `_label`
+        # degli alert (2026-09-24): un chiamante diretto.
+        "tests/test_registro_scartati.py",
         # ⚠️ Questo NON importa il servizio: costruisce righe `SignalOutcome` a
         # mano e verifica il verso della curva dal lato del CONSUMATORE. Resta
         # in elenco perche' fissa lo stesso contratto (il tono al momento della
@@ -284,6 +287,12 @@ ESCLUSI_DAI_BERSAGLI: dict[str, dict[str, str]] = {
             "Importa `SignalMatch` come contenitore per costruire gli ingressi. "
             "L'arricchimento della catena e' solo di visualizzazione e non "
             "muove la Forza (CLAUDE.md), quindi non esercita lo scorer.",
+        "tests/test_registro_scartati.py":
+            "Importa `SignalMatch` come contenitore per costruire i match che lo "
+            "scan scarta; la Forza e' scritta a mano nel test, lo scorer non gira.",
+        "tests/test_postgres_integration.py":
+            "Importa `SignalMatch` come contenitore per il registro degli "
+            "scartati su Postgres; non chiama lo scorer della Forza.",
     },
     "app/services/detector_performance_service.py": {
         "tests/test_setup_service_mutanti.py":

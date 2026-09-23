@@ -550,3 +550,74 @@ def test_la_migrazione_PLAN_OUTCOMES_gira_su_POSTGRES_andata_e_ritorno(monkeypat
         assert "plan_outcomes" not in set(inspect(eng).get_table_names()), (
             "il downgrade non ha rimosso la tabella"
         )
+
+
+def test_un_doppione_negli_scartati_non_avvelena_la_sessione_su_POSTGRES(pg) -> None:
+    """Il registro degli scartati scrive DENTRO il ciclo dello scan, che cattura
+    l'eccezione di un titolo senza rollback. Su Postgres una scrittura fallita
+    lascia la transazione abortita e ogni comando successivo risponde
+    InFailedSqlTransaction: un doppione fermerebbe tutti i titoli dietro —
+    la forma del fermo di diciannove ore gia' registrato. Su SQLite il test
+    passerebbe comunque, quindi sta in questa corsia."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import func
+    from sqlalchemy import insert as insert_semplice
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models import SignalCandidate
+    from app.signals.detectors.base import SignalMatch
+    from app.signals.signal_scan_service import _registra_scartato
+
+    s = Stock(ticker="PGSCART", exchange="NASDAQ", name="Scartati", country="US")
+    pg.add(s)
+    pg.flush()
+    giorno = date(2026, 5, 30)
+    m = SignalMatch(name="sr_flip", tone="bull", signal_date=giorno.isoformat(), chain=[],
+                    invalidation=None, factors={"x": 1.0}, strength=40, probability=50)
+
+    # Il controllo negativo: l'unicita' c'e', e un inserimento semplice la viola.
+    _registra_scartato(pg, s.id, m, giorno, giorno, 100.0, False, True, True, scartati={})
+    with pytest.raises(IntegrityError), pg.begin_nested():
+        pg.execute(insert_semplice(SignalCandidate).values(
+            stock_id=s.id, detector="sr_flip", tone="bull", signal_date=giorno,
+            bar_date=giorno, close=1.0, strength=40, passa_forza=False,
+            passa_trend=True, passa_follow=True, created_at=datetime.now(UTC)))
+
+    # Il caso vero: il promemoria in memoria non sa della riga, e il secondo
+    # inserimento deve TACERE.
+    _registra_scartato(pg, s.id, m, giorno, giorno, 100.0, False, True, True, scartati={})
+
+    # E la sessione deve essere ancora sana: una lettura qualunque dopo.
+    n = pg.execute(select(func.count()).select_from(SignalCandidate)).scalar_one()
+    assert n == 1
+
+
+def test_la_migrazione_SCARTATI_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -> None:
+    """La tabella degli scartati in entrambi i versi, con l'unicita' imposta
+    dal database. Il ritorno la cancella: lo dice la migrazione stessa."""
+    from sqlalchemy import text
+
+    from alembic import command
+
+    _PRIMA = "c3a91f26d8b4"
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        command.upgrade(cfg, _PRIMA)
+        assert "signal_candidates" not in set(inspect(eng).get_table_names())
+        command.upgrade(cfg, "head")
+        assert "signal_candidates" in set(inspect(eng).get_table_names())
+        indici = {i["name"]: i for i in inspect(eng).get_indexes("signal_candidates")}
+        assert indici["ix_signal_candidates_unico"]["unique"]
+
+        with eng.begin() as c:
+            _inserisci(c, "stocks", id=1, ticker="AAA", exchange="NYSE", name="Aaa")
+            c.execute(text(
+                "INSERT INTO signal_candidates (stock_id, detector, tone, signal_date, "
+                "bar_date, close, strength, passa_forza, passa_trend, passa_follow, "
+                "created_at) VALUES (1, 'sr_flip', 'bull', '2026-05-30', '2026-05-30', "
+                "100, 40, false, true, true, now())"))
+
+        command.downgrade(cfg, _PRIMA)
+        assert "signal_candidates" not in set(inspect(eng).get_table_names())
+        command.upgrade(cfg, "head")

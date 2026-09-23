@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.provenance import OUTCOME_METHOD_VERSION
 from app.indicators.periods import FIXED_EMA_SLOW
-from app.models import Alert, OhlcvDaily, SignalOutcome, Stock, StockSetup
+from app.models import Alert, OhlcvDaily, SignalCandidate, SignalOutcome, Stock, StockSetup
 from app.services.signal_drift_service import _horizon_days
 
 # EMA span for the causal regime label at the trigger bar.
@@ -493,3 +493,77 @@ def mature_setup_outcomes(db: Session, *, commit: bool = True) -> int:
         db.commit()
     logger.info(f"[setup-outcomes] matured {added} conversion events")
     return added
+
+
+# ─── I match scartati dai cancelli ──────────────────────────────────────────
+
+def _maturable_candidate_ids(db: Session) -> set[int]:
+    """Gli scartati in attesa il cui orizzonte e' GIA' trascorso nelle barre.
+
+    La stessa condizione di `_maturable_alert_ids`, detta per l'altra tabella:
+    filtrare qui non cambia nessun esito, cambia soltanto quante serie si
+    caricano — e gli scartati toccano quasi ogni titolo del catalogo."""
+    righe = db.execute(
+        select(SignalCandidate.id, SignalCandidate.detector, func.count(OhlcvDaily.date))
+        .join(
+            OhlcvDaily,
+            and_(
+                OhlcvDaily.stock_id == SignalCandidate.stock_id,
+                OhlcvDaily.date >= SignalCandidate.signal_date,
+            ),
+        )
+        .where(SignalCandidate.matured_at.is_(None))
+        .group_by(SignalCandidate.id, SignalCandidate.detector)
+    ).all()
+    return {cid for cid, name, n in righe if n >= _horizon_days(name) + 1}
+
+
+def mature_candidate_outcomes(db: Session, *, commit: bool = True) -> int:
+    """Scrive l'esito dei match che i cancelli dello scan hanno scartato.
+
+    ⚠️ Con la STESSA aritmetica degli alert (`_label`, `_benchmark_medians`):
+    la tabella esiste per confrontare cio' che passa con cio' che viene
+    scartato, e due metodi diversi renderebbero il confronto una misura dei
+    metodi invece che dei cancelli.
+
+    ⚠️ Le serie si caricano in una FINESTRA, non intere come per gli alert.
+    `_load_stock_closes` legge tutta la storia perche' il regime vuole una
+    EMA200 convergente; qui il regime non c'e', e gli scartati toccano quasi
+    ogni titolo del catalogo — caricare la storia intera vorrebbe dire rileggere
+    2,5 milioni di righe a ogni fine scansione, il difetto gia' chiuso una volta
+    per gli alert (vedi `mature_outcomes`). La finestra parte dieci giorni prima
+    del piu' vecchio in attesa: `_label` cerca la prima barra non precedente
+    alla data del segnale, e nella finestra c'e'.
+    """
+    maturabili = _maturable_candidate_ids(db)
+    if not maturabili:
+        logger.info("[candidate-outcomes] matured 0 (nessuno scartato maturabile)")
+        return 0
+    pending = list(db.execute(
+        select(SignalCandidate).where(SignalCandidate.id.in_(maturabili))
+    ).scalars()) if len(maturabili) <= 900 else [
+        c for c in db.execute(
+            select(SignalCandidate).where(SignalCandidate.matured_at.is_(None))
+        ).scalars() if c.id in maturabili
+    ]
+    dal = min(c.signal_date for c in pending)
+    serie = _load_universe_closes(db, since=dal - timedelta(days=10))
+    medians_by_h = _benchmark_medians(db, dal, {_horizon_days(c.detector) for c in pending})
+    adesso = datetime.now(UTC)
+    scritte = 0
+    for c in pending:
+        H = _horizon_days(c.detector)
+        lab = _label(serie.get(c.stock_id), c.signal_date, c.tone, H, medians_by_h)
+        if lab is None:
+            continue
+        c.horizon_days = H
+        c.fwd_return = lab.fwd_return
+        c.mkt_neutral_excess = lab.mkt_excess
+        c.mkt_neutral_hit = lab.mkt_hit
+        c.matured_at = adesso
+        c.method_version = OUTCOME_METHOD_VERSION
+        scritte += 1
+    if commit and scritte:
+        db.commit()
+    logger.info(f"[candidate-outcomes] matured {scritte} scartati ({len(pending)} maturabili)")
+    return scritte

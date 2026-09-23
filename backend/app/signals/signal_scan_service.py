@@ -7,12 +7,12 @@ from datetime import UTC, date, datetime
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.provenance import emission_stamp
-from app.models import Alert, SignalOutcome, Stock
+from app.models import Alert, SignalCandidate, SignalOutcome, Stock
 from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE, contesto
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
@@ -73,6 +73,60 @@ def _follow_through_ok(m, ohlcv: pd.DataFrame, idx_by_date: dict[str, int]) -> b
 
 
 _MAX_AGE_RELAX_CAP = 14  # never relax the recency window beyond this many days
+
+
+def _ultimi_scartati(db: Session, stock_id: int) -> dict[tuple[str, str], date]:
+    """L'ultima data di segnale registrata fra gli scartati, per (detector, verso)."""
+    righe = db.execute(
+        select(SignalCandidate.detector, SignalCandidate.tone,
+               func.max(SignalCandidate.signal_date))
+        .where(SignalCandidate.stock_id == stock_id)
+        .group_by(SignalCandidate.detector, SignalCandidate.tone)
+    ).all()
+    out: dict[tuple[str, str], date] = {}
+    for detector, tono, giorno in righe:
+        d = _to_date(str(giorno)) if giorno is not None else None
+        if d is not None:
+            out[(detector, tono)] = d
+    return out
+
+
+def _registra_scartato(
+    db: Session, stock_id: int, m, sig_date: date, bar_date: date, close: float,
+    passa_forza: bool, passa_trend: bool, passa_follow: bool,
+    scartati: dict[tuple[str, str], date],
+) -> None:
+    """Registra un match scartato da almeno un cancello (`SignalCandidate`).
+
+    ⚠️ Lo stesso cooldown degli alert: una condizione che persiste viene vista
+    a OGNI scansione, e una riga al giorno per lo stesso episodio gonfierebbe
+    il campione — il difetto che questo progetto sorveglia piu' di ogni altro.
+    Si registra solo se l'ultimo scartato dello stesso (detector, verso) e'
+    piu' vecchio del cooldown, e mai un segnale non PIU' NUOVO dell'ultimo.
+
+    ⚠️ E l'inserimento non puo' fallire su un doppione: `ON CONFLICT DO
+    NOTHING`. Non e' pignoleria — lo scan cattura l'eccezione di un titolo
+    senza rollback, e su Postgres una scrittura fallita lascia la sessione
+    abortita: TUTTI i titoli successivi fallirebbero, che e' la forma del
+    fermo di diciannove ore gia' registrato in CLAUDE.md.
+    """
+    chiave = (m.name, m.tone)
+    ultimo = scartati.get(chiave)
+    if ultimo is not None and (sig_date - ultimo).days <= settings.signal_dedup_cooldown_days:
+        return
+    valori = dict(
+        stock_id=stock_id, detector=m.name, tone=m.tone, signal_date=sig_date,
+        bar_date=bar_date, close=float(close), strength=int(m.strength),
+        passa_forza=passa_forza, passa_trend=passa_trend, passa_follow=passa_follow,
+        factors=json.dumps(m.factors or {}), created_at=datetime.now(UTC),
+    )
+    if db.get_bind().dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert
+    db.execute(insert(SignalCandidate).values(**valori).on_conflict_do_nothing(
+        index_elements=["stock_id", "detector", "tone", "signal_date"]))
+    scartati[chiave] = sig_date
 
 
 def effective_max_age_days(db: Session) -> int:
@@ -166,6 +220,9 @@ def evaluate_signals(
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
     contesto_titolo: dict | None = None
+    #: (detector, verso) -> data dell'ultimo scartato registrato per il titolo,
+    #: letto alla prima occorrenza: il cooldown degli scartati.
+    scartati: dict[tuple[str, str], date] | None = None
     # UN contesto per titolo (FA-065): il runner riceve quello gia' costruito
     # qui sopra invece di rifarlo dallo stesso DataFrame.
     matches, setups = detect_signals_and_setups(ohlcv, db=db, stock=stock, ctx=_ctx)
@@ -178,29 +235,48 @@ def evaluate_signals(
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[setups] persist failed for {stock.ticker}: {e}")
     for m in matches:
+        # I tre cancelli di qualita', valutati TUTTI e tre invece di fermarsi
+        # al primo: un match scartato si registra con l'esito di ciascuno,
+        # perche' sapere quale dei tre lo avrebbe fermato da solo e' la domanda
+        # che il registro degli scartati esiste per fare. Per chi viene emesso
+        # non cambia niente: e' la stessa congiunzione.
+        #
         # Emission gate now on Forza (strength). `signal_min_confidence` is the
         # min-Forza bar; note calibrated Forza runs lower than the old confidence,
         # so the same 60 admits fewer, individually-stronger signals (revisit).
-        if m.strength < settings.signal_min_confidence:
-            continue
+        passa_forza = m.strength >= settings.signal_min_confidence
         # Step 1 -- regime gate: a trend-following signal must agree with the
         # prevailing trend; contradicting it is the dominant false-positive
         # source. Reversal/fundamental detectors are exempt (see the set above).
-        if settings.signal_require_trend_alignment and m.name in _TREND_FOLLOWING_SIGNALS:
-            if (m.tone == "bull" and trend_sign < 0) or (m.tone == "bear" and trend_sign > 0):
-                continue
+        passa_trend = not (
+            settings.signal_require_trend_alignment
+            and m.name in _TREND_FOLLOWING_SIGNALS
+            and ((m.tone == "bull" and trend_sign < 0) or (m.tone == "bear" and trend_sign > 0))
+        )
         # Step 2 -- follow-through: the bar after the trigger must hold the
         # invalidation level. A fresh last-bar trigger is held for a later scan
         # (None); a fakeout is dropped (False).
-        if settings.signal_require_follow_through:
-            if not _follow_through_ok(m, ohlcv, idx_by_date):
-                continue
+        passa_follow = (not settings.signal_require_follow_through
+                        or _follow_through_ok(m, ohlcv, idx_by_date))
         sig_date = _to_date(m.signal_date)
         # Recency guard: skip setups that completed long before the latest bar
         # (the ~260-bar window holds a year of history; without this the first
         # scan would surface months-old signals as if fresh).
-        if sig_date is not None and last_bar_date is not None \
-                and (last_bar_date - sig_date).days > age_limit:
+        recente = not (sig_date is not None and last_bar_date is not None
+                       and (last_bar_date - sig_date).days > age_limit)
+        if not (passa_forza and passa_trend and passa_follow):
+            # ⚠️ Solo i RECENTI: un match vecchio non e' la decisione di un
+            # cancello di qualita', e' una rilevazione che lo scan non
+            # emetterebbe comunque.
+            if recente and sig_date is not None and last_bar_date is not None:
+                if scartati is None:
+                    scartati = _ultimi_scartati(db, stock.id)
+                _registra_scartato(
+                    db, stock.id, m, sig_date, last_bar_date, last_close,
+                    passa_forza, passa_trend, passa_follow, scartati,
+                )
+            continue
+        if not recente:
             continue
         ann = {"levels": list(m.annotations.get("levels", [])),
                "points": list(m.annotations.get("points", []))}

@@ -522,6 +522,16 @@ def run_tracked_scan(
         except Exception as set_exc:  # noqa: BLE001
             db.rollback()
             logger.warning(f"[scan_runner] setup outcome maturation failed (non-fatal): {set_exc}")
+        # L'esito dei match che i cancelli hanno SCARTATO, con la stessa
+        # aritmetica degli alert: e' cio' che rende misurabile dal vivo se un
+        # cancello scarta i segnali peggiori o i migliori. Separato, come gli
+        # altri: un suo guasto non deve costare le maturazioni sopra.
+        try:
+            from app.services import signal_outcome_service
+            signal_outcome_service.mature_candidate_outcomes(db)
+        except Exception as cand_exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning(f"[scan_runner] candidate outcome maturation failed (non-fatal): {cand_exc}")
         # La gara fra stop e target dei piani. Separata dalle due sopra, e
         # ⚠️ non e' una precauzione generica: un esito di piano si risolve
         # quando il prezzo TOCCA una gamba, cioe' di regola PRIMA che

@@ -165,8 +165,16 @@ class TestCacheOccupancy:
     def test_a_missing_cache_does_not_break_the_scrape(self, monkeypatch):
         """A scrape that raises takes the whole /metrics endpoint down — and
         with it the alerting that depends on it. Worth more than one bad
-        number."""
+        number.
+
+        ⚠️ Registra il collettore DA SOLO. Fino al 2026-09-24 contava sul fatto
+        che un altro test l'avesse gia' registrato nello stesso processo: da
+        solo falliva, e con `-n auto` passava o no a seconda di come xdist
+        distribuiva i file — e' bastato aggiungerne uno per farlo cadere. La
+        registrazione e' idempotente (vedi il test qui sopra)."""
         from prometheus_client import generate_latest
+
+        app_metrics.register_cache_collector()
 
         monkeypatch.setattr(
             app_metrics, "_CACHE_SOURCES",

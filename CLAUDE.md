@@ -3756,6 +3756,19 @@ streaming. Il comando esatto e' in `percorsi.py`.
 variabili fissate all'emissione (punto 2) con 12+ mesi di esiti, o fonti
 ortogonali ai prezzi archiviate nel tempo.
 
+**Il registro degli scartati (2026-09-24).** `signal_candidates` raccoglie i
+match che i tre cancelli dello scan scartano, coi tre esiti (`passa_forza`,
+`passa_trend`, `passa_follow`) e non solo il primo che fallisce, lo stesso
+cooldown degli alert, e l'esito maturato con la STESSA `_label` del magazzino
+(`mature_candidate_outcomes`, a fine scansione). E' la conferma dal vivo di cio'
+che lo studio ha visto sulla storia: se un cancello scarta i segnali migliori o
+i peggiori. ⚠️ L'inserimento e' `ON CONFLICT DO NOTHING`, e non per pulizia: lo
+scan cattura l'eccezione di un titolo SENZA rollback, quindi su Postgres un
+doppione avrebbe abortito la sessione per tutti i titoli successivi. ⚠️ E le
+serie per la maturazione si caricano in FINESTRA: gli scartati toccano quasi
+ogni titolo, e la storia intera sarebbero 2,5 milioni di righe a ogni fine
+scansione.
+
 ### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
 
 There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.

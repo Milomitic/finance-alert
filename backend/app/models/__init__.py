@@ -19,6 +19,7 @@ from app.models.price_alert import PriceAlert
 from app.models.revoked_session import RevokedSession
 from app.models.scan_run import ScanRun
 from app.models.score_history import ScoreHistory
+from app.models.signal_candidate import SignalCandidate
 from app.models.signal_outcome import SignalOutcome
 from app.models.stock import Stock
 from app.models.stock_drawing import StockDrawing
@@ -47,6 +48,7 @@ __all__ = [
     "StockSetup",
     "PlanOutcome",
     "SignalOutcome",
+    "SignalCandidate",
     "ScoreHistory",
     "KpiSnapshot",
     "RevokedSession",
