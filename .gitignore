@@ -19,6 +19,9 @@ backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/*.csv
 backend/data/logs/
+# Dati dello studio di taratura (backend/scripts/studio_taratura): esportazioni
+# di PRODUZIONE e un replay da ~1 GB, rigenerabili coi comandi in percorsi.py.
+backend/data/studio_taratura/
 # Runtime state — persistent circuit-breaker timestamps + cached upstream
 # payloads (regenerated on demand, machine-specific, not source of truth)
 backend/data/breakers.json

@@ -3675,6 +3675,67 @@ The only thing that can still overturn this is time: matured live outcomes in
 `signal_outcomes`, out-of-sample by construction because they did not exist
 when the detectors were written.
 
+### Studio di taratura + ML sul replay decennale (2026-09-23) — si toglie un danno, non si trova un vantaggio
+
+Il SETTIMO studio, e il primo che prova le leve del motore una per una contro la
+configurazione di oggi, fuori campione. Rapporto completo:
+`docs/superpowers/specs/2026-09-23-studio-taratura-e-ml-findings.md`.
+Strumenti in `backend/scripts/studio_taratura/` — **esistono, non rifarli**; i
+dati (esportazioni di produzione e un replay da ~1 GB) stanno fuori da git in
+`backend/data/studio_taratura/`, e `percorsi.py` dice come rigenerarli.
+
+**Il verdetto.** Soglia di Forza, cancelli trend e follow-through, pesi dei
+fattori, scelta dei detector sulla storia, geometria di medio e lungo: niente
+batte l'attuale in walk-forward. Sopravvivono due cose, entrambe SOTTRAZIONI:
+il piano breve ha lo stop troppo stretto (0,5 ATR: ~0,05 R di costi a
+operazione e skill sotto il caso; ipotesi pre-registrata e confermata su 274
+titoli mai visti), e `adx_confirmation` ha anti-skill di direzione (q 0,02).
+L'ML non trova direzione in modo robusto; trova la VOLATILITA' (R² +0,17
+sull'ATR, 7 anni su 7).
+
+**Cinque cose da sapere prima di rifare uno studio cosi'**, ognuna pagata:
+
+1. **Il magazzino dei piani va letto a finestre CHIUSE.** Il 18% delle righe
+   viene da finestre aperte, che contengono per costruzione solo le uscite
+   veloci — cioè gli stop. Sul pannello Prestazioni `structure_break` leggeva
+   −0,20 R; a finestre chiuse +0,06. La colonna c'e' gia':
+   `legs_window_complete`.
+2. **Forza e fattori del magazzino NON sono dell'ingresso.** Lo snapshot si
+   sostituisce a ogni revisione (80% degli alert): la Forza negli esiti
+   coincide con quella dello snapshot attuale nel 99,7% dei casi. Qualunque
+   studio Forza→esito sul LIVE e' contaminato da informazione posteriore
+   all'ingresso, compreso il «42% per la Forza 90-99» citato sopra.
+3. **Serve un CONTROLLO casuale, non basta «R > 0».** In un universo di titoli
+   sopravvissuti, 2017-2026, qualunque ingresso ha attesa positiva, e uno stop
+   stretto la moltiplica in unita' di R. Il controllo — stessa geometria in
+   unita' del SUO ATR, stesso giorno, titolo a caso — e' cio' che ha smontato
+   la geometria «vincente» a 0,5 ATR con target a 6R.
+4. **Il t sui mesi va letto contro i permutati e contro la replica.** In un
+   controllo permutato — niente da imparare per costruzione — il t economico e'
+   arrivato a **−2,61**: i mesi adiacenti non sono indipendenti, e anche un
+   modello addestrato sul rumore sceglie in base a variabili vere, spostando la
+   miscela di detector. La banda del caso e' ~±2,6, non ±2. Il risultato ML
+   piu' forte, t 3,5, si e' sciolto a 0,26 e 1,60 sui due gruppi di titoli
+   disgiunti — che hanno le STESSE date, quindi un tempismo vero avrebbe retto
+   in entrambi. **Conta la replica, non il t.**
+5. **Etichetta «vince/perde» = trappola.** Premia i target vicini: AUC piu'
+   alta di tutte, rendimento no.
+
+⚠️ E una sulle barre: il motore emette su titoli SOSPESI (BMPS.MI 2017, prezzo
+piatto a volume zero). ATR → 0, stop → 0, e 162 righe su 453mila spostavano
+una media da −0,02 a −0,85 R. Nessun detector controlla che il titolo stia
+scambiando.
+
+⚠️ E una sugli strumenti: **le serie complete NON si esportano dal container
+dell'app.** Una SELECT di 2,5M righe li' dentro e' finita in OOM (exit 137,
+limite 3 GiB); l'app e' sopravvissuta perche' il killer ha scelto il processo
+giusto. Si legge dal pod di Postgres con `\copy ... to stdout`, che fa
+streaming. Il comando esatto e' in `percorsi.py`.
+
+**Non rifarlo aspettando un'altra risposta** senza dati materialmente nuovi:
+variabili fissate all'emissione (punto 2) con 12+ mesi di esiti, o fonti
+ortogonali ai prezzi archiviate nel tempo.
+
 ### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
 
 There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.
