@@ -531,23 +531,26 @@ def mature_candidate_outcomes(db: Session, *, commit: bool = True) -> int:
     EMA200 convergente; qui il regime non c'e', e gli scartati toccano quasi
     ogni titolo del catalogo — caricare la storia intera vorrebbe dire rileggere
     2,5 milioni di righe a ogni fine scansione, il difetto gia' chiuso una volta
-    per gli alert (vedi `mature_outcomes`). La finestra parte dieci giorni prima
-    del piu' vecchio in attesa: `_label` cerca la prima barra non precedente
-    alla data del segnale, e nella finestra c'e'.
+    per gli alert (vedi `mature_outcomes`). La finestra parte dal piu' vecchio
+    in attesa: `_label` cerca la prima barra non precedente alla data del
+    segnale, e nella finestra c'e'.
     """
     maturabili = _maturable_candidate_ids(db)
     if not maturabili:
         logger.info("[candidate-outcomes] matured 0 (nessuno scartato maturabile)")
         return 0
-    pending = list(db.execute(
-        select(SignalCandidate).where(SignalCandidate.id.in_(maturabili))
-    ).scalars()) if len(maturabili) <= 900 else [
+    # In Python e non con un IN: i maturabili possono essere migliaia, oltre il
+    # tetto di parametri di SQLite, e una soglia per scegliere fra due forme di
+    # query che danno le stesse righe e' un numero arbitrario da mantenere.
+    pending = [
         c for c in db.execute(
             select(SignalCandidate).where(SignalCandidate.matured_at.is_(None))
         ).scalars() if c.id in maturabili
     ]
     dal = min(c.signal_date for c in pending)
-    serie = _load_universe_closes(db, since=dal - timedelta(days=10))
+    # Da `dal` esatto: `_label` cerca la prima barra NON precedente alla data
+    # del segnale, e ogni data in attesa e' >= dal.
+    serie = _load_universe_closes(db, since=dal)
     medians_by_h = _benchmark_medians(db, dal, {_horizon_days(c.detector) for c in pending})
     adesso = datetime.now(UTC)
     scritte = 0

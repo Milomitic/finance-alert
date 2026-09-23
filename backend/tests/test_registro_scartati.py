@@ -232,3 +232,47 @@ def test_la_maturazione_e_idempotente(db, monkeypatch) -> None:
 
     assert sos.mature_candidate_outcomes(db) == 1
     assert sos.mature_candidate_outcomes(db) == 0
+
+
+def test_matura_ESATTAMENTE_quando_l_orizzonte_e_trascorso(db, monkeypatch) -> None:
+    """Il bordo: la barra del segnale piu' H barre dopo, e non una di piu'.
+
+    Il filtro SQL dei maturabili deve dire la stessa cosa di `_label` (che
+    vuole `ti + H < len`): un confine sfasato di uno lascerebbe ogni scartato
+    in attesa una seduta in piu', o lo farebbe maturare su una barra che non
+    c'e'. Scritto dopo che la sonda di mutazione ha trovato scoperti sia `>=`
+    contro `>` sulla data sia `H + 1` contro `H + 2`."""
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    s = Stock(ticker="BORDO", exchange="NASDAQ", name="Bordo", country="US")
+    db.add(s)
+    db.flush()
+    dal = date(2026, 1, 1)
+    _barre(db, s, [10, 11, 12, 13], dal)          # segnale + esattamente 3 barre
+    db.add(SignalCandidate(stock_id=s.id, detector="sr_flip", tone="bull", signal_date=dal,
+                           bar_date=dal, close=10.0, strength=40, passa_forza=False,
+                           passa_trend=True, passa_follow=True, factors="{}"))
+    db.commit()
+
+    assert sos.mature_candidate_outcomes(db) == 1
+    c = db.execute(select(SignalCandidate)).scalars().one()
+    assert c.fwd_return == pytest.approx(13 / 10 - 1)
+
+
+def test_senza_commit_non_scrive(db, monkeypatch) -> None:
+    """Lo scan passa `commit=False` quando scrive tutto in una transazione sola:
+    la maturazione non deve fare commit per conto suo. Trovato scoperto dalla
+    sonda (`commit and scritte` -> `commit or scritte`)."""
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    s = Stock(ticker="NOCOMMIT", exchange="NASDAQ", name="Senza commit", country="US")
+    db.add(s)
+    db.flush()
+    dal = date(2026, 1, 1)
+    _barre(db, s, [10, 11, 12, 13, 14], dal)
+    db.add(SignalCandidate(stock_id=s.id, detector="sr_flip", tone="bull", signal_date=dal,
+                           bar_date=dal, close=10.0, strength=40, passa_forza=False,
+                           passa_trend=True, passa_follow=True, factors="{}"))
+    db.commit()
+
+    assert sos.mature_candidate_outcomes(db, commit=False) == 1
+    db.rollback()
+    assert db.execute(select(SignalCandidate)).scalars().one().matured_at is None
