@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.provenance import emission_stamp
 from app.models import Alert, SignalOutcome, Stock
+from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE, contesto
 from app.signals.context import build_context
 from app.signals.detectors.registry import DETECTORS
 from app.signals.horizon import classify_horizon
@@ -164,6 +165,7 @@ def evaluate_signals(
         return 0
     idx_by_date = {str(d)[:10]: i for i, d in enumerate(ohlcv["date"])}
     added = 0
+    contesto_titolo: dict | None = None
     # UN contesto per titolo (FA-065): il runner riceve quello gia' costruito
     # qui sopra invece di rifarlo dallo stesso DataFrame.
     matches, setups = detect_signals_and_setups(ohlcv, db=db, stock=stock, ctx=_ctx)
@@ -332,6 +334,17 @@ def evaluate_signals(
                         snapshot[_chiave] = _prior_snap[_chiave]
                     else:
                         snapshot.pop(_chiave, None)
+                # ⚠️ E le VARIABILI dell'ingresso — Forza, fattori, contesto —
+                # per la stessa ragione: la Forza del magazzino degli esiti
+                # coincideva con quella dell'ULTIMA revisione nel 99,7% dei
+                # casi, cioe' era misurata dopo il trade. La lettura viva resta
+                # in `strength`/`factors`: descrive il segnale di adesso.
+                # Motivo per esteso in `app.signals.contesto_emissione`.
+                for _chiave in VARIABILI_ALL_EMISSIONE:
+                    if _chiave in _prior_snap:
+                        snapshot[_chiave] = _prior_snap[_chiave]
+                    else:
+                        snapshot.pop(_chiave, None)
                 snapshot["amended_at"] = now_iso
                 snapshot["amend_count"] = int(_prior_snap.get("amend_count") or 0) + 1
                 prior.trigger_price = last_close
@@ -366,6 +379,16 @@ def evaluate_signals(
             snapshot["first_invalidation"] = m.invalidation
         if snapshot.get("horizon") is not None:
             snapshot["first_horizon"] = snapshot["horizon"]
+        # E le variabili di quel momento, che una revisione sovrascriverebbe:
+        # senza, nessun modello si puo' validare sugli esiti veri (vedi
+        # `app.signals.contesto_emissione`). Il contesto si calcola una volta
+        # per titolo, alla prima creazione, sulla stessa finestra dello scan.
+        if contesto_titolo is None:
+            contesto_titolo = contesto(ohlcv)
+        snapshot["first_strength"] = m.strength
+        snapshot["first_factors"] = dict(m.factors or {})
+        snapshot["first_contesto"] = contesto_titolo
+        snapshot["first_provenance"] = snapshot.get("provenance")
         alert = Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,

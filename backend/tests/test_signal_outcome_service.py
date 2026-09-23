@@ -112,3 +112,22 @@ def test_bear_miss_recorded(db, monkeypatch):
     row = db.execute(select(SignalOutcome)).scalars().one()
     assert row.tone == "bear"
     assert row.abs_hit == 0  # bear, price rose
+
+
+def test_il_magazzino_prende_la_forza_dell_INGRESSO_non_dell_ultima_revisione(db, monkeypatch):
+    """⚠️ Fino al 2026-09-24 la Forza di `signal_outcomes` coincideva con quella
+    dello snapshot ATTUALE nel 99,7% dei casi: su un alert rivisto era la Forza
+    di settimane dopo il trade. Con entrambe presenti vince quella fissata alla
+    prima emissione; il test esistente sopra copre il ripiego (nessun
+    `first_strength` -> `strength`)."""
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 3)
+    closes = [10, 11, 12, 13, 14, 15, 16, 17]
+    _s, a, _days = _seed(db, closes=closes, sig_idx=2, tone="bull")
+    a.snapshot = json.dumps({"tone": "bull", "strength": 90, "first_strength": 40,
+                             "probability": 55})
+    db.commit()
+
+    sos.mature_outcomes(db)
+
+    row = db.execute(select(SignalOutcome)).scalars().one()
+    assert row.strength == 40

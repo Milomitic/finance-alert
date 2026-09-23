@@ -517,3 +517,80 @@ def test_una_revisione_su_un_alert_storico_non_inventa_gli_ingressi_del_piano(
     snap = json.loads(_vb_rows(db, s)[0].snapshot)
     for chiave in INGRESSI_CONGELATI:
         assert chiave not in snap
+
+
+# ─── E le variabili dell'ingresso: Forza, fattori, contesto (2026-09-24) ───
+#
+# La stessa sostituzione, dal lato di chi MISURA. Lo snapshot si rifa' a ogni
+# revisione, e la Forza del magazzino degli esiti coincideva con quella
+# dell'ultima revisione nel 99,7% dei casi: ogni variabile era misurata DOPO
+# il trade, e nessun modello si poteva validare sugli esiti veri.
+
+def test_un_alert_nuovo_fissa_forza_fattori_e_contesto(db, monkeypatch):
+    from app.signals.contesto_emissione import VERSIONE
+
+    _relax(monkeypatch)
+    s = Stock(ticker="VAR_NEW", exchange="NASDAQ", name="Variabili", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    # Alla nascita coincidono: e' la revisione a separarli.
+    assert snap["first_strength"] == snap["strength"]
+    assert snap["first_factors"] == snap["factors"]
+    assert snap["first_provenance"] == snap["provenance"]
+    assert snap["first_contesto"]["versione"] == VERSIONE
+    # Pavimento: variabili vere, non chiavi presenti e vuote.
+    assert snap["first_factors"]
+    assert {"ret_5", "atr_pct", "rsi14"} <= set(snap["first_contesto"])
+
+
+def test_una_revisione_NON_sovrascrive_le_variabili_dell_ingresso(db, monkeypatch):
+    from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE
+
+    _relax(monkeypatch)
+    s = Stock(ticker="VAR_AMEND", exchange="NASDAQ", name="Variabili", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    snap0 = json.loads(prior.snapshot)
+    allora = {
+        "first_strength": 11,
+        "first_factors": {"volume_strength": 0.123},
+        "first_contesto": {"versione": "1", "ret_5": 0.0456},
+        "first_provenance": {"sentinella": "quella di allora"},
+    }
+    assert set(allora) == set(VARIABILI_ALL_EMISSIONE), "il test deve coprire ogni chiave"
+    snap0.update(allora)
+    prior.snapshot = json.dumps(snap0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    for chiave, valore in allora.items():
+        assert snap[chiave] == valore, chiave
+    # E la lettura VIVA e' avanzata lo stesso: senza questa meta' il test
+    # passerebbe anche se la revisione avesse smesso di aggiornare lo snapshot.
+    assert snap["strength"] != 11
+    assert snap["factors"] != allora["first_factors"]
+
+
+def test_una_revisione_su_un_alert_storico_non_inventa_le_variabili(db, monkeypatch):
+    """Gli alert che precedono i campi non ricevono i valori di OGGI spacciati
+    per quelli dell'ingresso: restano assenti."""
+    from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE
+
+    _relax(monkeypatch)
+    s = Stock(ticker="VAR_LEGACY", exchange="NASDAQ", name="Variabili", country="US")
+    db.add(s); db.flush()
+    _seed_prior(db, s, signal_date=date(2026, 4, 28), price=50.0)
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    snap = json.loads(_vb_rows(db, s)[0].snapshot)
+    for chiave in VARIABILI_ALL_EMISSIONE:
+        assert chiave not in snap

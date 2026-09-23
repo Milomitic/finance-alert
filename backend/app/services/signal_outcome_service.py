@@ -50,13 +50,23 @@ def _to_date(v: object) -> date | None:
 
 
 def _snapshot_fields(snapshot: str | None) -> tuple[str | None, int | None, int | None]:
-    """(tone, strength, probability) from an Alert.snapshot JSON blob."""
+    """(tone, strength, probability) from an Alert.snapshot JSON blob.
+
+    ⚠️ La Forza e' quella della PRIMA emissione (`first_strength`), non
+    dell'ultima revisione: lo snapshot si sostituisce a ogni revisione, e fino
+    al 2026-09-24 il magazzino portava nel 99,7% dei casi la Forza di quando
+    l'alert era stato rivisto per l'ultima volta — misurata dopo il trade.
+    Ripiego dichiarato su `strength` per gli alert che precedono il campo: per
+    quelli mai rivisti e' lo stesso numero, per gli altri e' il migliore
+    disponibile e resta contaminato."""
     try:
         s = json.loads(snapshot) if snapshot else {}
     except (ValueError, TypeError):
         return None, None, None
     tone = s.get("tone")
-    st = s.get("strength")
+    st = s.get("first_strength")
+    if not isinstance(st, (int, float)):
+        st = s.get("strength")
     pr = s.get("probability")
     return (
         tone if tone in ("bull", "bear") else None,

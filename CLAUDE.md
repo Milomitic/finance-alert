@@ -3711,6 +3711,15 @@ detector). Come cancello seleziona un po'; la soglia di Forza non seleziona.
    coincide con quella dello snapshot attuale nel 99,7% dei casi. Qualunque
    studio Forza→esito sul LIVE e' contaminato da informazione posteriore
    all'ingresso, compreso il «42% per la Forza 90-99» citato sopra.
+   **Chiuso in avanti il 2026-09-24**: lo scan fissa alla creazione
+   `first_strength`, `first_factors`, `first_provenance` e `first_contesto`
+   (`app.signals.contesto_emissione`, ~19 variabili del titolo sulla stessa
+   finestra di 260 barre dello scan, SMA e non EMA perche' il numero non
+   dipenda dalla lunghezza della serie) e li conserva a ogni revisione; il
+   magazzino degli esiti legge `first_strength`. ⚠️ Sugli alert STORICI
+   rivisti Forza e fattori NON si ricavano (`backfill_variabili_emissione`
+   copia solo sui mai rivisti): per studiarli si filtra su `first_strength`
+   presente, non ci si fida del ripiego.
 3. **Serve un CONTROLLO casuale, non basta «R > 0».** In un universo di titoli
    sopravvissuti, 2017-2026, qualunque ingresso ha attesa positiva, e uno stop
    stretto la moltiplica in unita' di R. Il controllo — stessa geometria in
