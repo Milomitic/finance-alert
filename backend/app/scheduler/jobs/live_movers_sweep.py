@@ -12,6 +12,8 @@ best-effort — neither step may break the scheduler loop or the other.
 """
 from loguru import logger
 
+from app.core import presence
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.services import (
     live_quote_service,
@@ -24,10 +26,14 @@ from app.services import (
 def run_live_universe_sweep() -> None:
     db = SessionLocal()
     try:
-        try:
-            live_universe_sweep_service.refresh_chunk(db)
-        except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
-            logger.warning(f"[live-sweep] job failed: {exc}")
+        # Il giro serve solo alla classifica dei movers in home: senza nessuno
+        # connesso si salta. I due controlli sotto NO — un prezzo-obiettivo o
+        # uno stop colpito vanno notificati anche a schermo spento.
+        if presence.qualcuno_connesso(settings.live_movers_idle_minutes * 60):
+            try:
+                live_universe_sweep_service.refresh_chunk(db)
+            except Exception as exc:  # noqa: BLE001 — never break the scheduler loop
+                logger.warning(f"[live-sweep] job failed: {exc}")
         # Intraday price-target evaluation — independent of the sweep chunk
         # outcome (an alert ticker may be open even when the whole chunk was
         # closed-market), idempotent vs the EOD pass via PriceAlert.triggered_at.

@@ -311,6 +311,11 @@ ESCLUSI_DAI_BERSAGLI: dict[str, dict[str, str]] = {
             "non qui. E costa: "
             "8,3 s da solo (attese reali) contro 6,1 s dell'intera sotto-suite "
             "del modulo, misurato il 2026-09-16.",
+        "tests/test_presenza_e_giro_movers.py":
+            "Usa `hash_password` solo per creare l'utente e fa lo stesso login di "
+            "`test_api_auth.py`, che e' gia' in elenco; asserisce sulla PRESENZA, "
+            "non su un esito della sessione, quindi non puo' uccidere un mutante "
+            "che quello lascia vivo.",
     },
 }
 

@@ -114,6 +114,11 @@ class Settings(BaseSettings):
     live_movers_sweep_seconds: int = 75
     live_movers_chunk: int = 200
     live_movers_stale_seconds: int = 900   # 15 min
+    # Il giro dell'universo serve SOLO alla classifica dei movers in home: se
+    # nessuno ha fatto una richiesta autenticata negli ultimi N minuti, il
+    # passo che scarica i blocchi si salta (prezzi-obiettivo e posizioni
+    # continuano a essere controllati). 0 = gira sempre. Vedi `app.core.presence`.
+    live_movers_idle_minutes: int = 10
     # Top-N gainers + N losers surfaced from the sweep. 30+30=60 leaves room
     # under the FE's 120-ticker candidate cap for the EOD lists too (so the
     # board mixes the true live universe movers with the familiar EOD names).

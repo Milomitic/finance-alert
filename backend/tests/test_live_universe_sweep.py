@@ -69,8 +69,12 @@ def test_sweep_job_runs_intraday_price_eval_even_if_sweep_fails(monkeypatch):
     """The scheduler tick piggybacks evaluate_intraday; a sweep crash must
     not prevent the price-alert evaluation (and vice versa: neither may
     propagate out of the job)."""
+    from app.core import presence
     from app.scheduler.jobs import live_movers_sweep as job
 
+    # Qualcuno connesso, altrimenti il giro si salta e il crollo non avviene:
+    # il test sarebbe vero di niente.
+    presence.segna_attivita()
     monkeypatch.setattr(
         job.live_universe_sweep_service, "refresh_chunk",
         lambda db: (_ for _ in ()).throw(RuntimeError("sweep boom")),

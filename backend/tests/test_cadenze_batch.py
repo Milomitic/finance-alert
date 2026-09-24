@@ -119,3 +119,45 @@ def test_db_backup_non_si_registra_su_postgres(monkeypatch) -> None:
     monkeypatch.setattr(db_module, "engine", SimpleNamespace(dialect=SimpleNamespace(name="postgresql")))
     monkeypatch.setattr(scheduler_module, "_scheduler", None)
     assert scheduler_module.get_scheduler().get_job("db_backup") is None
+
+
+# ─── 2026-09-24: kpi_rollup dopo la scansione, weekend spenti, pulizia a 5' ─
+
+
+def test_il_riepilogo_kpi_viene_DOPO_la_scansione_notturna(scheduler) -> None:
+    """Il riepilogo deve vedere la scansione delle 23:30 del giorno stesso:
+    il suo primo scatto dopo ogni scansione feriale cade prima della scansione
+    successiva, e almeno 45 minuti dopo (una scansione dura ~12 minuti piu' le
+    maturazioni)."""
+    scan = _scatti(scheduler.get_job("scan_alerts"), _SETTIMANA, 7)
+    rollup = _scatti(scheduler.get_job("kpi_rollup"), _SETTIMANA, 8)
+    assert len(scan) == 5
+    for s in scan:
+        dopo = [r for r in rollup if r > s]
+        assert dopo, f"nessun riepilogo dopo la scansione {s:%a %H:%M}"
+        assert timedelta(minutes=45) <= dopo[0] - s <= timedelta(hours=3), f"{s:%a}"
+
+
+def test_utili_imminenti_solo_nei_feriali_e_ogni_ora(scheduler) -> None:
+    scatti = _scatti(scheduler.get_job("refresh_imminent_earnings"), _SETTIMANA, 7)
+    assert all(t.weekday() < 5 for t in scatti)
+    assert len(scatti) == 5 * 24
+
+
+def test_riparazione_buchi_salta_solo_la_domenica(scheduler) -> None:
+    """Il giro di sabato 00:20 ripara ancora la scansione di venerdi' notte."""
+    scatti = _scatti(scheduler.get_job("repair_ohlcv_gaps"), _SETTIMANA, 7)
+    assert all(t.weekday() != 6 for t in scatti)
+    assert any(t.weekday() == 5 and t.hour == 0 for t in scatti)
+    assert len(scatti) == 6 * 4
+
+
+def test_la_pulizia_degli_orfani_gira_ogni_cinque_minuti(scheduler) -> None:
+    """Non piu' spesso della soglia che applica (5 minuti di heartbeat fermo):
+    un giro al minuto non chiudeva una riga prima. Ma nemmeno piu' di rado,
+    o una barra fantasma resterebbe a schermo oltre i dieci minuti."""
+    from app.scheduler.jobs.cleanup_orphan_scans_job import _STALE_AFTER_MINUTES
+
+    scatti = _scatti(scheduler.get_job("cleanup_orphan_scans"), _SETTIMANA, 1)
+    passo = min(b - a for a, b in zip(scatti, scatti[1:], strict=False))
+    assert passo == timedelta(minutes=_STALE_AFTER_MINUTES)

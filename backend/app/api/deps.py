@@ -5,6 +5,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import presence
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import read_session_token
@@ -42,6 +43,7 @@ def get_current_user(
     # get_db dependency. Return the loaded user detached so a subsequent slow
     # provider call does not reserve even the authentication connection.
     db.close()
+    presence.segna_attivita()
     return user
 
 

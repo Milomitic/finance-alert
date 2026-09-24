@@ -161,9 +161,11 @@ def get_scheduler() -> BackgroundScheduler:
         # revisits it: before this job, one transient upstream failure left a
         # PERMANENT hole in the charts — ~100 symbols including AMZN/MSFT lost
         # a week of bars in July 2026 without a single failed scan.
+        # Solo lun-sab (2026-09-24): il giro delle 00:20 di sabato ripara ancora
+        # la scansione di venerdi' notte; domenica non arriva nessuna barra.
         _scheduler.add_job(
             run_repair_ohlcv_gaps,
-            trigger=_cron(hour="*/6", minute=20),
+            trigger=_cron(day_of_week="mon-sat", hour="*/6", minute=20),
             id="repair_ohlcv_gaps",
             replace_existing=True,
             max_instances=1,
@@ -179,9 +181,12 @@ def get_scheduler() -> BackgroundScheduler:
             max_instances=1,
             coalesce=True,
         )
+        # 00:45, DOPO la scansione delle 23:30 (2026-09-24). Alle 23:00 il
+        # riepilogo fotografava lo stato di mezz'ora PRIMA della scansione piu'
+        # importante del giorno, cioe' sempre un giorno indietro.
         _scheduler.add_job(
             run_kpi_rollup,
-            trigger=_cron(day_of_week="*", hour=23, minute=0),
+            trigger=_cron(day_of_week="*", hour=0, minute=45),
             id="kpi_rollup",
             replace_existing=True,
             max_instances=1,
@@ -247,21 +252,25 @@ def get_scheduler() -> BackgroundScheduler:
         # force-refreshes only those. Captures actuals within ~1h of
         # release; the Finnhub fallback inside `_fetch_fresh` typically
         # cuts the lag from 1-3h (yfinance scrape) to ~30 min.
+        # Solo lun-ven (2026-09-24): nel fine settimana non esce nessuna
+        # trimestrale, e i 48 giri di sabato e domenica non trovavano niente.
         _scheduler.add_job(
             run_refresh_imminent_earnings,
-            trigger=_cron(minute=45),
+            trigger=_cron(day_of_week="mon-fri", minute=45),
             id="refresh_imminent_earnings",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
-        # Cleanup orfani ScanRun — ogni minuto. Necessario perché
+        # Cleanup orfani ScanRun — ogni 5 minuti (era ogni minuto fino al
+        # 2026-09-24: la pulizia chiude una riga il cui heartbeat e' fermo da
+        # ~5 minuti, quindi un giro al minuto non la vedeva prima). Necessario perché
         # _cleanup_orphan_scans in main.py gira solo al boot; se uvicorn
         # resta su ma un worker scan crasha, la riga resta 'running'
         # all'infinito (la UI mostra una progress bar fantasma).
         _scheduler.add_job(
             run_cleanup_orphan_scans,
-            trigger=_cron(minute="*"),
+            trigger=_cron(minute="*/5"),
             id="cleanup_orphan_scans",
             replace_existing=True,
             max_instances=1,
