@@ -12,6 +12,10 @@ Due passate, con costi molto diversi:
                 giorni: volatilita' implicita at-the-money di call e put,
                 rapporti put/call di volume e open interest. Rete vera, quindi
                 ha un tetto di tempo e si ferma al primo segno di limitazione.
+                Gira DENTRO la seduta USA: fuori seduta bid e ask sono a zero e
+                la IV non si puo' leggere (`_iv_atm`). Il volume del giorno e'
+                quindi parziale, sempre alla stessa ora: il rapporto put/call
+                resta confrontabile fra un giorno e l'altro.
 
 ⚠️ Nessuna delle due tocca un numero che il motore usa. Sono dati raccolti per
 un modello che ancora non esiste, e la sola cosa che conta oggi e' che la
@@ -145,10 +149,17 @@ def e_usa(ticker: str) -> bool:
 
 
 def _iv_atm(tabella, prezzo: float) -> float | None:
-    """La volatilita' implicita dello strike piu' vicino al prezzo."""
-    if tabella is None or len(tabella) == 0 or "strike" not in tabella or "impliedVolatility" not in tabella:
+    """La volatilita' implicita dello strike QUOTATO piu' vicino al prezzo.
+
+    ⚠️ Quotato = bid e ask entrambi sopra zero. Fuori seduta Yahoo li azzera e
+    la IV che riporta diventa un residuo del suo calcolo (0,00001, 0,0156,
+    0,031 — misurato su AAPL e JPM il 2026-09-24): un numero plausibile per
+    tipo e falso per contenuto. Senza quotazioni si rende None, non un valore.
+    """
+    colonne = ("strike", "impliedVolatility", "bid", "ask")
+    if tabella is None or len(tabella) == 0 or any(c not in tabella for c in colonne):
         return None
-    t = tabella[tabella["impliedVolatility"] > 0]
+    t = tabella[(tabella["impliedVolatility"] > 0) & (tabella["bid"] > 0) & (tabella["ask"] > 0)]
     if len(t) == 0:
         return None
     riga = t.iloc[(t["strike"] - prezzo).abs().argsort().iloc[0]]

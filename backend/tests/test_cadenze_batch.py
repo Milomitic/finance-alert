@@ -172,17 +172,46 @@ def test_l_addestramento_dei_modelli_in_ombra_e_la_domenica_mattina(scheduler) -
     assert all(r < s for r, s in zip(retention, scatti, strict=False))
 
 
-def test_l_archivio_opzioni_finisce_prima_della_scansione_notturna(scheduler) -> None:
-    """Le catene partono dopo la chiusura USA e hanno un tetto di 40 minuti:
-    devono essere finite quando parte la scansione delle 23:30."""
+def test_l_archivio_opzioni_gira_DENTRO_la_seduta_di_new_york_tutto_l_anno(scheduler) -> None:
+    """⚠️ Fino al 2026-09-24 questo test pretendeva il contrario: partenza DOPO
+    la chiusura USA. Fuori seduta Yahoo azzera bid e ask e la volatilita'
+    implicita diventa un residuo senza senso (0,00001, 0,0156 — misurato nel
+    pod), quindi il job archiviava numeri falsi o, con la guardia, niente.
+
+    Si controlla un anno intero e non una settimana perche' Roma e New York
+    cambiano ora in giorni diversi: a fine marzo e a inizio novembre lo scarto
+    scende da 6 a 5 ore, e un orario scelto guardando settembre finirebbe fuori
+    seduta proprio in quelle settimane. Partenza e fine del tetto devono stare
+    fra le 9:30 e le 16:00 di New York, ogni volta."""
+    from app.services.archivio_non_prezzo_service import archivia_opzioni
+
+    ny = ZoneInfo("America/New_York")
+    tetto = timedelta(seconds=archivia_opzioni.__kwdefaults__["tetto_s"])
+    scatti = _scatti(scheduler.get_job("archivia_opzioni"), datetime(2026, 1, 1, tzinfo=ROMA), 366)
+    assert len(scatti) > 250                     # tutti i feriali, non una manciata
+    assert all(t.astimezone(ny).weekday() < 5 for t in scatti)
+    for t in scatti:
+        inizio, fine = t.astimezone(ny), (t + tetto).astimezone(ny)
+        apertura = inizio.replace(hour=9, minute=30, second=0, microsecond=0)
+        chiusura = inizio.replace(hour=16, minute=0, second=0, microsecond=0)
+        assert apertura <= inizio and fine <= chiusura, f"{t.isoformat()} -> NY {inizio:%H:%M}-{fine:%H:%M}"
+
+
+def test_l_archivio_opzioni_non_si_sovrappone_alle_scansioni(scheduler) -> None:
+    """Rete e CPU dello stesso nodo: il giro delle catene non parte mentre una
+    scansione e' in corso (il job lo salta), quindi l'orario non deve cadere
+    nella finestra di nessuna delle due."""
     from app.services.archivio_non_prezzo_service import archivia_opzioni
 
     tetto = timedelta(seconds=archivia_opzioni.__kwdefaults__["tetto_s"])
     opzioni = _scatti(scheduler.get_job("archivia_opzioni"), _SETTIMANA, 7)
-    scan = _scatti(scheduler.get_job("scan_alerts"), _SETTIMANA, 7)
-    assert len(opzioni) == len(scan) == 5
-    for o, s in zip(opzioni, scan, strict=True):
-        assert o.hour >= 22 and o + tetto < s
+    scansioni = (_scatti(scheduler.get_job("scan_alerts"), _SETTIMANA, 7)
+                 + _scatti(scheduler.get_job("scan_alerts_eu_close"), _SETTIMANA, 7))
+    assert len(opzioni) == 5 and scansioni
+    for o in opzioni:
+        for s in scansioni:
+            # una scansione dura ~10-20 minuti: 30 di margine da entrambe le parti
+            assert o + tetto <= s - timedelta(minutes=5) or o >= s + timedelta(minutes=30), (o, s)
 
 
 def test_l_archivio_fondamentali_segue_la_scansione_che_rinnova_la_cache(scheduler) -> None:

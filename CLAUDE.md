@@ -3815,9 +3815,19 @@ sapeva QUEL giorno. Due fonti (`app.services.archivio_non_prezzo_service`):
   riga (`osservato_il` = istante dello SCARICAMENTO). La cache si rinnova circa
   una volta a settimana per titolo, quindi la cadenza vera e' settimanale.
 - `opzioni` — IV at-the-money di call e put, put/call di volume e open interest,
-  prima scadenza ad almeno 7 giorni. Job `archivia_opzioni` feriali alle 22:15,
-  solo titoli USA, tetto di 40 minuti, si ferma al breaker yfinance o alla
-  prima limitazione.
+  prima scadenza ad almeno 7 giorni. Job `archivia_opzioni` feriali alle 20:00
+  di Roma, DENTRO la seduta USA; solo titoli USA, tetto di 40 minuti, si ferma
+  al breaker yfinance o alla prima limitazione.
+
+⚠️ **Le opzioni si leggono in seduta, e la IV solo da strike quotati.** Il job
+nacque alle 22:15 di Roma, un quarto d'ora dopo la chiusura USA. Una sonda nel
+pod (2026-09-24, prima che girasse una volta) ha trovato fuori seduta bid e ask
+a ZERO e la volatilita' implicita ridotta a un residuo del calcolo di Yahoo —
+0,00001, 0,0156, 0,031 sugli strike at-the-money di AAPL e JPM. Numeri validi
+per tipo e falsi per contenuto: l'archivio li avrebbe raccolti ogni sera senza
+un errore. `_iv_atm` scarta gli strike con bid o ask a zero, e l'orario e'
+fissato da un test su un anno intero, perche' Roma e New York cambiano ora in
+giorni diversi.
 
 ⚠️ I nomi dei campi si cercano con `dataclasses.asdict(...).get(nome)`, che su
 un nome sbagliato rende None in silenzio: la prima versione cercava quattordici

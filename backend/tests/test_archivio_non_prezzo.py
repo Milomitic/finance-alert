@@ -98,8 +98,11 @@ def test_i_nan_diventano_null_e_il_json_e_valido(db, titolo, monkeypatch) -> Non
 
 # ─── opzioni ───────────────────────────────────────────────────────────────
 
-def _catena(strike_iv: list[tuple[float, float]], volume: float, oi: float) -> pd.DataFrame:
-    return pd.DataFrame([{"strike": k, "impliedVolatility": iv, "volume": volume, "openInterest": oi}
+def _catena(strike_iv: list[tuple[float, float]], volume: float, oi: float,
+            *, quotati: bool = True) -> pd.DataFrame:
+    q = 1.0 if quotati else 0.0
+    return pd.DataFrame([{"strike": k, "impliedVolatility": iv, "volume": volume, "openInterest": oi,
+                          "bid": q, "ask": q}
                          for k, iv in strike_iv])
 
 
@@ -111,6 +114,33 @@ def test_il_riassunto_prende_lo_strike_piu_vicino_al_prezzo() -> None:
     assert d["put_call_volume"] == pytest.approx(60 / 30)
     assert d["put_call_oi"] == pytest.approx(100 / 300)
     assert d["giorni"] == 22 and d["open_interest"] == 400
+
+
+def test_fuori_seduta_la_volatilita_implicita_NON_si_archivia() -> None:
+    """⚠️ Il difetto (2026-09-24), misurato nel pod su AAPL e JPM alle 11:30 UTC.
+
+    Fuori seduta Yahoo azzera bid e ask, e la volatilita' implicita che
+    riporta diventa un residuo del suo calcolo: 0,00001, 0,0156, 0,031 sugli
+    strike at-the-money. Sono numeri, passano ogni controllo di tipo, e il job
+    che girava dopo la chiusura li avrebbe archiviati ogni sera. Una IV senza
+    un bid e un ask da cui ricavarla non e' un'osservazione."""
+    calls = _catena([(335.0, 0.00001), (337.5, 0.0039), (340.0, 0.0156)], volume=10, oi=100,
+                    quotati=False)
+    puts = _catena([(335.0, 0.0156), (337.5, 0.00001)], volume=10, oi=100, quotati=False)
+    d = svc.estrai_opzioni(calls, puts, prezzo=337.0, scadenza="2026-10-02", oggi=date(2026, 9, 24))
+    assert d["iv_atm_call"] is None and d["iv_atm_put"] is None
+    # Volume e open interest non dipendono dalle quotazioni: restano.
+    assert d["put_call_volume"] == pytest.approx(20 / 30) and d["open_interest"] == 500
+
+
+def test_si_prende_lo_strike_QUOTATO_piu_vicino() -> None:
+    """Uno strike senza quotazioni non si usa neanche se e' il piu' vicino:
+    si scende al piu' vicino che ne ha una."""
+    muti = _catena([(100.0, 0.00001)], volume=1, oi=1, quotati=False)
+    vivi = _catena([(95.0, 0.31), (110.0, 0.40)], volume=1, oi=1)
+    calls = pd.concat([muti, vivi], ignore_index=True)
+    d = svc.estrai_opzioni(calls, calls, prezzo=100.0, scadenza="2026-10-16", oggi=date(2026, 9, 24))
+    assert d["iv_atm_call"] == 0.31
 
 
 def test_una_catena_senza_volume_non_divide_per_zero() -> None:

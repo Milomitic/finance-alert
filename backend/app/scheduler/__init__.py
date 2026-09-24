@@ -95,9 +95,11 @@ def get_scheduler() -> BackgroundScheduler:
             )
         # Archivio puntuale dei dati non-prezzo (fase 4): la parte dalla cache
         # dei fondamentali ogni notte alle 00:30, dopo la scansione delle 23:30
-        # che la rinnova; le catene di opzioni nei feriali alle 22:15, dopo la
-        # chiusura USA e prima della scansione. Vedi
-        # `app.services.archivio_non_prezzo_service`.
+        # che la rinnova; le catene di opzioni nei feriali alle 20:00, DENTRO la
+        # seduta USA (14:00 a New York, 15:00 nelle settimane in cui i cambi
+        # d'ora non coincidono). ⚠️ Non dopo la chiusura: fuori seduta Yahoo
+        # azzera bid e ask e la volatilita' implicita diventa un residuo senza
+        # senso. Vedi `app.services.archivio_non_prezzo_service`.
         _scheduler.add_job(
             run_archivia_fondamentali,
             trigger=_cron(day_of_week="*", hour=0, minute=30),
@@ -108,7 +110,7 @@ def get_scheduler() -> BackgroundScheduler:
         )
         _scheduler.add_job(
             run_archivia_opzioni,
-            trigger=_cron(day_of_week="mon-fri", hour=22, minute=15),
+            trigger=_cron(day_of_week="mon-fri", hour=20, minute=0),
             id="archivia_opzioni",
             replace_existing=True,
             max_instances=1,
