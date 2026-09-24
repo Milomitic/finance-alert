@@ -455,7 +455,19 @@ def mature_plan_outcomes(
         orizzonte = _horizon_days(a.signal_name or "")
         esito = corri_la_gara(piano, barre, orizzonte)
         if esito is None:
-            continue   # ancora aperto, o senza barre
+            # Ancora aperto, o senza barre. ⚠️ Se c'e' una riga di un metodo
+            # RITIRATO, la regola in vigore la contraddice («risolta» contro
+            # «aperta»): si toglie, altrimenti resta a farsi leggere come una
+            # misura. Successo al passaggio alla "3" (14 righe alla "2"), e al
+            # passaggio alla "4" sarebbero state le operazioni in cui lo stop
+            # breve piu' largo cambia l'esito. La riga nuova nasce quando la
+            # gara si risolve. Diverso dal `piano is None` sopra, dove la regola
+            # nuova non dice niente e la misura vecchia resta l'unica.
+            if a.id in da_riscrivere:
+                db.execute(delete(PlanOutcome).where(PlanOutcome.alert_id == a.id))
+                da_riscrivere.discard(a.id)
+                scritte += 1
+            continue
 
         valori = dict(
             stock_id=a.stock_id, detector=a.signal_name or "",

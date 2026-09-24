@@ -485,6 +485,61 @@ def test_una_riga_di_versione_vecchia_viene_RIMISURATA(db: Session) -> None:
     assert riga.entry == pytest.approx(100.0), "la riga vecchia e' sopravvissuta"
 
 
+def _riga_vecchia(db: Session, a: Alert, s: Stock, *, esito: str = "stop") -> None:
+    db.add(PlanOutcome(
+        alert_id=a.id, stock_id=s.id, detector="sr_flip",
+        signal_date=date(2026, 3, 1), tone="bull", horizon_days=21,
+        entry_date=date(2026, 3, 2), entry=100.0, stop=99.5, tp1=100.75, tp2=None,
+        r=0.5, esito=esito, resolved_date=date(2026, 3, 3),
+        bars_to_outcome=1, r_multiple=-1.0, mae_r=-1.0, mfe_r=0.0,
+        tp2_reached=False, method_version="3", legs_window_complete=False,
+        matured_at=datetime.now(UTC),
+    ))
+    db.flush()
+
+
+def test_una_riga_vecchia_che_la_regola_nuova_dichiara_APERTA_viene_tolta(db: Session) -> None:
+    """⚠️ Il difetto (2026-09-24, al passaggio alla versione "4").
+
+    Lo scambio vecchia->nuova avveniva solo quando la regola nuova produceva un
+    esito. Se col metodo corrente la gara e' ancora APERTA, la riga vecchia
+    restava — col suo esito — e continuava a essere letta come una misura.
+    Misurato in produzione: 14 righe alla versione "2" sopravvissute al
+    passaggio alla "3". E con lo stop breve portato da 0,5 a 4 ATR sarebbero
+    state proprio le operazioni in cui lo stop largo cambia l'esito: «stop
+    colpito» per la regola ritirata, «ancora aperta» per quella in vigore.
+
+    Una riga di un metodo ritirato che il metodo corrente contraddice non e'
+    una misura da conservare: finche' la gara e' aperta non c'e' niente da
+    mostrare, e la riga nuova nascera' quando ci sara'."""
+    s = _titolo(db)
+    a = _alert(db, s)
+    # Niente tocca 96 ne' 106: aperta per la regola corrente.
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 103, 99, 101),
+                   ("2026-03-04", 102, 98, 100)])
+    _riga_vecchia(db, a, s)
+
+    # Conta come una modifica: e' cio' che fa scattare il commit, e una
+    # passata di sole rimozioni che non committasse le perderebbe.
+    assert mature_plan_outcomes(db, commit=False) == 1
+
+    assert db.query(PlanOutcome).count() == 0, "la riga del metodo ritirato e' sopravvissuta"
+
+
+def test_una_riga_ALLA_VERSIONE_CORRENTE_ancora_aperta_non_viene_tolta(db: Session, orizzonte_5) -> None:
+    """Controllo negativo del test sopra: la pulizia vale per le versioni
+    RITIRATE. Una riga corrente a finestra aperta — uno stop gia' colpito, le
+    gambe ancora da seguire — e' una misura vera e deve restare."""
+    s = _titolo(db)
+    _alert(db, s)
+    _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 101, 95, 96)])
+
+    assert mature_plan_outcomes(db, commit=False) == 1
+    assert db.query(PlanOutcome).one().legs_window_complete is False
+    mature_plan_outcomes(db, commit=False)
+    assert db.query(PlanOutcome).count() == 1
+
+
 def test_una_riga_ALLA_VERSIONE_CORRENTE_non_viene_toccata(db: Session) -> None:
     """Controllo negativo del test sopra. Senza, una maturazione che riscrive
     TUTTO a ogni passata lo supererebbe — e riscrivere ottomila righe a ogni
