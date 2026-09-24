@@ -13,7 +13,7 @@ Due passate, con costi molto diversi:
                 rapporti put/call di volume e open interest. Rete vera, quindi
                 ha un tetto di tempo e si ferma al primo segno di limitazione.
                 Gira DENTRO la seduta USA: fuori seduta bid e ask sono a zero e
-                la IV non si puo' leggere (`_iv_atm`). Il volume del giorno e'
+                la IV non si puo' leggere (`_atm`). Il volume del giorno e'
                 quindi parziale, sempre alla stessa ora: il rapporto put/call
                 resta confrontabile fra un giorno e l'altro.
 
@@ -148,23 +148,42 @@ def e_usa(ticker: str) -> bool:
     return bool(ticker) and "." not in ticker and not ticker.startswith("^")
 
 
-def _iv_atm(tabella, prezzo: float) -> float | None:
-    """La volatilita' implicita dello strike QUOTATO piu' vicino al prezzo.
+#: Lo spread massimo, relativo al prezzo medio, di una quotazione da cui si
+#: accetta la IV. Misurato il 2026-09-24 in seduta: AAPL 13%, NVDA 5%, KO call
+#: 16%; lo strike di facciata della put KO (0,01 / 2,85) 199%.
+_SPREAD_MAX = 0.5
+#: Oltre questa distanza dal prezzo lo strike non e' at-the-money: la sua IV
+#: appartiene a un'altra opzione (lo «smile» la alza sulle ali).
+_DISTANZA_MAX = 0.05
 
-    ⚠️ Quotato = bid e ask entrambi sopra zero. Fuori seduta Yahoo li azzera e
-    la IV che riporta diventa un residuo del suo calcolo (0,00001, 0,0156,
-    0,031 — misurato su AAPL e JPM il 2026-09-24): un numero plausibile per
-    tipo e falso per contenuto. Senza quotazioni si rende None, non un valore.
+
+def _atm(tabella, prezzo: float) -> tuple[float | None, float | None]:
+    """(IV, strike) dello strike QUOTATO piu' vicino al prezzo, o (None, None).
+
+    ⚠️ Quotato vuol dire tre cose, e ciascuna e' stata un difetto:
+    - bid e ask sopra zero: fuori seduta Yahoo li azzera e la IV diventa un
+      residuo del suo calcolo (0,00001, 0,0156, 0,031 su AAPL e JPM);
+    - uno spread da mercato vero: in seduta uno strike della put KO stava a
+      0,01 / 2,85 e ne usciva una IV del 61% per Coca-Cola;
+    - vicino al prezzo: scartati gli strike muti, il piu' vicino rimasto puo'
+      essere lontano, e la sua IV non e' quella at-the-money.
+    Lo strike si rende accanto alla IV, cosi' chi usera' l'archivio puo'
+    vedere da dove viene il numero.
     """
     colonne = ("strike", "impliedVolatility", "bid", "ask")
-    if tabella is None or len(tabella) == 0 or any(c not in tabella for c in colonne):
-        return None
-    t = tabella[(tabella["impliedVolatility"] > 0) & (tabella["bid"] > 0) & (tabella["ask"] > 0)]
+    if tabella is None or len(tabella) == 0 or any(c not in tabella for c in colonne) or not prezzo > 0:
+        return None, None
+    bid, ask = tabella["bid"], tabella["ask"]
+    medio = (bid + ask) / 2
+    t = tabella[(tabella["impliedVolatility"] > 0) & (bid > 0) & (ask >= bid)
+                & ((ask - bid) <= _SPREAD_MAX * medio)]
     if len(t) == 0:
-        return None
+        return None, None
     riga = t.iloc[(t["strike"] - prezzo).abs().argsort().iloc[0]]
-    iv = float(riga["impliedVolatility"])
-    return iv if math.isfinite(iv) else None
+    strike, iv = float(riga["strike"]), float(riga["impliedVolatility"])
+    if abs(strike - prezzo) > _DISTANZA_MAX * prezzo or not math.isfinite(iv):
+        return None, None
+    return iv, strike
 
 
 def _somma(tabella, col: str) -> float:
@@ -178,13 +197,17 @@ def estrai_opzioni(calls, puts, *, prezzo: float, scadenza: str, oggi: date) -> 
     """Il riassunto di una catena: IV ATM, rapporti put/call, scadenza."""
     vc, vp = _somma(calls, "volume"), _somma(puts, "volume")
     oc, op_ = _somma(calls, "openInterest"), _somma(puts, "openInterest")
+    iv_c, k_c = _atm(calls, prezzo)
+    iv_p, k_p = _atm(puts, prezzo)
     return _pulito({
         "versione": VERSIONE_OPZIONI,
         "scadenza": scadenza,
         "giorni": (date.fromisoformat(scadenza) - oggi).days,
         "prezzo": prezzo,
-        "iv_atm_call": _iv_atm(calls, prezzo),
-        "iv_atm_put": _iv_atm(puts, prezzo),
+        "iv_atm_call": iv_c,
+        "strike_call": k_c,
+        "iv_atm_put": iv_p,
+        "strike_put": k_p,
         "put_call_volume": vp / vc if vc > 0 else None,
         "put_call_oi": op_ / oc if oc > 0 else None,
         "open_interest": oc + op_,

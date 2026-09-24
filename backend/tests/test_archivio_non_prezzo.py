@@ -143,6 +143,30 @@ def test_si_prende_lo_strike_QUOTATO_piu_vicino() -> None:
     assert d["iv_atm_call"] == 0.31
 
 
+def test_una_quotazione_DI_FACCIATA_non_e_una_quotazione() -> None:
+    """⚠️ Il secondo difetto (2026-09-24, in seduta, KO): lo strike 88 della put
+    aveva bid 0,01 e ask 2,85 — un prezzo di facciata, spread del 199% sul
+    medio — e Yahoo ne ricavava una IV del 61% per Coca-Cola. Bid e ask sopra
+    zero non bastano: lo spread deve essere quello di un mercato vero."""
+    tab = pd.DataFrame([
+        {"strike": 88.0, "impliedVolatility": 0.615, "bid": 0.01, "ask": 2.85, "volume": 1, "openInterest": 1},
+        {"strike": 89.0, "impliedVolatility": 0.27, "bid": 0.95, "ask": 1.30, "volume": 1, "openInterest": 1},
+    ])
+    d = svc.estrai_opzioni(tab, tab, prezzo=88.09, scadenza="2026-10-02", oggi=date(2026, 9, 24))
+    assert d["iv_atm_call"] == 0.27 and d["strike_call"] == 89.0
+
+
+def test_uno_strike_lontano_non_si_spaccia_per_at_the_money() -> None:
+    """Se l'unico strike quotato bene e' a piu' del 5% dal prezzo, la sua IV
+    appartiene a un'altra opzione: si rende None, non il valore sbagliato."""
+    tab = _catena([(80.0, 0.45), (120.0, 0.50)], volume=1, oi=1)
+    d = svc.estrai_opzioni(tab, tab, prezzo=100.0, scadenza="2026-10-16", oggi=date(2026, 9, 24))
+    assert d["iv_atm_call"] is None and d["strike_call"] is None
+    vicino = _catena([(104.0, 0.33)], volume=1, oi=1)
+    d = svc.estrai_opzioni(vicino, vicino, prezzo=100.0, scadenza="2026-10-16", oggi=date(2026, 9, 24))
+    assert d["iv_atm_put"] == 0.33 and d["strike_put"] == 104.0
+
+
 def test_una_catena_senza_volume_non_divide_per_zero() -> None:
     vuota = _catena([(100, 0.0)], volume=0, oi=0)
     d = svc.estrai_opzioni(vuota, vuota, prezzo=100.0, scadenza="2026-10-16", oggi=date(2026, 9, 24))

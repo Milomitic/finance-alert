@@ -3825,9 +3825,14 @@ pod (2026-09-24, prima che girasse una volta) ha trovato fuori seduta bid e ask
 a ZERO e la volatilita' implicita ridotta a un residuo del calcolo di Yahoo —
 0,00001, 0,0156, 0,031 sugli strike at-the-money di AAPL e JPM. Numeri validi
 per tipo e falsi per contenuto: l'archivio li avrebbe raccolti ogni sera senza
-un errore. `_iv_atm` scarta gli strike con bid o ask a zero, e l'orario e'
-fissato da un test su un anno intero, perche' Roma e New York cambiano ora in
-giorni diversi.
+un errore. L'orario e' fissato da un test su un anno intero, perche' Roma e
+New York cambiano ora in giorni diversi.
+
+⚠️ E in seduta non basta ancora. Alle 13:45 UTC lo strike 88 della put KO
+stava a bid 0,01 / ask 2,85 — un prezzo di facciata — e ne usciva una IV del
+61% per Coca-Cola. `_atm` pretende bid e ask sopra zero, uno spread entro il
+50% del prezzo medio (AAPL 13%, NVDA 5%, la facciata 199%) e uno strike entro
+il 5% dal prezzo; altrimenti None. Lo strike usato si archivia accanto alla IV.
 
 ⚠️ I nomi dei campi si cercano con `dataclasses.asdict(...).get(nome)`, che su
 un nome sbagliato rende None in silenzio: la prima versione cercava quattordici
