@@ -54,8 +54,11 @@ VERSIONE = "1"
 #:   first_factors     i fattori del detector di quel momento
 #:   first_contesto    le variabili del titolo qui sotto
 #:   first_provenance  con quali regole e' stata prodotta quella prima analisi
+#:   first_ombra       i punteggi dei modelli in prova silenziosa (`app.ml`),
+#:                     presente solo se un modello esisteva a quell'emissione
 VARIABILI_ALL_EMISSIONE: tuple[str, ...] = (
     "first_strength", "first_factors", "first_contesto", "first_provenance",
+    "first_ombra",
 )
 
 _ANNO = 252

@@ -295,3 +295,34 @@ def test_senza_commit_non_scrive(db, monkeypatch) -> None:
     assert sos.mature_candidate_outcomes(db, commit=False) == 1
     db.rollback()
     assert db.execute(select(SignalCandidate)).scalars().one().matured_at is None
+
+
+# ─── I modelli in ombra (fase 3) ───────────────────────────────────────────
+
+def test_scartati_e_alert_portano_contesto_e_punteggi_in_ombra(db, scan, monkeypatch) -> None:
+    """Il modello di selezione sceglie fra TUTTI i match, prima dei cancelli:
+    va valutato anche sugli scartati, quindi anche loro portano contesto e
+    punteggio. E l'alert li fissa nello snapshot come le altre variabili
+    dell'ingresso."""
+    finto = {"vol": {"fattore": 1.2, "versione": "t"}, "sel": {"p": 0.6, "top30": True, "versione": "t"}}
+    monkeypatch.setattr("app.signals.signal_scan_service.ombra.punteggi_per_match",
+                        lambda *a, **k: finto)
+    scan(_match(forza=40))
+    (r,) = _righe(db)
+    assert json.loads(r.ombra) == finto
+    assert "atr_pct" in json.loads(r.contesto)
+
+    scan(_match(nome="trend_pullback", forza=80))
+    (a,) = db.query(Alert).all()
+    assert json.loads(a.snapshot)["first_ombra"] == finto
+
+
+def test_senza_modelli_nessuna_chiave_in_ombra(db, scan) -> None:
+    """Controllo negativo: un punteggio assente non diventa un dizionario
+    vuoto scritto come se fosse stato calcolato."""
+    scan(_match(forza=40))
+    scan(_match(nome="trend_pullback", forza=80))
+    (r,) = _righe(db)
+    assert r.ombra is None and r.contesto is not None
+    (a,) = db.query(Alert).all()
+    assert "first_ombra" not in json.loads(a.snapshot)

@@ -73,3 +73,10 @@ class SignalCandidate(Base):
     mkt_neutral_hit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     matured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     method_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: Il contesto del titolo alla barra del match (`contesto_emissione`) e i
+    #: punteggi dei modelli in ombra (`app.ml.ombra`), JSON. Gli stessi che un
+    #: alert fissa in `first_contesto` / `first_ombra`: senza, il modello di
+    #: selezione — che sceglie fra TUTTI i match, prima dei cancelli — non si
+    #: potrebbe valutare sulla popolazione per cui e' fatto.
+    contesto: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ombra: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -17,6 +17,7 @@ from app.scheduler.jobs.health_probes_job import (
 )
 from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
 from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
+from app.scheduler.jobs.modelli_ombra import run_addestra_modelli_ombra
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
@@ -91,6 +92,18 @@ def get_scheduler() -> BackgroundScheduler:
                 max_instances=1,
                 coalesce=True,
             )
+        # Modelli in prova silenziosa (fase 3 dello studio del 2026-09-23):
+        # domenica 05:00, dopo la retention delle 04:00 e senza scansioni. Il
+        # job addestra solo se un modello manca o ha piu' di 27 giorni.
+        _scheduler.add_job(
+            run_addestra_modelli_ombra,
+            trigger=_cron(day_of_week="sun", hour=5, minute=0),
+            id="addestra_modelli_ombra",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60 * 60 * 12,
+        )
         # Weekly retention prune of scan_runs (audit B4-11) — Sunday 04:00,
         # after the nightly 03:30 backup window and far from the scan hours.
         # Deletes rows older than 180 days keeping the newest 500 regardless;

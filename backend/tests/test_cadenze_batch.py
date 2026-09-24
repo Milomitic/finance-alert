@@ -161,3 +161,12 @@ def test_la_pulizia_degli_orfani_gira_ogni_cinque_minuti(scheduler) -> None:
     scatti = _scatti(scheduler.get_job("cleanup_orphan_scans"), _SETTIMANA, 1)
     passo = min(b - a for a, b in zip(scatti, scatti[1:], strict=False))
     assert passo == timedelta(minutes=_STALE_AFTER_MINUTES)
+
+
+def test_l_addestramento_dei_modelli_in_ombra_e_la_domenica_mattina(scheduler) -> None:
+    """Domenica, dopo la retention delle 04:00 e lontano da ogni scansione."""
+    scatti = _scatti(scheduler.get_job("addestra_modelli_ombra"), _SETTIMANA, 14)
+    assert len(scatti) == 2
+    assert all(t.weekday() == 6 and t.hour == 5 for t in scatti)
+    retention = _scatti(scheduler.get_job("retention"), _SETTIMANA, 7)
+    assert all(r < s for r, s in zip(retention, scatti, strict=False))

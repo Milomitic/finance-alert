@@ -559,6 +559,7 @@ def test_una_revisione_NON_sovrascrive_le_variabili_dell_ingresso(db, monkeypatc
         "first_factors": {"volume_strength": 0.123},
         "first_contesto": {"versione": "1", "ret_5": 0.0456},
         "first_provenance": {"sentinella": "quella di allora"},
+        "first_ombra": {"vol": {"fattore": 1.23, "versione": "allora"}},
     }
     assert set(allora) == set(VARIABILI_ALL_EMISSIONE), "il test deve coprire ogni chiave"
     snap0.update(allora)

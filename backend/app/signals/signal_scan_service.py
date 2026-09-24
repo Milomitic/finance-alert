@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.provenance import emission_stamp
+from app.ml import ombra
 from app.models import Alert, SignalCandidate, SignalOutcome, Stock
 from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE, contesto
 from app.signals.context import build_context
@@ -95,6 +96,7 @@ def _registra_scartato(
     db: Session, stock_id: int, m, sig_date: date, bar_date: date, close: float,
     passa_forza: bool, passa_trend: bool, passa_follow: bool,
     scartati: dict[tuple[str, str], date],
+    *, contesto_titolo: dict | None = None, calcola_ombra=None,
 ) -> None:
     """Registra un match scartato da almeno un cancello (`SignalCandidate`).
 
@@ -114,11 +116,17 @@ def _registra_scartato(
     ultimo = scartati.get(chiave)
     if ultimo is not None and (sig_date - ultimo).days <= settings.signal_dedup_cooldown_days:
         return
+    # I punteggi in ombra si calcolano solo per chi viene davvero registrato:
+    # un match che persiste e' scartato a ogni scansione, e il cooldown sopra
+    # ne tiene una riga sola — pagarli ogni volta sarebbero ~8 ms a match.
+    punteggi_ombra = calcola_ombra() if calcola_ombra is not None else None
     valori = dict(
         stock_id=stock_id, detector=m.name, tone=m.tone, signal_date=sig_date,
         bar_date=bar_date, close=float(close), strength=int(m.strength),
         passa_forza=passa_forza, passa_trend=passa_trend, passa_follow=passa_follow,
         factors=json.dumps(m.factors or {}), created_at=datetime.now(UTC),
+        contesto=json.dumps(contesto_titolo) if contesto_titolo else None,
+        ombra=json.dumps(punteggi_ombra) if punteggi_ombra else None,
     )
     if db.get_bind().dialect.name == "postgresql":
         from sqlalchemy.dialects.postgresql import insert
@@ -277,9 +285,14 @@ def evaluate_signals(
             if recente and sig_date is not None and last_bar_date is not None:
                 if scartati is None:
                     scartati = _ultimi_scartati(db, stock.id)
+                if contesto_titolo is None:
+                    contesto_titolo = contesto(ohlcv)
                 _registra_scartato(
                     db, stock.id, m, sig_date, last_bar_date, last_close,
                     passa_forza, passa_trend, passa_follow, scartati,
+                    contesto_titolo=contesto_titolo,
+                    calcola_ombra=lambda m=m, ctx=contesto_titolo: ombra.punteggi_per_match(
+                        db, m, ctx=ctx, atr=_atr, close=last_close),
                 )
             continue
         if not recente:
@@ -471,6 +484,11 @@ def evaluate_signals(
         snapshot["first_factors"] = dict(m.factors or {})
         snapshot["first_contesto"] = contesto_titolo
         snapshot["first_provenance"] = snapshot.get("provenance")
+        # I modelli in prova silenziosa, accanto ad ATR e Forza e NON usati:
+        # vedi `app.ml`. Assenti finche' il primo addestramento non c'e'.
+        _ombra = ombra.punteggi_per_match(db, m, ctx=contesto_titolo, atr=_atr, close=last_close)
+        if _ombra:
+            snapshot["first_ombra"] = _ombra
         alert = Alert(
             stock_id=stock.id, trigger_price=last_close,
             signal_date=sig_date, signal_name=m.name,

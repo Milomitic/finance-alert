@@ -3777,6 +3777,23 @@ serie per la maturazione si caricano in FINESTRA: gli scartati toccano quasi
 ogni titolo, e la storia intera sarebbero 2,5 milioni di righe a ogni fine
 scansione.
 
+### Modelli in prova silenziosa (fase 3, 2026-09-24) — calcolati, salvati, NON usati
+
+`app/ml/`: un modello di volatilità accanto all'ATR e uno di selezione accanto
+alla Forza, gli stessi dello studio (GBM in numpy, `app/ml/gbm.py`). Si
+addestrano DENTRO l'app sulle barre del catalogo (job `addestra_modelli_ombra`,
+domenica 05:00, solo se un modello manca o ha più di 27 giorni; ~1-1,5 h), si
+salvano in `modelli_ombra` con le metriche dell'anno tenuto da parte, e lo scan
+fissa i punteggi in `snapshot.first_ombra` (alert) e `signal_candidates.ombra`
+(scartati). Lettura: `python -m app.scripts.rapporto_modelli_ombra`.
+
+⚠️ **Nessun consumatore finché il criterio non è soddisfatto**, ed è scritto
+prima di vedere i dati in `docs/superpowers/specs/2026-09-24-modelli-in-ombra.md`
+(sei mesi minimo; per la selezione la potenza chiede 16+ mesi). Un ordinamento
+o un filtro su `first_ombra` prima di allora è la rampa di rischio sulla Forza
+con un altro nome. E `ombra.punteggi` non deve mai sollevare: un modello in
+prova che ferma uno scan è il danno che la prova silenziosa esiste per evitare.
+
 ### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
 
 There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.
