@@ -2,6 +2,7 @@ import { BadgeDollarSign, BookOpen, CalendarClock, ShieldAlert, Users } from "lu
 
 import type { SignalSnapshot } from "@/api/types";
 import {
+  FORZA_TOOLTIP,
   PROBABILITA_TOOLTIP,
   TONE_TEXT,
   snapshotForza,
@@ -135,7 +136,7 @@ export function SignalSnapshotView({
         <div className="space-y-4 md:order-2">
           {/* Forza — pattern strength, tone-colored. */}
           {forza != null && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3" title={FORZA_TOOLTIP}>
               <span className="w-[4.5rem] shrink-0 text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold">
                 Forza
               </span>

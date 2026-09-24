@@ -123,8 +123,14 @@ class Settings(BaseSettings):
     # under the FE's 120-ticker candidate cap for the EOD lists too (so the
     # board mixes the true live universe movers with the familiar EOD names).
     live_movers_top_n: int = 30
-    # Signal engine: minimum confidence (0-100) for a detected signal to
-    # become an alert. Below this the signal is computed but not surfaced.
+    # Signal engine: minimum Forza (0-100) for a detected signal to become an
+    # alert. Below this the signal is computed but not surfaced.
+    # ⚠️ E' un regolatore di VOLUME, non di qualita' (studio 2026-09-23): nel
+    # replay decennale i quintili di Forza non ordinano gli esiti dentro nessun
+    # detector (IC medio 0,008), e ne' un'altra soglia ne' nessuna soglia
+    # battono 60 fuori campione. Alzarla vuol dire vedere meno segnali, non
+    # segnali migliori. Il registro degli scartati (`signal_candidates`) e' la
+    # conferma dal vivo. Il nome resta per compatibilita' con l'ambiente.
     signal_min_confidence: int = 60
     # Setup emission gate. Signals have had `signal_min_confidence` since the
     # start; setups shipped with NO bar at all, and the first production scan

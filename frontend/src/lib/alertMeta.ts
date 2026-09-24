@@ -184,6 +184,19 @@ export const PROBABILITA_TOOLTIP =
   "tipo si sono realizzati sull'orizzonte. È una base rate — uguale per tutti i " +
   "segnali dello stesso detector, non una previsione del singolo segnale né una garanzia.";
 
+/** Cosa la Forza E' e cosa NON e' (2026-09-24). Proprietario unico del testo,
+ *  come `PROBABILITA_TOOLTIP` accanto.
+ *
+ *  Nel replay decennale i quintili di Forza non ordinano gli esiti dentro
+ *  nessun detector (IC medio 0,008) e la soglia di 60 non batte ne' un'altra
+ *  soglia ne' nessuna soglia fuori campione: il cancello riduce QUANTI segnali
+ *  escono, non sceglie i MIGLIORI. Il numero resta a schermo perche' descrive
+ *  quanto il pattern e' netto; non va letto come una graduatoria di qualita'. */
+export const FORZA_TOOLTIP =
+  "Quanto è netto il pattern (0-100). Regola QUANTI segnali escono — sotto 60 " +
+  "non vengono emessi — ma non li ordina: sulla storia, una Forza più alta non " +
+  "ha dato esiti migliori. Non è una previsione di riuscita.";
+
 /** Forza (pattern strength) for a signal snapshot.
  *  Reads `snapshot.strength`; null when it's not a number. */
 export function snapshotForza(

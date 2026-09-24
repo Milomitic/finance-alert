@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatMoney } from "@/lib/money";
 import { barraDiversaDalSegnale, giornoDelSegnale, isAlertDelayed } from "@/lib/alertDates";
-import { PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { pianoDelSegnale, primoTarget } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
 
@@ -125,7 +125,7 @@ export function RecentAlertsFeed({ alerts }: Props) {
                   ) : (
                     <span
                       className={cn("text-[0.7647rem] font-semibold tabular-nums", forzaTxt)}
-                      title={`Forza ${forza}%`}
+                      title={`Forza ${forza}% — ${FORZA_TOOLTIP}`}
                     >
                       {forza}%
                     </span>

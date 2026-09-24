@@ -246,9 +246,10 @@ def evaluate_signals(
         # che il registro degli scartati esiste per fare. Per chi viene emesso
         # non cambia niente: e' la stessa congiunzione.
         #
-        # Emission gate now on Forza (strength). `signal_min_confidence` is the
-        # min-Forza bar; note calibrated Forza runs lower than the old confidence,
-        # so the same 60 admits fewer, individually-stronger signals (revisit).
+        # Emission gate on Forza (strength). `signal_min_confidence` is the
+        # min-Forza bar. ⚠️ It controls HOW MANY signals are emitted, not WHICH:
+        # the 2026-09-23 study found Forza does not rank outcomes within any
+        # detector, so this gate is a volume knob. See the note in config.py.
         passa_forza = m.strength >= settings.signal_min_confidence
         # Step 1 -- regime gate: a trend-following signal must agree with the
         # prevailing trend; contradicting it is the dominant false-positive

@@ -3295,6 +3295,14 @@ cross-lens leakage; don't re-introduce it):
   artifact is missing.
 - Snapshot stores `strength` + `probability`; emission gate is on Forza
   (`settings.signal_min_confidence` = the min-Forza bar).
+  ⚠️ **That gate is a VOLUME knob, not a quality one** (study 2026-09-23):
+  Forza quintiles do not rank outcomes inside any detector (mean IC 0.008),
+  and no other threshold beats 60 out of sample. Screens say so through the
+  single owner `FORZA_TOOLTIP` in `lib/alertMeta.ts`. Do not raise the bar
+  expecting better signals — expect fewer.
+- **`adx_confirmation` does not emit** (`registry.NON_EMESSI`, 2026-09-24):
+  anti-skill of direction (q 0.02). It stays in `DETECTORS` so replays still
+  measure it, and its `adx_trend` event still confirms other detectors' chains.
 
 ### Calibration data — read-only studies, regenerate when wanted
 - `python -m app.scripts.signal_factor_outcomes` — per-FACTOR forward-outcome study.

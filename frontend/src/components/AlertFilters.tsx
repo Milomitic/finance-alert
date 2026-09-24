@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import type { AlertListParams } from "@/api/alerts";
 import { formatShortDate } from "@/lib/alertDates";
+import { FORZA_TOOLTIP } from "@/lib/alertMeta";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -427,11 +428,13 @@ export function AlertFilters({ value, onChange }: Props) {
         </SelectField>
 
         {/* Forza minima — number input 0-100. Drives the API `strength_min`
-            param. */}
+            param. ⚠️ Riduce QUANTI segnali si vedono, non ne alza la qualita':
+            vedi FORZA_TOOLTIP. */}
         <div>
           <Label
             htmlFor="alert-strength-min"
             className="text-xs uppercase tracking-wider text-muted-foreground"
+            title={FORZA_TOOLTIP}
           >
             Forza minima
           </Label>

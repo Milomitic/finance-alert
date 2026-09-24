@@ -28,7 +28,7 @@ import {
   giornoDelSegnale,
   isAlertDelayed,
 } from "@/lib/alertDates";
-import { PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { ESITO_META, formatR, raccontaPiano, stopTroppoStretto } from "@/lib/planOutcome";
 import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
@@ -418,13 +418,13 @@ export function AlertsTable({
                 column="strength"
                 label="Forza"
                 align="right"
-                hint="Forza del pattern (0-100)"
+                hint={FORZA_TOOLTIP}
                 sortBy={sortBy}
                 sortDir={sortDir}
                 onSort={onSort}
               />
             ) : (
-              <TableHead className={cn(TESTA, "text-right")} hint="Forza del pattern (0-100)">
+              <TableHead className={cn(TESTA, "text-right")} hint={FORZA_TOOLTIP}>
                 Forza
               </TableHead>
             )
@@ -618,7 +618,7 @@ export function AlertsTable({
                         ? "text-amber-700 dark:text-amber-400"
                         : "text-rose-600 dark:text-rose-400";
                   return (
-                    <div className="flex items-center justify-end gap-2" title={`Forza ${pct}%`}>
+                    <div className="flex items-center justify-end gap-2" title={`Forza ${pct}% — ${FORZA_TOOLTIP}`}>
                       <span className={cn(embedded ? "text-[0.7647rem]" : "text-sm", "font-semibold tabular-nums w-10 text-right", txt)}>
                         {pct}%
                       </span>
