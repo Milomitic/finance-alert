@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.core import db as db_module
 from app.core.config import settings
+from app.scheduler.jobs.archivio_non_prezzo import run_archivia_fondamentali, run_archivia_opzioni
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
 from app.scheduler.jobs.db_backup import run_db_backup
 from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
@@ -92,6 +93,27 @@ def get_scheduler() -> BackgroundScheduler:
                 max_instances=1,
                 coalesce=True,
             )
+        # Archivio puntuale dei dati non-prezzo (fase 4): la parte dalla cache
+        # dei fondamentali ogni notte alle 00:30, dopo la scansione delle 23:30
+        # che la rinnova; le catene di opzioni nei feriali alle 22:15, dopo la
+        # chiusura USA e prima della scansione. Vedi
+        # `app.services.archivio_non_prezzo_service`.
+        _scheduler.add_job(
+            run_archivia_fondamentali,
+            trigger=_cron(day_of_week="*", hour=0, minute=30),
+            id="archivia_fondamentali",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        _scheduler.add_job(
+            run_archivia_opzioni,
+            trigger=_cron(day_of_week="mon-fri", hour=22, minute=15),
+            id="archivia_opzioni",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         # Modelli in prova silenziosa (fase 3 dello studio del 2026-09-23):
         # domenica 05:00, dopo la retention delle 04:00 e senza scansioni. Il
         # job addestra solo se un modello manca o ha piu' di 27 giorni.

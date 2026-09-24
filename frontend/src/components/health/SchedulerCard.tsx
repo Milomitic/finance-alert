@@ -29,9 +29,13 @@ const JOB_LABEL: Record<string, string> = {
   db_backup: "Backup notturno DB",
   retention: "Retention scan_runs",
   live_movers_sweep: "Sweep live top movers",
+  repair_ohlcv_gaps: "Riparazione buchi OHLCV",
   kpi_rollup: "Rollup KPI giornaliero",
   health_probes_fast: "Probe salute (set veloce)",
   health_probes_slow: "Probe salute (set lento)",
+  addestra_modelli_ombra: "Addestramento modelli in prova",
+  archivia_fondamentali: "Archivio analisti / scoperto / insider",
+  archivia_opzioni: "Archivio volatilità implicita (opzioni USA)",
 };
 
 // Grace window before a past-due next_run_time reads as "in ritardo": the

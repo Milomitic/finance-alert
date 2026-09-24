@@ -3794,6 +3794,31 @@ o un filtro su `first_ombra` prima di allora è la rampa di rischio sulla Forza
 con un altro nome. E `ombra.punteggi` non deve mai sollevare: un modello in
 prova che ferma uno scan è il danno che la prova silenziosa esiste per evitare.
 
+### Archivio puntuale dei dati non-prezzo (fase 4, 2026-09-24)
+
+`archivio_non_prezzo`: una riga per (titolo, fonte, giorno) con cio' che si
+sapeva QUEL giorno. Due fonti (`app.services.archivio_non_prezzo_service`):
+
+- `fondamentali` — analisti (consenso, target, rating, azioni degli ultimi 120
+  giorni), stime, storia delle sorprese, scoperto, proprieta', insider. Job
+  `archivia_fondamentali` ogni notte alle 00:30, **zero chiamate di rete**: legge
+  la cache dei fondamentali e scrive solo se e' stata riscaricata dopo l'ultima
+  riga (`osservato_il` = istante dello SCARICAMENTO). La cache si rinnova circa
+  una volta a settimana per titolo, quindi la cadenza vera e' settimanale.
+- `opzioni` — IV at-the-money di call e put, put/call di volume e open interest,
+  prima scadenza ad almeno 7 giorni. Job `archivia_opzioni` feriali alle 22:15,
+  solo titoli USA, tetto di 40 minuti, si ferma al breaker yfinance o alla
+  prima limitazione.
+
+⚠️ I nomi dei campi si cercano con `dataclasses.asdict(...).get(nome)`, che su
+un nome sbagliato rende None in silenzio: la prima versione cercava quattordici
+campi sul `Fundamentals` invece che su `.micro`. Un test pretende che ogni
+campo archiviato esista nel dataclass.
+
+⚠️ Nessun consumatore, per ora e per un pezzo: un modello su questi dati ha
+senso solo con 12+ mesi di storia accumulata. Il loro valore e' che la serie
+COMINCI — un consenso di marzo non si recupera a dicembre.
+
 ### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
 
 There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.

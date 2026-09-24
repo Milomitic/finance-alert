@@ -170,3 +170,35 @@ def test_l_addestramento_dei_modelli_in_ombra_e_la_domenica_mattina(scheduler) -
     assert all(t.weekday() == 6 and t.hour == 5 for t in scatti)
     retention = _scatti(scheduler.get_job("retention"), _SETTIMANA, 7)
     assert all(r < s for r, s in zip(retention, scatti, strict=False))
+
+
+def test_l_archivio_opzioni_finisce_prima_della_scansione_notturna(scheduler) -> None:
+    """Le catene partono dopo la chiusura USA e hanno un tetto di 40 minuti:
+    devono essere finite quando parte la scansione delle 23:30."""
+    from app.services.archivio_non_prezzo_service import archivia_opzioni
+
+    tetto = timedelta(seconds=archivia_opzioni.__kwdefaults__["tetto_s"])
+    opzioni = _scatti(scheduler.get_job("archivia_opzioni"), _SETTIMANA, 7)
+    scan = _scatti(scheduler.get_job("scan_alerts"), _SETTIMANA, 7)
+    assert len(opzioni) == len(scan) == 5
+    for o, s in zip(opzioni, scan, strict=True):
+        assert o.hour >= 22 and o + tetto < s
+
+
+def test_l_archivio_fondamentali_segue_la_scansione_che_rinnova_la_cache(scheduler) -> None:
+    scan = _scatti(scheduler.get_job("scan_alerts"), _SETTIMANA, 7)
+    arch = _scatti(scheduler.get_job("archivia_fondamentali"), _SETTIMANA, 8)
+    for s in scan:
+        dopo = [a for a in arch if a > s]
+        assert dopo and dopo[0] - s <= timedelta(hours=2)
+
+
+def test_ogni_job_ha_un_nome_leggibile_nella_scheda_salute(scheduler) -> None:
+    """Il commento in SchedulerCard lo chiede da luglio, e un job senza
+    etichetta si legge in snake_case: lo si pretende qui, dove i job nascono."""
+    from pathlib import Path
+
+    sorgente = (Path(__file__).resolve().parents[2]
+                / "frontend/src/components/health/SchedulerCard.tsx").read_text(encoding="utf-8")
+    mancanti = [j.id for j in scheduler.get_jobs() if f"  {j.id}:" not in sorgente]
+    assert not mancanti, f"job senza etichetta in SchedulerCard: {mancanti}"
