@@ -3843,6 +3843,16 @@ campo archiviato esista nel dataclass.
 senso solo con 12+ mesi di storia accumulata. Il loro valore e' che la serie
 COMINCI — un consenso di marzo non si recupera a dicembre.
 
+### ⚠️ `count(x::jsonb->'campo')` conta anche i null JSON (2026-09-25)
+
+Terza voce della famiglia «risposta pulita e falsa», e stavolta lo strumento
+ero io. Contando le IV del primo giro dell'archivio opzioni ho letto «699 su
+699»; erano 662. Con `->` un `null` JSON resta un VALORE jsonb (`'null'`), non
+un NULL SQL, quindi `count()` lo conta e `is null` non lo vede. Si usa `->>`,
+che rende testo e trasforma il null JSON in NULL SQL. Nella stessa query
+l'ordinamento `desc` metteva in testa proprio quelle righe vuote — i NULL per
+primi di Postgres, gia' scritti sopra — e la «IV piu' alta» era un campo vuoto.
+
 ### ⚠️ Run scripts from `backend/`, or you silently query an EMPTY database
 
 There is a gitignored `data/app.db` at the REPO ROOT: 4 KB, **zero tables**.
