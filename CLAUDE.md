@@ -3782,7 +3782,8 @@ scansione.
 `app/ml/`: un modello di volatilità accanto all'ATR e uno di selezione accanto
 alla Forza, gli stessi dello studio (GBM in numpy, `app/ml/gbm.py`). Si
 addestrano DENTRO l'app sulle barre del catalogo (job `addestra_modelli_ombra`,
-domenica 05:00, solo se un modello manca o ha più di 27 giorni; ~1-1,5 h), si
+domenica 05:00, solo se un modello manca o ha più di 27 giorni; misurato sul
+nodo: 60', picco 731 MiB), si
 salvano in `modelli_ombra` con le metriche dell'anno tenuto da parte, e lo scan
 fissa i punteggi in `snapshot.first_ombra` (alert) e `signal_candidates.ombra`
 (scartati). Lettura: `python -m app.scripts.rapporto_modelli_ombra`.
@@ -3793,6 +3794,14 @@ prima di vedere i dati in `docs/superpowers/specs/2026-09-24-modelli-in-ombra.md
 o un filtro su `first_ombra` prima di allora è la rampa di rischio sulla Forza
 con un altro nome. E `ombra.punteggi` non deve mai sollevare: un modello in
 prova che ferma uno scan è il danno che la prova silenziosa esiste per evitare.
+
+⚠️ **Il `t_mensile` d'addestramento della selezione non si legge come
+«riproduce lo studio».** È misurato su un anno e 80 titoli: con l'effetto dello
+studio il t atteso sta sotto 1,5, e la prova nel pod del 2026-09-24 ha dato
+0,15 con la catena sana (R² +0,189, AUC 0,604 contro i 0,49-0,51 dei
+permutati). La prima versione della spec lo trattava come un cancello a 2,6,
+cioè un allarme che sarebbe suonato quasi sempre. Sulla catena si leggono R² e
+AUC; sulla selezione decide solo il confronto dal vivo.
 
 ### Archivio puntuale dei dati non-prezzo (fase 4, 2026-09-24)
 

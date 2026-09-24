@@ -24,8 +24,10 @@ geometria del piano), niente variabili di mercato.
   Addestra solo se un modello manca o ha più di 27 giorni, quindi una volta al
   mese e la prima domenica dopo il rilascio. Campione: 300 titoli per la
   volatilità (una data ogni 10 sedute), 80 titoli rigiocati coi detector per
-  la selezione, ultimi 9 anni. Misurato in locale: ~35 s a titolo per il
-  replay, ~1-1,5 h in totale sul nodo. A mano:
+  la selezione, ultimi 9 anni. **Misurato sul nodo il 2026-09-24** (prova con
+  `salva=False` in un processo separato nel pod): **60 minuti** — volatilità
+  4', selezione 56' — e **731 MiB** di picco. Dentro l'app, che sta a
+  250-360 MiB, fa ~1,1 GiB contro un limite di 3 GiB. A mano:
   `python -m app.scripts.addestra_modelli_ombra`.
 - **Punteggio**: lo scan, per ogni alert nuovo (`snapshot.first_ombra`, fissato
   come le altre variabili dell'ingresso e conservato a ogni revisione) e per
@@ -49,12 +51,36 @@ confronto dal vivo:
   **finestre indipendenti** accanto alle righe, e R medio del piano a
   finestre chiuse.
 
-⚠️ La prima cosa da guardare dopo il primo addestramento sono le metriche
-d'addestramento, non il confronto dal vivo: dicono se **questo** campione ha
-riprodotto lo studio. `R2_contro_ATR` sotto zero, o `t_mensile` della
-selezione sotto ~2,6 (la banda del caso misurata coi controlli permutati),
-vogliono dire che il modello in servizio non è quello dello studio, e che il
-confronto dal vivo misurerebbe un'altra cosa.
+⚠️ La prima cosa da guardare dopo ogni addestramento sono le metriche
+d'addestramento, non il confronto dal vivo: dicono se la catena che ha prodotto
+il modello in servizio funziona. Si misurano sull'ultimo anno tenuto da parte,
+e **un anno ha potenza per due controlli su tre**:
+
+| Metrica | Soglia | Perché è leggibile su un anno | Prova del 2026-09-24 |
+|---|---|---|---|
+| `volatilita.R2_contro_ATR` | > 0,05 | effetto grande (studio +0,17, positivo 7 anni su 7) su ~7.000 righe | **+0,189** |
+| `selezione.auc` | > 0,55 | i permutati stanno a 0,494-0,505, lo studio a 0,626: un'etichetta o variabili sfasate riportano l'AUC a 0,5 | **0,604** |
+| `selezione.t_mensile` | **nessuna** | vedi sotto | 0,15 |
+
+⚠️ **`t_mensile` della selezione NON dice se il modello riproduce lo studio, e
+non va letto come tale.** Fino al 2026-09-24 questa sezione chiedeva di
+trattare un valore sotto ~2,6 come un modello diverso da quello dello studio.
+La soglia veniva dallo studio, che però la misurava su ~84 mesi di prova e 450
+titoli. L'addestramento in servizio ne ha **13 e 80**: con lo stesso identico
+effetto (~0,02 R) il t atteso sta sotto 1,5, quindi quella regola avrebbe dato
+un falso allarme quasi a ogni addestramento. È la forma «un cancello che nasce
+rosso viene spento» di `CLAUDE.md`. La prova del 2026-09-24 l'ha confermato:
+catena sana (AUC 0,604, R² +0,189), skill del 30% scelto −0,005 R contro
++0,024 della media, t 0,15. Il segno su un anno è rumore in entrambe le
+direzioni: la Forza, con +0,073 R, non seleziona di più (t 0,26).
+
+Il `t_mensile` resta nelle metriche perché sommato su molti addestramenti
+diventa leggibile, ma la domanda «la selezione funziona?» ha una sola risposta
+valida: il **confronto dal vivo** del criterio qui sotto, coi suoi 16+ mesi.
+
+Questa correzione riguarda la LETTURA delle metriche d'addestramento, non il
+criterio di promozione, ed è stata scritta prima di qualunque esito dal vivo:
+non esiste ancora un alert con `first_ombra`.
 
 ## Criterio di promozione (scritto prima di vedere un dato)
 
