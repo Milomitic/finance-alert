@@ -197,10 +197,11 @@ describe("ingressiDelPiano", () => {
     const { first_atr: _a, first_horizon: _h, first_invalidation: _i, ...soloVivi } = vivo;
     const corrente = buildPlaybook(soloVivi, 100, "sr_flip")!;
     // Congelato: invalidazione 90, distanza 10, sopra il pavimento di 2,5
-    // ATR su ATR 3 → R = 10. Corrente: invalidazione 59 e ATR 12 → R = 41.
+    // ATR su ATR 3 → R = 10. Corrente: orizzonte breve, invalidazione 59 e
+    // ATR 12 → distanza 41 sotto il pavimento di 4 ATR, quindi R = 48.
     // Due geometrie diverse, non due arrotondamenti.
     expect(congelato.stop).toBeCloseTo(90, 9);
     expect(congelato.horizon).toBe("Medio");
-    expect(corrente.stop).toBeCloseTo(59, 9);
+    expect(corrente.stop).toBeCloseTo(52, 9);
   });
 });

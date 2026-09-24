@@ -32,8 +32,12 @@ def _barre(db: Session, stock: Stock, righe: list[tuple[str, float, float, float
 def _alert(db: Session, stock: Stock, *, detector: str = "sr_flip",
            scattato: str = "2026-03-02", prezzo: float = 100.0,
            invalidazione: float | None = 96.0, tono: str = "bull",
-           orizzonte: str = "short") -> Alert:
-    snap: dict = {"tone": tono, "atr": 2.0, "horizon": orizzonte, "chain": []}
+           orizzonte: str = "short", atr: float = 1.0) -> Alert:
+    # ATR 1: sul breve il pavimento (4 ATR) coincide con la distanza
+    # strutturale di 4, quindi lo stop e' l'invalidazione a 96 e il 1° target
+    # 1,5 R sopra, a 106. Con l'ATR a 2 il pavimento (8) scavalcherebbe il
+    # livello e ogni caso qui sotto misurerebbe il pavimento invece del livello.
+    snap: dict = {"tone": tono, "atr": atr, "horizon": orizzonte, "chain": []}
     if invalidazione is not None:
         snap["invalidation"] = {"level": invalidazione, "reason": "prova"}
     a = Alert(stock_id=stock.id, signal_name=detector,
@@ -226,11 +230,13 @@ def test_il_gap_prende_il_livello_dalla_chiusura_precedente(db: Session) -> None
 
 def test_la_divergenza_prende_il_livello_dall_estremo_della_barra(db: Session) -> None:
     s = _titolo(db)
-    _alert(db, s, detector="rsi_divergence", invalidazione=None, scattato="2026-03-02")
+    # ATR 2: la distanza di 11,5 sta fra il pavimento (8) e il tetto (16).
+    _alert(db, s, detector="rsi_divergence", invalidazione=None, scattato="2026-03-02", atr=2.0)
     _barre(db, s, [
         ("2026-03-01", 101, 88.5, 100),   # la barra del segnale: minimo = livello
         ("2026-03-03", 103, 99, 102),
         ("2026-03-04", 109, 101, 108),
+        ("2026-03-05", 118, 107, 117),    # il 1° target, 1,5 R = 117,25
     ])
 
     assert mature_plan_outcomes(db, commit=False) == 1
@@ -509,7 +515,7 @@ def orizzonte_5(monkeypatch):
 
 def test_un_target_toccato_DOPO_lo_stop_entra_nella_riga_gia_nata(db: Session, orizzonte_5) -> None:
     s = _titolo(db)
-    _alert(db, s)   # ingresso 100, stop 96, 1° target 104
+    _alert(db, s)   # ingresso 100, stop 96, 1° target 106
     _barre(db, s, [("2026-03-02", 101, 99, 100.0), ("2026-03-03", 100, 95, 96)])
 
     assert mature_plan_outcomes(db, commit=False) == 1

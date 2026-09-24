@@ -1,6 +1,6 @@
 {
   "_perche": "Vettori d'oro della geometria del piano di trade. Li devono soddisfare ENTRAMBE le implementazioni: `frontend/src/lib/tradePlaybook.ts` (che li ha generati, ed e' cio' che l'utente vede a schermo) e `backend/app/signals/trade_plan.py` (che serve a far correre stop e target sulle barre per l'esito basato sul piano). Due copie della stessa aritmetica divergono al primo ritocco, e qui la divergenza farebbe misurare un piano diverso da quello mostrato. Chi tocca una meta' sola rende rosso il test dell'altra.",
-  "_generato": "dal TS, 2026-09-17, via src/lib/playbookVectors.test.ts",
+  "_generato": "dal gemello Python, 2026-09-24 (piano breve a 4 ATR / 1,5 R); verificato dal TS in src/lib/playbookVectors.test.ts",
   "_non_coperto": "riskBudgetPct / positionPct / leverage / leverageNote restano solo nel TS: sono una scelta di propensione al rischio e di resa a schermo, non geometria, e il backend non ne ha bisogno per far correre la gara.",
   "casi": [
     {
@@ -19,20 +19,20 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 96,
-        "stopPct": 4,
+        "stop": 92,
+        "stopPct": 8,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 104,
-            "rr": 1
+            "price": 112,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 107.2,
-            "rr": 1.8
+            "price": 118,
+            "rr": 2.25
           }
         ]
       }
@@ -53,20 +53,20 @@
       "atteso": {
         "side": "short",
         "entry": 100,
-        "stop": 104,
-        "stopPct": 4,
+        "stop": 108,
+        "stopPct": 8,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 96,
-            "rr": 1
+            "price": 88,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 92.8,
-            "rr": 1.8
+            "price": 82,
+            "rr": 2.25
           }
         ]
       }
@@ -155,20 +155,20 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 98,
-        "stopPct": 2,
+        "stop": 84,
+        "stopPct": 16,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 108,
-            "rr": 4
+            "price": 124,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 112,
-            "rr": 6
+            "price": 136,
+            "rr": 2.25
           }
         ]
       }
@@ -196,13 +196,13 @@
         "targets": [
           {
             "label": "Target 1",
-            "price": 102,
-            "rr": 0.25
+            "price": 112,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 103.6,
-            "rr": 0.45
+            "price": 118,
+            "rr": 2.25
           }
         ]
       }
@@ -222,20 +222,20 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 95,
-        "stopPct": 5,
+        "stop": 92,
+        "stopPct": 8,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 104,
-            "rr": 0.8
+            "price": 112,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 107.2,
-            "rr": 1.44
+            "price": 118,
+            "rr": 2.25
           }
         ]
       }
@@ -290,20 +290,20 @@
       "atteso": {
         "side": "short",
         "entry": 12,
-        "stop": 30,
-        "stopPct": 150,
+        "stop": 36,
+        "stopPct": 200,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
             "price": 0.6000000000000014,
-            "rr": 0.6333333333333333
+            "rr": 0.4749999999999999
           },
           {
             "label": "Target 2",
             "price": 0.6000000000000014,
-            "rr": 0.6333333333333333
+            "rr": 0.4749999999999999
           }
         ]
       }
@@ -327,20 +327,20 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 96,
-        "stopPct": 4,
+        "stop": 92,
+        "stopPct": 8,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 104,
-            "rr": 1
+            "price": 112,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 107.2,
-            "rr": 1.8
+            "price": 118,
+            "rr": 2.25
           }
         ]
       }
@@ -453,24 +453,24 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 96,
-        "stopPct": 4,
+        "stop": 80,
+        "stopPct": 20,
         "stopCapped": false,
         "horizon": "Breve",
         "targets": [
           {
             "label": "Target 1",
-            "price": 110,
-            "rr": 2.5
+            "price": 130,
+            "rr": 1.5
           },
           {
             "label": "Target 2",
-            "price": 118,
-            "rr": 4.5
+            "price": 145,
+            "rr": 2.25
           }
         ]
       }
     }
   ],
-  "_ingressi_congelati": "I casi `ingressi_congelati_battono_i_correnti` e `ingresso_congelato_parziale_solo_atr` fissano la precedenza: `first_atr`, `first_invalidation` e `first_horizon` sono gli ingressi della PRIMA EMISSIONE e battono i campi correnti, campo per campo. Senza questa regola il piano mescola due istanti \u2014 ingresso di un giorno, volatilita' di un altro \u2014 e su MRNA produceva uno stop il 58% sotto l'ingresso. Un'implementazione che li ignora rende qui i numeri dei campi vivi, quindi il rosso nomina la meta' rimasta indietro."
+  "_ingressi_congelati": "I casi `ingressi_congelati_battono_i_correnti` e `ingresso_congelato_parziale_solo_atr` fissano la precedenza: `first_atr`, `first_invalidation` e `first_horizon` sono gli ingressi della PRIMA EMISSIONE e battono i campi correnti, campo per campo. Senza questa regola il piano mescola due istanti — ingresso di un giorno, volatilita' di un altro — e su MRNA produceva uno stop il 58% sotto l'ingresso. Un'implementazione che li ignora rende qui i numeri dei campi vivi, quindi il rosso nomina la meta' rimasta indietro."
 }

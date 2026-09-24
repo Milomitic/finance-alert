@@ -21,11 +21,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-# Geometria per orizzonte, VALIDATA da backtest (2026-05-25) e identica al TS:
-# `floor`/`tp*Cap` sono multipli di ATR, `tp*R` sono multipli di R.
+# Geometria per orizzonte, identica al TS: `floor`/`tp*Cap` sono multipli di
+# ATR, `tp*R` sono multipli di R. Medio e lungo: VALIDATI da backtest
+# (2026-05-25) e confermati dallo studio del 2026-09-23, dove nessuna delle 73
+# alternative li batte fuori campione.
+#
+# ⚠️ Il BREVE e' cambiato il 2026-09-24 (PLAN_METHOD_VERSION "4"). Il
+# pavimento a 0,5 ATR dava uno stop mediano dell'1,7%: ~0,05 R a operazione
+# solo di costi, e il piano rendeva MENO dello stesso piano su un titolo a
+# caso. Pavimento 4 ATR e TP1 a 1,5 R, senza tetto in ATR che morda (lo stop
+# e' gia' tagliato a 8 ATR, quindi 1,5 R <= 12 ATR): e' l'ipotesi scritta in
+# `preregistrazione.json` PRIMA di guardare 274 titoli mai usati, e su quelli
+# confermata (netto a costo 0,1%: -0,055 -> -0,014 R, t 3,50). Non e' un
+# vantaggio trovato, e' un danno tolto: a costo zero il netto non cambia.
+# `docs/superpowers/specs/2026-09-23-studio-taratura-e-ml-findings.md` §4.
+# TP2 non e' mai stato messo in gara (la gara e' TP1 contro stop): tiene il
+# rapporto 1,5x col TP1 che aveva prima.
 _HZ: dict[str, dict[str, float | str]] = {
-    "short":  {"floor": 0.5, "tp1R": 4.0, "tp1Cap": 2.0, "tp2R": 6.0,
-               "tp2Cap": 3.6, "label": "Breve"},
+    "short":  {"floor": 4.0, "tp1R": 1.5, "tp1Cap": 12.0, "tp2R": 2.25,
+               "tp2Cap": 18.0, "label": "Breve"},
     "medium": {"floor": 2.5, "tp1R": 2.0, "tp1Cap": 10.0, "tp2R": 3.0,
                "tp2Cap": 18.0, "label": "Medio"},
     "long":   {"floor": 1.0, "tp1R": 3.0, "tp1Cap": 8.0, "tp2R": 4.5,

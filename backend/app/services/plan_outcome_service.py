@@ -227,7 +227,10 @@ def _esito(
 #:        volatilita' di un altro: su MRNA stop il 58% sotto l'ingresso e i
 #:        due target sullo stesso numero. Misura e ragione in
 #:        `trade_plan._CONGELATI`.
-PLAN_METHOD_VERSION = "3"
+#:   "4"  il piano BREVE ha lo stop a 4 ATR e il TP1 a 1,5 R (era 0,5 ATR e
+#:        4 R tagliato a 2 ATR). Tutte le righe brevi cambiano; medio e lungo
+#:        si riscrivono identici. Ragione in `trade_plan._HZ`.
+PLAN_METHOD_VERSION = "4"
 
 
 def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:

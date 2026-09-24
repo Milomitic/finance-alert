@@ -60,7 +60,8 @@ const MAX_LEVERAGE = 3;
 // limiting loss + fixing R:R<1; most structural stops (~2-3 ATR) are untouched.
 const STOP_CAP_ATR = 8;
 
-/* Per-horizon geometry, VALIDATED by backtest (2026-05-25): replay over the
+/* Per-horizon geometry (medium/long VALIDATED by backtest 2026-05-25; short
+   re-set 2026-09-24, see below): replay over the
    pool, train/test split on DISJOINT stocks, usability-constrained to
    TP-hit >= 25% (so targets are actually reachable, not a degenerate
    "never take profit" optimum). `floor`/`tp*Cap` are ATR multiples; `tp*R`
@@ -71,7 +72,11 @@ const HZ: Record<Horizon, {
   floor: number; tp1R: number; tp1Cap: number; tp2R: number; tp2Cap: number;
   label: string; duration: string;
 }> = {
-  short:  { floor: 0.5, tp1R: 4.0, tp1Cap: 2.0,  tp2R: 6.0, tp2Cap: 3.6,  label: "Breve", duration: "qualche giorno - 2 settimane" },
+  // Breve cambiato il 2026-09-24: pavimento 4 ATR (era 0,5) e TP1 a 1,5 R.
+  // Lo stop stretto costava ~0,05 R a operazione di costi e rendeva meno del
+  // caso; l'ipotesi era pre-registrata e confermata su 274 titoli mai visti.
+  // Ragione e numeri accanto a `_HZ` in backend/app/signals/trade_plan.py.
+  short:  { floor: 4.0, tp1R: 1.5, tp1Cap: 12.0, tp2R: 2.25, tp2Cap: 18.0, label: "Breve", duration: "qualche giorno - 2 settimane" },
   medium: { floor: 2.5, tp1R: 2.0, tp1Cap: 10.0, tp2R: 3.0, tp2Cap: 18.0, label: "Medio", duration: "2 - 6 settimane" },
   long:   { floor: 1.0, tp1R: 3.0, tp1Cap: 8.0,  tp2R: 4.5, tp2Cap: 14.0, label: "Lungo", duration: "1 - 3 mesi" },
 };
