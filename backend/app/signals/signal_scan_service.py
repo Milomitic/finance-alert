@@ -15,7 +15,7 @@ from app.core.provenance import emission_stamp
 from app.models import Alert, SignalCandidate, SignalOutcome, Stock
 from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE, contesto
 from app.signals.context import build_context
-from app.signals.detectors.registry import DETECTORS
+from app.signals.detectors.registry import DETECTORS, NON_EMESSI
 from app.signals.horizon import classify_horizon
 from app.signals.negoziazione import motivo_non_negoziato
 from app.signals.runner import detect_signals_and_setups
@@ -235,6 +235,11 @@ def evaluate_signals(
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[setups] persist failed for {stock.ticker}: {e}")
     for m in matches:
+        # Declassati: girano (studi, catena degli altri) ma non emettono, e non
+        # entrano nemmeno fra gli scartati — non li ha fermati un cancello di
+        # qualita'. Vedi `registry.NON_EMESSI`.
+        if m.name in NON_EMESSI:
+            continue
         # I tre cancelli di qualita', valutati TUTTI e tre invece di fermarsi
         # al primo: un match scartato si registra con l'esito di ciascuno,
         # perche' sapere quale dei tre lo avrebbe fermato da solo e' la domanda

@@ -108,6 +108,25 @@ def test_un_trend_contrario_da_solo_basta_a_registrarlo(db, scan) -> None:
     assert db.query(Alert).count() == 0
 
 
+def test_adx_confirmation_non_emette_e_non_finisce_fra_gli_scartati(db, scan) -> None:
+    """Declassato (2026-09-24): anti-skill di direzione. Lo stesso match che
+    sotto diventa un alert, col nome di adx, non produce niente."""
+    assert scan(_match(nome="adx_confirmation", forza=80)) == 0
+    assert _righe(db) == []
+    assert db.query(Alert).count() == 0
+
+
+def test_la_catena_degli_altri_riconosce_ancora_l_evento_adx() -> None:
+    """Il declassamento toglie l'ALERT, non l'evento: `adx_trend` resta una
+    conferma per gli altri detector."""
+    from app.signals.chain_enrichment import _CONFIRMATION_TYPES
+    from app.signals.detectors.registry import DETECTORS, NON_EMESSI
+
+    assert "adx_trend" in _CONFIRMATION_TYPES
+    assert "adx_confirmation" in {d.name for d in DETECTORS}
+    assert {"adx_confirmation"} == NON_EMESSI
+
+
 def test_un_match_che_passa_tutto_diventa_un_alert_e_NON_un_registro(db, scan) -> None:
     """Controllo negativo: senza, il registro potrebbe accogliere tutto e i
     test sopra passerebbero lo stesso."""

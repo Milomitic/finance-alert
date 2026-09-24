@@ -36,3 +36,21 @@ DETECTORS = [
     ChartPattern(),
     HiddenDivergence(),
 ]
+
+
+#: Detector che GIRANO ma non EMETTONO un alert proprio (2026-09-24).
+#:
+#: `adx_confirmation` e' anti-skill di direzione: 11.940 segnali nel replay
+#: decennale, skill -0,051 R (t -3,21, q 0,02 dopo Benjamini-Hochberg su 22
+#: celle), hit market-neutral 47,9%, e resta negativo anche con lo stop largo.
+#: Non va INVERTITO — due punti sotto la moneta non sono un segnale da giocare
+#: al contrario — ma non merita un alert. `docs/superpowers/specs/
+#: 2026-09-23-studio-taratura-e-ml-findings.md` §5.
+#:
+#: ⚠️ Resta nell'elenco sopra di proposito, e il filtro sta nello SCAN, non nel
+#: runner: gli studi rigiocano `detect_signals` e devono poterlo ancora
+#: misurare, e l'evento su cui scatta (`adx_trend`) continua a comparire come
+#: CONFERMA nella catena degli altri detector (`chain_enrichment`), che e' dove
+#: lo studio dice che ha ancora un senso. Gli alert gia' emessi restano: sono
+#: storia, e il magazzino degli esiti li misura.
+NON_EMESSI: frozenset[str] = frozenset({"adx_confirmation"})
