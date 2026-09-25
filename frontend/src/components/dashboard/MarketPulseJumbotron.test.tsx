@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -545,5 +545,160 @@ describe("l'agenda del giorno", () => {
     // dire. E' anche il controllo negativo del test qui sopra.
     montaA(PREMARKET);
     expect(screen.queryByText("Oggi")).not.toBeInTheDocument();
+  });
+});
+
+/* ─── Umore e ampiezza: i continenti e le loro borse ─────────────────────── */
+
+function borsa(code: string, avg: number, n = 50, extra: Partial<IndexBreadth> = {}): IndexBreadth {
+  return {
+    code, name: code, n, pct_above_ema200: 50, pct_above_ema50: 40,
+    rsi_oversold_count: 0, rsi_overbought_count: 0, avg_change_pct: avg,
+    advancers: 10, decliners: 10, new_52w_highs: 0, new_52w_lows: 0,
+    volume_spikes_count: 0, ...extra,
+  };
+}
+
+/** Le nove borse dell'istantanea di produzione del 2026-09-25, con medie
+ *  scelte perche' la somma e la base giusta diano numeri DIVERSI: un test in
+ *  cui coincidono passerebbe anche col totale sbagliato. */
+const TUTTE: IndexBreadth[] = [
+  borsa("SP500", 0.4, 500, { advancers: 300, decliners: 190 }),
+  borsa("NDX", -2.0, 100),
+  borsa("DJI", -1.0, 30),
+  borsa("EUSTX50", 1.0, 50),
+  borsa("FTSE100", -1.0, 50),
+  borsa("FTSEMIB", -3.0, 40),
+  borsa("N225", 1.0, 40),
+  borsa("KOSPI20", 0.5, 20),
+  borsa("HSI30", -0.5, 50),
+];
+
+function montaAmpiezza(byIndex: IndexBreadth[]) {
+  vi.setSystemTime(SEDUTA);
+  return render(
+    <MemoryRouter>
+      <MarketPulseJumbotron global={GLOBAL} byIndex={byIndex} computedAt={SEDUTA.toISOString()} />
+    </MemoryRouter>,
+  );
+}
+
+describe("umore e ampiezza: ogni continente con le sue borse", () => {
+  it("si chiama «Umore e ampiezza», e porta una riga per ogni borsa", () => {
+    montaAmpiezza(TUTTE);
+    expect(screen.getByText("Umore e ampiezza")).toBeInTheDocument();
+    for (const nome of ["S&P 500", "Nasdaq 100", "Dow Jones", "Euro Stoxx 50", "FTSE 100",
+      "FTSE MIB", "Nikkei", "KOSPI", "Hang Seng"]) {
+      // Nella sezione del suo continente, non da qualche parte della pagina:
+      // «S&P 500» e' anche il nome di un riquadro in cima.
+      expect(screen.getAllByText(nome).length).toBeGreaterThanOrEqual(1);
+    }
+    const europa = screen.getByRole("region", { name: "Europa" });
+    expect(europa).toHaveTextContent("FTSE 100");
+    expect(europa).toHaveTextContent("FTSE MIB");
+    expect(europa).not.toHaveTextContent("Nikkei");
+  });
+
+  it("ogni borsa porta alla lista dei suoi titoli", () => {
+    montaAmpiezza(TUTTE);
+    const asia = screen.getByRole("region", { name: "Asia" });
+    const kospi = within(asia).getByText("KOSPI").closest("a")!;
+    expect(kospi).toHaveAttribute("href", "/stocks?index=KOSPI20");
+  });
+
+  it("⚠️ il totale USA e' l'S&P 500, NON la somma di tre panieri sovrapposti", () => {
+    /* Nasdaq e Dow stanno quasi per intero dentro l'S&P: sommarli contava due
+     * o tre volte i grandi nomi. Con queste medie la vecchia somma pesata
+     * darebbe (0,4·500 − 2·100 − 1·30) / 630 = −0,05%; la base giusta +0,40%. */
+    montaAmpiezza(TUTTE);
+    const usa = screen.getByRole("region", { name: "USA" });
+    const intestazione = within(usa).getByText("totale su S&P 500").parentElement!;
+    expect(intestazione).toHaveTextContent("+0,40%");
+    expect(intestazione).not.toHaveTextContent("−0,05%");
+  });
+
+  it("⚠️ l'Europa somma Euro Stoxx e FTSE 100, e lascia FUORI il FTSE MIB dichiarandolo", () => {
+    // (1·50 − 1·50) / 100 = 0: col FTSE MIB dentro sarebbe −0,86%.
+    montaAmpiezza(TUTTE);
+    const europa = screen.getByRole("region", { name: "Europa" });
+    const intestazione = within(europa).getByText("totale su Euro Stoxx 50 + FTSE 100").parentElement!;
+    expect(intestazione).toHaveTextContent("0,00%");
+    expect(intestazione).not.toHaveTextContent("−0,86%");
+    // Fuori dal totale, ma a schermo e con la ragione scritta.
+    const mib = within(europa).getByText("FTSE MIB").closest("a")!;
+    expect(mib).toHaveTextContent("fuori dal totale del continente");
+    expect(screen.getByText(/i suoi titoli maggiori sono già contati in un altro indice/)).toBeInTheDocument();
+  });
+
+  it("anche Nasdaq e Dow portano la nota: i loro titoli sono gia' nell'S&P", () => {
+    montaAmpiezza(TUTTE);
+    const usa = screen.getByRole("region", { name: "USA" });
+    expect(within(usa).getByText("Nasdaq 100").closest("a")).toHaveTextContent("fuori dal totale");
+    expect(within(usa).getByText("S&P 500").closest("a")).not.toHaveTextContent("fuori dal totale");
+  });
+
+  it("senza borse fuori dal totale non stampa una nota che non riguarda niente", () => {
+    montaAmpiezza(TUTTE.filter((i) => !["NDX", "DJI", "FTSEMIB"].includes(i.code)));
+    expect(screen.queryByText(/già contati in un altro indice/)).not.toBeInTheDocument();
+  });
+
+  it("una borsa che l'istantanea non porta manca, non diventa una riga di zeri", () => {
+    montaAmpiezza(TUTTE.filter((i) => i.code !== "KOSPI20"));
+    const asia = screen.getByRole("region", { name: "Asia" });
+    expect(within(asia).queryByText("KOSPI")).not.toBeInTheDocument();
+    expect(within(asia).getByText("Nikkei")).toBeInTheDocument();
+  });
+});
+
+/* ─── Il VIX ─────────────────────────────────────────────────────────────── */
+
+function conVix(vixCambio: number, spCambio = 0.27) {
+  assets = [
+    indice("^GSPC", {
+      quote: {
+        price: 7725, prev_close: 7704.06, change_abs: 20.94, change_pct: spCambio,
+        market_state: "OPEN",
+      } as LiveAsset["quote"],
+    }),
+    indice("^VIX", {
+      quote: { price: 15.68, prev_close: 15.67, change_pct: vixCambio, market_state: "OPEN" } as LiveAsset["quote"],
+    }),
+  ];
+}
+
+describe("il VIX tradotto in movimento atteso", () => {
+  it("dice di quanto si muove l'S&P in una seduta, in percento e in punti", () => {
+    // 15,68 / radice(252) = 0,99%; attorno alla chiusura precedente 7.704.
+    conVix(0.06);
+    montaA(SEDUTA);
+    expect(screen.getByText("±0,99%")).toBeInTheDocument();
+    expect(screen.getByText("7.628–7.780")).toBeInTheDocument();
+    expect(screen.getByText("±4,5%")).toBeInTheDocument();       // 30 giorni di calendario
+  });
+
+  it("mette la variazione di oggi a confronto con l'atteso", () => {
+    // 0,27 / 0,99 = 0,3.
+    conVix(0.06, 0.27);
+    montaA(SEDUTA);
+    expect(screen.getByText("0,3×")).toBeInTheDocument();
+  });
+
+  it("⚠️ una seduta oltre l'atteso si nota in ambra, non nel colore di una direzione", () => {
+    conVix(0.06, -1.5);
+    montaA(SEDUTA);
+    expect(screen.getByText("1,5×").className).toContain("amber");
+  });
+
+  it("⚠️ un VIX che SALE ha il colore di un mercato che scende", () => {
+    conVix(3.2);
+    montaA(SEDUTA);
+    expect(screen.getByText("+3,20%").className).toContain("rose");
+  });
+
+  it("e uno che scende quello di un mercato che sale", () => {
+    // Controllo negativo del test sopra: senza, un colore fisso lo supererebbe.
+    conVix(-3.2);
+    montaA(SEDUTA);
+    expect(screen.getByText("−3,20%").className).toContain("emerald");
   });
 });

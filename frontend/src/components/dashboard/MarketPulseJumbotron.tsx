@@ -26,6 +26,10 @@ import { agendaDelGiorno, agendaVuota } from "@/lib/oggiMercato";
 import { sparklinePoints } from "@/lib/sparkline";
 import { etToday, formatDelta, usSessionClock, type UsPhase } from "@/lib/usSession";
 import { cn } from "@/lib/utils";
+import {
+  bandaVix, CLASSE_BANDA, formatPercento, intervalloSeduta, movimentoSeduta, movimentoTrentaGiorni,
+  multiploAtteso, spiegazioneBande, tonoVariazioneVix,
+} from "@/lib/vix";
 import { fmtVolume } from "@/lib/volumeFormat";
 
 /* ─── MarketPulseJumbotron — PROTOTIPO ────────────────────────────────────── *
@@ -174,14 +178,100 @@ function perche(a: LiveAsset | undefined, nome: string): string {
   return `${nome}: quotazione non ancora ricevuta`;
 }
 
-/** La lettura convenzionale dei livelli del VIX. Non e' una previsione ed e'
- *  per questo che le soglie sono scritte nel suggerimento: chi legge «teso»
- *  deve poter vedere da dove viene. */
-function bandaVix(v: number): string {
-  if (v < 15) return "calmo";
-  if (v < 20) return "normale";
-  if (v < 30) return "teso";
-  return "stress";
+/* ─── Il VIX, letto come movimento atteso ─────────────────────────────────── *
+ *
+ * Era una parola in coda a una riga di testo piccolo, neutra di proposito. Il
+ * numero da solo («15,68») non dice niente a chi non fa il conto; tradotto nel
+ * movimento che il mercato si aspetta dall'S&P in una seduta dice quanto e'
+ * normale quello che si ha davanti — ed e' la ragione per cui il VIX sta qui.
+ *
+ * ⚠️ La variazione ha il colore INVERTITO rispetto a un prezzo: un VIX che
+ * sale e' il mercato che compra protezione, cioe' la stessa notizia di un
+ * indice che scende. Colorarlo come un prezzo farebbe leggere «bene» un
+ * rialzo della paura — che e' il motivo per cui prima restava neutro.
+ *
+ * ⚠️ E il movimento atteso e' UNA deviazione standard sull'S&P 500, non sul
+ * Nasdaq o sul Dow: lo dicono il testo e il suggerimento. I conti stanno in
+ * `lib/vix`, coi loro test.
+ */
+function RiquadroVix({ vix, sp500 }: { vix: LiveAsset; sp500: LiveAsset | undefined }) {
+  const valore = vix.quote?.price ?? null;
+  const cambio = vix.quote?.change_pct ?? null;
+  const seduta = movimentoSeduta(valore);
+  const trenta = movimentoTrentaGiorni(valore);
+  const q = sp500?.quote;
+  const chiusuraPrec = q?.prev_close
+    ?? (q?.price != null && q?.change_abs != null ? q.price - q.change_abs : null);
+  const intervallo = intervalloSeduta(chiusuraPrec, valore);
+  const multiplo = multiploAtteso(q?.change_pct, valore);
+  const banda = valore != null ? bandaVix(valore) : null;
+  return (
+    <div
+      className="mt-2 rounded-md border bg-card/70 px-2 py-1.5"
+      title={[
+        "VIX — volatilita' attesa a 30 giorni sull'S&P 500, ricavata dalle sue opzioni.",
+        "Il movimento atteso e' UNA deviazione standard: l'S&P resta dentro l'intervallo circa due sedute su tre.",
+        spiegazioneBande() + ".",
+        "La variazione del VIX ha il colore invertito: un VIX che sale e' un mercato che si copre.",
+      ].join(" ")}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">VIX</span>
+        <span className="text-lg font-bold leading-none tabular-nums">
+          {valore != null
+            ? <FlashValue value={valore} format={(v) => formatLivello(v) ?? "—"} noTween />
+            : <NoValue hint={perche(vix, "VIX")} />}
+        </span>
+        {cambio != null && (
+          <span className={cn("text-sm font-semibold tabular-nums", tonoVariazioneVix(cambio))}>
+            {formatVariazione(cambio)}
+          </span>
+        )}
+        {banda && (
+          <span className={cn("rounded px-1 text-[0.6471rem] font-bold uppercase tracking-wide", CLASSE_BANDA[banda])}>
+            {banda}
+          </span>
+        )}
+      </div>
+      {seduta != null && (
+        <div className="mt-1 text-xs leading-snug text-muted-foreground">
+          <div>
+            S&P atteso in una seduta{" "}
+            <span className="font-semibold tabular-nums text-foreground">±{formatPercento(seduta)}%</span>
+            {intervallo && (
+              <>
+                {" · "}
+                <span className="tabular-nums text-foreground">
+                  {formatLivello(intervallo.basso)}–{formatLivello(intervallo.alto)}
+                </span>
+              </>
+            )}
+          </div>
+          <div>
+            {trenta != null && (
+              <>a 30 giorni <span className="font-semibold tabular-nums text-foreground">±{formatPercento(trenta, 1)}%</span></>
+            )}
+            {multiplo != null && (
+              <>
+                {" · oggi "}
+                {/* Oltre il movimento atteso e' la seduta da notare: ambra,
+                    non rosa — e' un avviso sull'ampiezza, non sulla direzione. */}
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    multiplo > 1 ? "text-amber-700 dark:text-amber-400" : "text-foreground",
+                  )}
+                >
+                  {formatPercento(multiplo, 1)}×
+                </span>{" "}
+                l'atteso
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Chi tira e chi frena un indice, tre per lato.
@@ -253,101 +343,112 @@ function IndiceTile({ asset, nome, ampiezza }: {
   const posizione = posizioneNelRange(q?.price, q?.day_low, q?.day_high);
   const corpo = (
     <>
-      <div className="flex min-w-0 items-center gap-1.5">
-        {/* La bandiera dice a colpo d'occhio che le tre grandi sono americane,
-            come gia' fanno le voci della riga di contesto qui sotto. */}
-        <img
-          src="/flags/us.svg"
-          alt=""
-          width={14}
-          height={10}
-          style={{ width: "14px", height: "10px", objectFit: "cover" }}
-          className="shrink-0 rounded-[1px] shadow-sm"
-        />
-        <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {nome}
-        </span>
-        {suFutures ? (
-          <span
-            className="shrink-0 rounded bg-amber-100 px-1 text-[0.6471rem] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-            title="Cash chiuso — il prezzo viene dal contratto futures, che e' quello che si muove prima dell'apertura"
-          >
-            FUT
-          </span>
-        ) : live ? (
-          /* ⚠️ `role="img"` non e' decorazione: un `aria-label` su uno span
-             senza ruolo e' un attributo PROIBITO per axe
-             (`aria-prohibited-attr`, lo stesso rilievo che /calendar porta in
-             linea di base). */
-          <PuntoLive titolo="Prezzo in aggiornamento ogni 15 secondi" etichetta="prezzo live" />
-        ) : null}
-      </div>
-      {/* Su un telefono il riquadro vale ~87px di contenuto: prezzo e
-          variazione affiancati non ci stanno, e affidarsi a `truncate`
-          significherebbe tagliare proprio la cifra. Si impilano sotto `sm`. */}
-      <div className="mt-0.5 flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
-        {/* Effetto tape: a ogni battito il valore lampeggia verde o rosso nel
-            verso del movimento. `noTween` perche' su una fascia con una
-            ventina di numeri l'interpolazione simultanea costa piu' di quanto
-            renda. */}
-        <span className="truncate text-lg font-bold tabular-nums leading-none sm:text-xl">
-          {q?.price != null
-            ? <FlashValue value={q.price} format={(v) => formatLivello(v) ?? "—"} noTween />
-            : <NoValue hint={perche(asset, nome)} />}
-        </span>
-        <span className={cn("shrink-0 text-sm font-semibold tabular-nums", tono(cambio))}>
-          {cambio != null
-            ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween showArrow />
-            : <NoValue hint={perche(asset, nome)} />}
-        </span>
-      </div>
-      {/* Due informazioni che il riquadro aveva sotto mano e non diceva: di
-          quanti PUNTI si e' mosso (una percentuale su un indice a cinque cifre
-          non da' la misura del movimento) e da dove era partito stamattina —
-          un indice sopra la sua apertura e uno sotto raccontano sedute
-          diverse a parita' di segno. */}
-      {(q?.change_abs != null || q?.day_open != null) && (
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[0.6765rem] tabular-nums text-muted-foreground">
-          {q?.change_abs != null && (
-            <span title="Variazione in punti indice rispetto alla chiusura precedente">
-              {q.change_abs >= 0 ? "+" : "−"}
-              {formatLivello(Math.abs(q.change_abs))} pt
-            </span>
-          )}
-          {q?.day_open != null && (
-            <span title="Apertura della sessione">ap. {formatLivello(q.day_open)}</span>
-          )}
-        </div>
-      )}
-      {punti && (
-        <div className="mt-1 hidden sm:block">
-          {/* Il tracciato e' decorativo: la variazione qui sopra e' gia' il
-              numero, e una polilinea non ha niente da annunciare a chi non la
-              vede. */}
-          <svg viewBox="0 0 120 26" preserveAspectRatio="none" className="h-[26px] w-full" aria-hidden>
-            <polyline
-              points={punti}
-              fill="none"
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-              className={cambio != null && cambio < 0 ? "stroke-rose-500" : "stroke-emerald-500"}
+      {/* Da `xl` il tracciato sta A DESTRA di nome e prezzo invece che sotto:
+          prima occupava una riga intera a tutta larghezza, ed era la riga che
+          allungava i tre riquadri senza aggiungere un numero. Sotto `xl` il
+          riquadro e' troppo stretto per due colonne e il tracciato torna
+          sotto — una griglia sola, che a una colonna impila da se'. */}
+      <div className="grid min-w-0 gap-x-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,44%)] xl:items-center">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {/* La bandiera dice a colpo d'occhio che le tre grandi sono americane,
+                come gia' fanno le voci della riga di contesto qui sotto. */}
+            <img
+              src="/flags/us.svg"
+              alt=""
+              width={14}
+              height={10}
+              style={{ width: "14px", height: "10px", objectFit: "cover" }}
+              className="shrink-0 rounded-[1px] shadow-sm"
             />
-          </svg>
-          {/* ⚠️ Con FUT acceso il prezzo viene dal future e questa linea no:
-              il backend manda solo la storia del cash, quindi l'ultimo punto
-              NON e' il numero grande sopra. Dirlo costa quattro parole. */}
-          <div className="text-[0.6471rem] leading-none text-muted-foreground">
-            30 giorni{suFutures ? " · indice cash, non il future" : ""}
+            <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {nome}
+            </span>
+            {suFutures ? (
+              <span
+                className="shrink-0 rounded bg-amber-100 px-1 text-[0.6471rem] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+                title="Cash chiuso — il prezzo viene dal contratto futures, che e' quello che si muove prima dell'apertura"
+              >
+                FUT
+              </span>
+            ) : live ? (
+              /* ⚠️ `role="img"` non e' decorazione: un `aria-label` su uno span
+                 senza ruolo e' un attributo PROIBITO per axe
+                 (`aria-prohibited-attr`, lo stesso rilievo che /calendar porta in
+                 linea di base). */
+              <PuntoLive titolo="Prezzo in aggiornamento ogni 15 secondi" etichetta="prezzo live" />
+            ) : null}
           </div>
+          {/* Su un telefono il riquadro vale ~87px di contenuto: prezzo e
+              variazione affiancati non ci stanno, e affidarsi a `truncate`
+              significherebbe tagliare proprio la cifra. Si impilano sotto `sm`. */}
+          <div className="mt-0.5 flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
+            {/* Effetto tape: a ogni battito il valore lampeggia verde o rosso nel
+                verso del movimento. `noTween` perche' su una fascia con una
+                ventina di numeri l'interpolazione simultanea costa piu' di quanto
+                renda. */}
+            <span className="truncate text-lg font-bold tabular-nums leading-none sm:text-xl">
+              {q?.price != null
+                ? <FlashValue value={q.price} format={(v) => formatLivello(v) ?? "—"} noTween />
+                : <NoValue hint={perche(asset, nome)} />}
+            </span>
+            <span className={cn("shrink-0 text-sm font-semibold tabular-nums", tono(cambio))}>
+              {cambio != null
+                ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween showArrow />
+                : <NoValue hint={perche(asset, nome)} />}
+            </span>
+          </div>
+          {/* Due informazioni che il riquadro aveva sotto mano e non diceva: di
+              quanti PUNTI si e' mosso (una percentuale su un indice a cinque cifre
+              non da' la misura del movimento) e da dove era partito stamattina —
+              un indice sopra la sua apertura e uno sotto raccontano sedute
+              diverse a parita' di segno. */}
+          {(q?.change_abs != null || q?.day_open != null) && (
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-[0.6765rem] tabular-nums text-muted-foreground">
+              {q?.change_abs != null && (
+                <span title="Variazione in punti indice rispetto alla chiusura precedente">
+                  {q.change_abs >= 0 ? "+" : "−"}
+                  {formatLivello(Math.abs(q.change_abs))} pt
+                </span>
+              )}
+              {q?.day_open != null && (
+                <span title="Apertura della sessione">ap. {formatLivello(q.day_open)}</span>
+              )}
+            </div>
+          )}
         </div>
-      )}
+        {punti && (
+          <div className="mt-1 hidden sm:block xl:mt-0">
+            {/* Il tracciato e' decorativo: la variazione qui sopra e' gia' il
+                numero, e una polilinea non ha niente da annunciare a chi non la
+                vede. */}
+            <svg viewBox="0 0 120 26" preserveAspectRatio="none" className="h-[26px] w-full xl:h-[40px]" aria-hidden>
+              <polyline
+                points={punti}
+                fill="none"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                className={cambio != null && cambio < 0 ? "stroke-rose-500" : "stroke-emerald-500"}
+              />
+            </svg>
+            {/* ⚠️ Con FUT acceso il prezzo viene dal future e questa linea no:
+                il backend manda solo la storia del cash, quindi l'ultimo punto
+                NON e' il numero grande sopra. Dirlo costa quattro parole. */}
+            <div className="text-[0.6471rem] leading-none text-muted-foreground xl:mt-0.5 xl:text-right">
+              30 giorni{suFutures ? " · indice cash, non il future" : ""}
+            </div>
+          </div>
+        )}
+      </div>
       {q?.day_low != null && q?.day_high != null && (
         /* `mt-5`: la barra dell'intervallo stava appiccicata al tracciato e le
            due si leggevano come un unico disegno — l'etichetta «30 giorni»
            sembrava riferita al minimo e massimo, che sono di GIORNATA. Era
            `mt-3` e non bastava: fra i due c'e' gia' una riga di testo, quindi
-           lo stacco che si vede e' quello che avanza dopo di essa. */
-        <div className="mt-5 hidden lg:block">
+           lo stacco che si vede e' quello che avanza dopo di essa. Da `xl` il
+           tracciato sta a destra e la barra segue punti e apertura, quindi
+           basta meno. */
+        <div className="mt-5 hidden lg:block xl:mt-3">
           {/* Il minimo e il massimo da soli non dicono DOVE sta il prezzo. Il
               marcatore lo dice senza far fare il conto. */}
           <div
@@ -681,7 +782,6 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
   }, [levaQ.data]);
 
   const vix = perSimbolo.get("^VIX");
-  const vixValore = vix?.quote?.price ?? null;
   const contesto = assets.filter((a) => !USA.includes(a.symbol) && a.symbol !== "^VIX");
   const gruppi: [string, LiveAsset[]][] = [
     ["Indici", contesto.filter((a) => a.category === "index")],
@@ -787,36 +887,17 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 </div>
               </div>
             )}
-            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-              {frazioneVolume != null && (
+            {frazioneVolume != null && (
+              <div className="mt-1.5 text-xs text-muted-foreground">
                 <span title="Quota del volume di una giornata tipica gia' scambiata a quest'ora, dalla stessa curva intraday che proietta i volumi delle schede sotto">
                   volume tipico già scambiato ≈{" "}
                   <span className="font-semibold tabular-nums text-foreground">
                     {Math.round(frazioneVolume * 100)}%
                   </span>
                 </span>
-              )}
-              {vix && (
-                /* ⚠️ Il VIX resta NEUTRO di proposito: in questa app rosa e
-                 * verde dicono la direzione di un PREZZO, e un VIX in rialzo
-                 * colorato di verde si leggerebbe come «bene» mentre significa
-                 * che il mercato si sta coprendo. */
-                <span title="VIX — volatilita' attesa a 30 giorni sull'S&P 500. Sotto 15 calmo, 15-20 normale, 20-30 teso, sopra 30 stress. Sale quando il mercato compra protezione.">
-                  VIX{" "}
-                  <span className="font-semibold tabular-nums text-foreground">
-                    {formatLivello(vixValore) ?? <NoValue hint={perche(vix, "VIX")} />}
-                  </span>
-                  {formatVariazione(vix.quote?.change_pct) && (
-                    <span className="ml-1 tabular-nums">{formatVariazione(vix.quote?.change_pct)}</span>
-                  )}
-                  {vixValore != null && (
-                    <span className="ml-1 rounded bg-muted px-1 text-[0.6471rem] font-semibold">
-                      {bandaVix(vixValore)}
-                    </span>
-                  )}
-                </span>
-              )}
-            </div>
+              </div>
+            )}
+            {vix && <RiquadroVix vix={vix} sp500={perSimbolo.get("^GSPC")} />}
           </div>
 
           <div className="grid min-w-0 grid-cols-3 gap-2">

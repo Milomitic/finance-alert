@@ -11,28 +11,31 @@ export interface IndexMeta {
   /** User-facing alias shown in UI badges/tables instead of the raw code.
    *  E.g. DJI → "DOW JONES". The DB code stays untouched. */
   displayCode: string;
+  /** Il nome da leggere in una riga, dove `fullName` e' troppo lungo e
+   *  `displayCode` e' un codice («SPX500»), non un nome. */
+  shortName: string;
 }
 
 const META: Record<string, IndexMeta> = {
-  SP500:   { countryCode: "us", country: "USA",       fullName: "S&P 500",                          displayCode: "SPX500" },
-  NDX:     { countryCode: "us", country: "USA",       fullName: "Nasdaq-100",                       displayCode: "NASDAQ" },
-  DJI:     { countryCode: "us", country: "USA",       fullName: "Dow Jones Industrial Average",     displayCode: "DOW JONES" },
-  EUSTX50: { countryCode: "eu", country: "Europe",    fullName: "EuroStoxx 50",                     displayCode: "EUSTX50" },
-  FTSEMIB: { countryCode: "it", country: "Italy",     fullName: "FTSE MIB (Milano)",                displayCode: "FTSEMIB" },
-  FTSE100: { countryCode: "gb", country: "UK",        fullName: "FTSE 100 (London)",                displayCode: "FTSE100" },
+  SP500:   { countryCode: "us", country: "USA",       fullName: "S&P 500",                          displayCode: "SPX500", shortName: "S&P 500" },
+  NDX:     { countryCode: "us", country: "USA",       fullName: "Nasdaq-100",                       displayCode: "NASDAQ", shortName: "Nasdaq 100" },
+  DJI:     { countryCode: "us", country: "USA",       fullName: "Dow Jones Industrial Average",     displayCode: "DOW JONES", shortName: "Dow Jones" },
+  EUSTX50: { countryCode: "eu", country: "Europe",    fullName: "EuroStoxx 50",                     displayCode: "EUSTX50", shortName: "Euro Stoxx 50" },
+  FTSEMIB: { countryCode: "it", country: "Italy",     fullName: "FTSE MIB (Milano)",                displayCode: "FTSEMIB", shortName: "FTSE MIB" },
+  FTSE100: { countryCode: "gb", country: "UK",        fullName: "FTSE 100 (London)",                displayCode: "FTSE100", shortName: "FTSE 100" },
   // SSE50 removed 2026-05 — index + .SS constituents purged from
   // the catalog. CSI 300 entry kept here for backward-compat if any
   // historical snapshot row still references the code, but the
   // index has no live members (the breadth row will simply omit it).
-  CSI300:  { countryCode: "cn", country: "China",     fullName: "CSI 300 (Shanghai + Shenzhen)",    displayCode: "CSI300" },
-  HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng top 50",                 displayCode: "HSI50" },
-  N225:    { countryCode: "jp", country: "Japan",     fullName: "Nikkei 225 (top constituents)",   displayCode: "NIKKEI" },
-  KOSPI20: { countryCode: "kr", country: "Korea",     fullName: "KOSPI top 20",                     displayCode: "KOSPI20" },
+  CSI300:  { countryCode: "cn", country: "China",     fullName: "CSI 300 (Shanghai + Shenzhen)",    displayCode: "CSI300", shortName: "CSI 300" },
+  HSI30:   { countryCode: "hk", country: "Hong Kong", fullName: "Hang Seng top 50",                 displayCode: "HSI50", shortName: "Hang Seng" },
+  N225:    { countryCode: "jp", country: "Japan",     fullName: "Nikkei 225 (top constituents)",   displayCode: "NIKKEI", shortName: "Nikkei" },
+  KOSPI20: { countryCode: "kr", country: "Korea",     fullName: "KOSPI top 20",                     displayCode: "KOSPI20", shortName: "KOSPI" },
 };
 
-const FALLBACK: IndexMeta = { countryCode: "", country: "—", fullName: "—", displayCode: "—" };
+const FALLBACK: IndexMeta = { countryCode: "", country: "—", fullName: "—", displayCode: "—", shortName: "—" };
 
 export function getIndexMeta(code: string | null | undefined): IndexMeta {
   if (!code) return FALLBACK;
-  return META[code] ?? { countryCode: "", country: code, fullName: code, displayCode: code };
+  return META[code] ?? { countryCode: "", country: code, fullName: code, displayCode: code, shortName: code };
 }

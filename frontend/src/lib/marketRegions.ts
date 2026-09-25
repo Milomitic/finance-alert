@@ -13,24 +13,48 @@ export interface RegionDef {
   label: string;
   flagSrc: string | null;
   emoji?: string;
+  /** Gli indici su cui si calcola il TOTALE della regione, e quindi il suo
+   *  umore. ⚠️ Solo panieri che non si sovrappongono: vedi sotto. */
   indexCodes: string[];
+  /** Le borse mostrate una per una sotto la regione, nell'ordine di lettura.
+   *  Puo' contenere indici FUORI dal totale: si vedono, ma non si sommano. */
+  shownCodes: string[];
 }
 
-// EU mood drives off EUSTX50 alone: FTSEMIB constituents overlap heavily with
-// EUSTX50's universe (Italian blue-chips like ENI, ENEL, ISP, UCG sit in both
-// indices), so averaging the two double-counts Italian breadth and biases the
-// regional signal toward Italy. EUSTX50's broader 50-name pan-Eurozone basket
-// is the cleaner mood proxy.
-//
-// Asia mood blends Japan + Korea + Hong Kong. Japan ranks first per user
-// preference (Nikkei is the headline Asian benchmark in most Italian financial
-// press). Mainland China (SSE50) removed 2026-05 — the user retired the .SS
-// constituents from the catalog and the remaining three indices already cover
-// the Asia signal adequately.
+/* ⚠️ Il totale di una regione si calcola su panieri DISGIUNTI.
+ *
+ * Fino al 2026-09-25 l'umore USA sommava S&P 500, Nasdaq 100 e Dow Jones: 635
+ * «titoli», ma quasi tutti quelli del Nasdaq e tutti quelli del Dow sono gia'
+ * nell'S&P, quindi i grandi nomi contavano due o tre volte. Finche' a schermo
+ * c'era solo il totale non si vedeva; con le righe per borsa sotto, un «221
+ * in rialzo» che e' la somma di righe sovrapposte si legge come 221 titoli, e
+ * non lo e'.
+ *
+ * - USA: l'S&P 500 da solo. Contiene il Dow per intero e il Nasdaq 100 quasi
+ *   per intero.
+ * - Europa: Euro Stoxx 50 + FTSE 100, che non hanno un titolo in comune (il
+ *   Regno Unito non e' nell'eurozona). Il FTSE MIB resta FUORI dal totale per
+ *   la ragione di sempre: i suoi titoli maggiori — ENI, ENEL, ISP, UCG —
+ *   stanno anche nell'Euro Stoxx, e sommarli spingerebbe il verdetto europeo
+ *   verso l'Italia. Il FTSE 100 mancava perche' e' arrivato dopo quella
+ *   scelta, non perche' fosse stato escluso.
+ * - Asia: Giappone, Corea e Hong Kong, tre panieri distinti. Il Giappone per
+ *   primo per scelta dell'utente (il Nikkei e' il riferimento asiatico della
+ *   stampa italiana). La Cina continentale e' uscita dal catalogo nel 2026-05.
+ */
 export const REGIONS: RegionDef[] = [
-  { code: "US", label: "USA", flagSrc: "/flags/us.svg", indexCodes: ["SP500", "NDX", "DJI"] },
-  { code: "EU", label: "Europa", flagSrc: "/flags/eu.svg", indexCodes: ["EUSTX50"] },
-  { code: "ASIA", label: "Asia", flagSrc: null, emoji: "🌏", indexCodes: ["N225", "KOSPI20", "HSI30"] },
+  {
+    code: "US", label: "USA", flagSrc: "/flags/us.svg",
+    indexCodes: ["SP500"], shownCodes: ["SP500", "NDX", "DJI"],
+  },
+  {
+    code: "EU", label: "Europa", flagSrc: "/flags/eu.svg",
+    indexCodes: ["EUSTX50", "FTSE100"], shownCodes: ["EUSTX50", "FTSE100", "FTSEMIB"],
+  },
+  {
+    code: "ASIA", label: "Asia", flagSrc: null, emoji: "🌏",
+    indexCodes: ["N225", "KOSPI20", "HSI30"], shownCodes: ["N225", "KOSPI20", "HSI30"],
+  },
 ];
 
 export interface RegionMood {
@@ -80,10 +104,21 @@ export function deriveMood(indices: IndexBreadth[]): RegionMood {
   };
 }
 
-/** Region rows for a snapshot, in display order. */
-export function regionMoods(byIndex: IndexBreadth[]): Array<{ region: RegionDef; mood: RegionMood }> {
+/** Le regioni di un'istantanea, nell'ordine di lettura, con sotto ciascuna le
+ *  sue borse. `indices` segue `shownCodes`; un indice che l'istantanea non
+ *  porta semplicemente manca, non diventa una riga di zeri. */
+export function regionMoods(byIndex: IndexBreadth[]): Array<{
+  region: RegionDef;
+  mood: RegionMood;
+  indices: Array<{ index: IndexBreadth; inTotal: boolean }>;
+}> {
+  const perCodice = new Map(byIndex.map((i) => [i.code, i]));
   return REGIONS.map((region) => ({
     region,
     mood: deriveMood(byIndex.filter((i) => region.indexCodes.includes(i.code))),
+    indices: region.shownCodes
+      .map((c) => perCodice.get(c))
+      .filter((i): i is IndexBreadth => !!i && i.n > 0)
+      .map((index) => ({ index, inTotal: region.indexCodes.includes(index.code) })),
   }));
 }
