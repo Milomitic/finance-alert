@@ -11,10 +11,28 @@ loki:
     enabled: true
     storageClassName: local-path
     size: 2Gi
+  # FA-104 (2026-09-26). 300Mi was OOMKilled by a multi-day aggregation. The
+  # limit alone was not the defect — see `chunk_cache_config` below — but a
+  # querying Loki needs headroom above its 60Mi idle. The node has ~5GiB free.
   resources:
-    requests: { cpu: 20m, memory: 80Mi }
-    limits: { memory: 300Mi }
+    requests: { cpu: 20m, memory: 128Mi }
+    limits: { memory: 768Mi }
   config:
+    # ⚠️ THE cause of the OOM. Loki 2.6.1 enables an in-process FIFO cache for
+    # chunks by default, capped at 1GB — inside a container capped at 300Mi.
+    # A query over several days fetches enough chunks to fill it, and the
+    # kernel kills the process long before the cache's own cap is reached.
+    # Read from the running pod's /config on 2026-09-26; nothing in this file
+    # had ever set it. Bounded, not disabled: repeated queries still hit it.
+    chunk_store_config:
+      chunk_cache_config:
+        fifocache:
+          max_size_bytes: 128MB
+    # Fewer sub-queries in flight: each holds chunk iterators in memory. The
+    # defaults (10 per querier, 32 per query) are sized for a cluster of
+    # queriers, not one pod sharing a node with Postgres and Prometheus.
+    querier:
+      max_concurrent: 4
     # Compactor-driven retention so the 2Gi PVC can't fill up: keep 72h of logs.
     compactor:
       retention_enabled: true
@@ -29,6 +47,13 @@ loki:
       retention_period: 720h
       reject_old_samples: true
       reject_old_samples_max_age: 168h
+      max_query_parallelism: 8
+      # A week per query (default 30d1h). Thirty days stay retained and any
+      # week of them stays queryable; what fails is one query spanning all of
+      # them, and it now fails with an error instead of killing Loki. For
+      # longer windows read the app's own log files or a counter (CLAUDE.md,
+      # «Loki regge poche ore»).
+      max_query_length: 7d1h
 
 promtail:
   enabled: true

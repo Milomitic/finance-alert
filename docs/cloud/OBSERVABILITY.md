@@ -15,7 +15,7 @@ M9 follow-up; the value files in `infra/observability/` are the source of truth.
 | Prometheus + operator | `kube-prometheus-stack` | scrape app `/metrics` + cluster (node-exporter, kube-state-metrics, kubelet, apiserver, coredns), 3d retention |
 | Grafana | (bundled) | dashboards (25 pre-loaded) + datasources |
 | Alertmanager | (bundled) | routes alerts → Telegram |
-| Loki + promtail | `loki-stack` | centralised pod logs, 72h retention (compactor) |
+| Loki + promtail | `loki-stack` | centralised pod logs, 30d retention (720h since 2026-08-20, compactor); queries capped at 7d1h (FA-104) |
 
 Sizing lives in `infra/observability/kube-prometheus-stack.values.yaml` and
 `loki-stack.values.yaml` (short retention, modest limits, 60s scrape, small
@@ -75,7 +75,11 @@ helm upgrade --install kps prometheus-community/kube-prometheus-stack -n monitor
   --set grafana.adminPassword=<pw>
 
 # logs (Loki + promtail)
-helm upgrade --install loki grafana/loki-stack -n monitoring \
+# ⚠️ Pin the chart: an unpinned upgrade pulls the latest loki-stack and a Loki
+# nobody chose. Helm 4 applies server-side; if a field is owned by an old
+# `kubectl patch`, check the live values first, then add --force-conflicts,
+# then restart the StatefulSet and verify /config (CLAUDE.md, FA-104).
+helm upgrade --install loki grafana/loki-stack --version 2.10.3 -n monitoring \
   -f infra/observability/loki-stack.values.yaml
 
 kubectl apply -f infra/observability/app-podmonitor.yaml

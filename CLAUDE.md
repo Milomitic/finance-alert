@@ -1220,21 +1220,50 @@ cominciata prima della finestra dal suo primo campione anche quando la serie e'
 nata DENTRO la finestra — che e' di nuovo l'errore di `increase()`. La seconda
 bozza diceva 161; il numero giusto e' 175.
 
-### ⚠️ Loki regge poche ore: un'aggregazione su giorni lo uccide (2026-09-26)
+### ⚠️ Loki andava in OOM per una cache da 1 GB in un container da 300 MiB (2026-09-26, FA-104)
 
-Loki gira con **300 MiB** di limite ed e' alla **2.6.1**. Contando l'uso delle
-pagine per l'analisi del 2026-09-26, diciassette `count_over_time(...[30d])` in
-fila e poi un `sum by` su 7 giorni l'hanno mandato in **OOMKilled** (era su da
-30 giorni; di nuovo pronto in un minuto, promtail ritenta). Le trenta giorni non
-hanno mai risposto; due aggregazioni su 7 giorni si', in qualche minuto
-ciascuna, e la query successiva lo ha abbattuto.
+Contando l'uso delle pagine per l'analisi del 2026-09-26, diciassette
+`count_over_time(...[30d])` e un `sum by` su 7 giorni hanno mandato Loki in
+**OOMKilled**. Il limite basso era il sintomo. **La causa: Loki 2.6.1 accende
+di default una cache FIFO dei chunk in memoria con tetto a 1 GB**, dentro un
+container limitato a 300 MiB. Una query su piu' giorni la riempie, e il kernel
+uccide il processo molto prima che la cache arrivi al suo tetto. Nessun file
+l'aveva mai impostata: si e' vista solo leggendo `/config` dal pod vivo, che
+mostra i default. **Alzare il solo limite non sarebbe bastato.**
 
-- Finche' il limite non sale, **niente finestre oltre qualche ora** su Loki.
-- Per l'uso delle pagine c'e' di meglio: il file `data/logs/app.log*` dentro il
-  pod (7 giorni di rotazione, `grep` in un secondo) o, meglio ancora, un
-  contatore scritto dall'app (proposta D di `docs/analisi-completa-2026-09-26.md`).
+Ora (`infra/observability/loki-stack.values.yaml`): limite 768Mi, cache dei
+chunk a 128MB, `querier.max_concurrent` 4, `max_query_parallelism` 8,
+**`max_query_length` 7d1h**. Misurato dopo: un'aggregazione di 6 giorni su
+tutti i namespace risponde in 7,6 s con Loki a 158 MiB; la stessa query su 10
+giorni torna 400 invece di arrivare a Loki. Trenta giorni restano conservati e
+interrogabili una settimana alla volta.
+
+- Per finestre piu' lunghe, o per l'uso delle pagine: il file
+  `data/logs/app.log*` dentro il pod (7 giorni di rotazione, `grep` in un
+  secondo) o un contatore scritto dall'app (proposta D di
+  `docs/analisi-completa-2026-09-26.md`).
 - ⚠️ Un processo `kubectl get --raw` ucciso in locale NON ferma la query sul
   nodo: controllare con `pgrep -af "kubectl get --raw"` e fermarla li'.
+- ⚠️ **Prima di cambiare un parametro, leggere `/config`** (`kubectl get --raw
+  "/api/v1/namespaces/monitoring/services/loki:3100/proxy/config"`): dice i nomi
+  VALIDI per questa versione e i default che nessun file dichiara.
+
+**Tre trappole dell'aggiornamento, tutte pagate quel giorno:**
+
+1. **Il chart si fissa: `--version 2.10.3`.** Senza, `helm upgrade` scarica
+   l'ultimo `loki-stack` e con lui una versione di Loki che nessuno ha scelto.
+   E l'`APP VERSION` che `helm list` stampa (v2.9.3) NON e' l'immagine che gira
+   (2.6.1): fa fede `kubectl get pod loki-0 -o jsonpath=...image`.
+2. **Helm 4 fa server-side apply, e il Secret `loki` era di `kubectl-patch`**
+   (la retention del 2026-08-20 era stata cambiata con `kubectl patch`). Il
+   primo `helm upgrade` e' FALLITO a meta': ha aggiornato lo StatefulSet e non
+   il Secret, quindi Loki e' ripartito con 768Mi e la configurazione VECCHIA. Si
+   ripete con `--force-conflicts` dopo aver verificato che il contenuto vivo
+   coincida con quello del file (`helm get values loki` contro il file).
+3. **Poi va riavviato a mano** (`kubectl rollout restart statefulset/loki`): il
+   template era gia' cambiato al primo tentativo, quindi il secondo non tocca
+   il pod, e Loki legge la configurazione solo all'avvio. Si verifica su
+   `/config`, non sull'esito di helm.
 
 ## Ingress rate limit: 50/s, burst 100 — and how to test one (2026-09-09)
 
