@@ -30,10 +30,16 @@ def _buffer_sink(message) -> None:
 
 
 def configure_logging() -> None:
+    # ⚠️ `diagnose=False` su OGNI sink (FA-102, 2026-09-26). loguru lo accende
+    # di default e annota ogni riga del traceback coi VALORI dei nomi che vi
+    # compaiono: una chiamata `_invia(token)` che fallisce scriverebbe il token
+    # in chiaro su stdout — quindi in Loki — e nel file su disco. Il tipo, il
+    # messaggio e le righe dell'eccezione restano; spariscono solo i valori.
     logger.remove()
     logger.add(
         sys.stdout,
         level=settings.log_level,
+        diagnose=False,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
         "<level>{level: <8}</level> | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
@@ -47,6 +53,7 @@ def configure_logging() -> None:
         rotation="10 MB",
         retention="7 days",
         encoding="utf-8",
+        diagnose=False,
     )
     # In-memory ring buffer for the /api/platform/stream endpoint.
     # Capture from DEBUG so the UI filter can choose what to show.
@@ -54,6 +61,7 @@ def configure_logging() -> None:
         _buffer_sink,
         level="DEBUG",
         format="{message}",
+        diagnose=False,
     )
 
 
