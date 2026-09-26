@@ -1220,6 +1220,22 @@ cominciata prima della finestra dal suo primo campione anche quando la serie e'
 nata DENTRO la finestra — che e' di nuovo l'errore di `increase()`. La seconda
 bozza diceva 161; il numero giusto e' 175.
 
+### ⚠️ Loki regge poche ore: un'aggregazione su giorni lo uccide (2026-09-26)
+
+Loki gira con **300 MiB** di limite ed e' alla **2.6.1**. Contando l'uso delle
+pagine per l'analisi del 2026-09-26, diciassette `count_over_time(...[30d])` in
+fila e poi un `sum by` su 7 giorni l'hanno mandato in **OOMKilled** (era su da
+30 giorni; di nuovo pronto in un minuto, promtail ritenta). Le trenta giorni non
+hanno mai risposto; due aggregazioni su 7 giorni si', in qualche minuto
+ciascuna, e la query successiva lo ha abbattuto.
+
+- Finche' il limite non sale, **niente finestre oltre qualche ora** su Loki.
+- Per l'uso delle pagine c'e' di meglio: il file `data/logs/app.log*` dentro il
+  pod (7 giorni di rotazione, `grep` in un secondo) o, meglio ancora, un
+  contatore scritto dall'app (proposta D di `docs/analisi-completa-2026-09-26.md`).
+- ⚠️ Un processo `kubectl get --raw` ucciso in locale NON ferma la query sul
+  nodo: controllare con `pgrep -af "kubectl get --raw"` e fermarla li'.
+
 ## Ingress rate limit: 50/s, burst 100 — and how to test one (2026-09-09)
 
 Until this date `kubectl get middleware -A` returned **No resources found**:
@@ -1882,20 +1898,20 @@ twice is the ×100 bug in reverse.** Migration `8fc285de13e2` repaired the rows
 and `seed_service` normalizes at the boundary, the way `canonical_country`
 does — repairing without closing the door lets the next CSV import undo it.
 
-### ⚠️ `stock.market_cap` is in the LISTING currency, and the screener sorts on it
+### `stock.market_cap` is in the LISTING currency — RESOLVED (FA-026)
 
-NOT fixed, and it is a real defect, so do not re-discover it. `risk.py` hit
-this exact trap and its test records the damage: 158 names cleared the 200e9
-mega-cap bar in native currency against only 83 in USD, so **75 stocks were
-scored as stable mega-caps without being anything of the kind** (7270.T at
-$10.9bn, 033780.KS at $14.4bn). It now calls `to_usd` first.
+⚠️ This section said «NOT fixed» until 2026-09-26, two weeks after the fix
+shipped: the exact stale-note failure this file warns about. FA-026 (commit
+`a4d8e20`) took option C — **sort in USD, show in native currency**: the
+screener sorts server-side on `market_cap_usd` (`stock_service.market_cap_usd_expr`)
+and prints each cap with its own symbol; NavbarSearch uses `formatCompactMoney`
+with the stock's currency. Measured before the fix, the native-currency top 10
+and the USD top 10 had NO stock in common (ten Korean names, KRW ~1300x USD).
 
-The screener's market-cap column and NavbarSearch still print `$` on the raw
-figure AND the column is SORTABLE, so a 19,812bn KRW cap outranks a 3,500bn
-USD one. Fixing it is a decision, not a relabel: converting to USD keeps the
-sort meaningful and changes the numbers on screen; labelling each cap with its
-own currency is honest and makes the sort meaningless. Do not slap
-`formatMoney` on it — that picks the second option by accident.
+The lesson that stays: any threshold or sort on a cap goes through `to_usd`
+first. `risk.py` learned it the hard way — 75 stocks scored as stable mega-caps
+in native currency without being anything of the kind (7270.T at $10.9bn,
+033780.KS at $14.4bn).
 
 ## Units are the third recurring defect class, after palettes and rates (2026-09-10)
 
