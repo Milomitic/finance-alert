@@ -415,6 +415,46 @@ def test_una_revisione_NON_sovrascrive_il_prezzo_della_prima_emissione(db, monke
     assert snap.get("first_emitted_at") == "2026-04-28T21:00:00+00:00"
 
 
+def _utc(dt):
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+
+
+def test_un_alert_nuovo_nasce_all_istante_di_first_emitted_at(db, monkeypatch):
+    """FA-100: la colonna indicizzata e il campo dello snapshot sono lo stesso
+    istante, cosi' i conteggi e la lista non possono raccontare due nascite."""
+    _relax(monkeypatch)
+    s = Stock(ticker="NASCITA_NEW", exchange="NASDAQ", name="Nascita", country="US")
+    db.add(s); db.flush()
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    a = _vb_rows(db, s)[0]
+    istante = datetime.fromisoformat(json.loads(a.snapshot)["first_emitted_at"])
+    assert _utc(a.emitted_at) == istante
+
+
+def test_una_revisione_sposta_triggered_at_ma_NON_la_nascita(db, monkeypatch):
+    """⚠️ Il difetto di FA-100 in una riga: la revisione riscrive
+    `triggered_at`, e ogni conteggio fatto su quel campo contava il segnale
+    come nato oggi."""
+    _relax(monkeypatch)
+    s = Stock(ticker="NASCITA_AMEND", exchange="NASDAQ", name="Nascita", country="US")
+    db.add(s); db.flush()
+    prior = _seed_prior(db, s, signal_date=date(2026, 4, 28),
+                        first_emitted="2026-04-28T21:00:00+00:00")
+    db.commit()
+
+    evaluate_signals(db, s, _confirmed_df())
+    db.commit()
+
+    riga = _vb_rows(db, s)[0]
+    assert riga.id == prior.id and json.loads(riga.snapshot).get("amend_count") == 1
+    assert _utc(riga.emitted_at) == datetime(2026, 4, 28, 21, tzinfo=UTC)
+    # Il pavimento: la revisione c'e' stata davvero, altrimenti la nascita
+    # ferma sarebbe vera anche di una scansione che non ha toccato la riga.
+    assert _utc(riga.triggered_at).date() > date(2026, 4, 28)
+
+
 def test_una_revisione_su_un_alert_storico_senza_first_price_non_ne_inventa_uno(
     db, monkeypatch,
 ):

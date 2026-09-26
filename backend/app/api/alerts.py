@@ -895,8 +895,9 @@ def peers(
 
     Stesso detector, stesso giorno, stessa direzione, archiviati compresi —
     cioe' esattamente la popolazione di `same_day_same_tone`. ⚠️ NON e' un link
-    a `/alerts` filtrato: quel filtro sulle date legge `triggered_at`,
-    l'ampiezza legge `signal_date`, e i due differiscono su migliaia di alert.
+    a `/alerts` filtrato: quel filtro sulle date legge la nascita
+    (`emitted_at`), l'ampiezza legge `signal_date`, che ogni revisione sposta
+    in avanti, e i due differiscono su migliaia di alert.
     Il numero e la lista devono descrivere la stessa popolazione.
     """
     from app.services.signal_breadth_service import peers_for

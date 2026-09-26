@@ -119,7 +119,7 @@ def scan_universe(
         # significa rivalutare la STESSA ultima barra congelata a ogni
         # scansione, e il ramo di aggiornamento in cooldown scatta ogni volta:
         # `amend_count` cresce, `triggered_at` viene spinto a oggi, e la lista
-        # alert ordina per `triggered_at` decrescente. Misurato in produzione
+        # alert ordinava allora per `triggered_at` decrescente. Misurato in produzione
         # il 2026-09-14, gli OTTO alert piu' revisionati dell'intero catalogo
         # erano tutti su titoli morti — `APLS adx_confirmation` a 372
         # revisioni, data segnale congelata al 15 maggio — quindi occupavano

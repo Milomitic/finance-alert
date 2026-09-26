@@ -186,9 +186,11 @@ def _signal_counts(db: Session, *, days: int = SIGNAL_WINDOW_DAYS) -> dict[int, 
     """
     since = datetime.now(UTC) - timedelta(days=days)
     tone_col = json_text(Alert.snapshot, "tone")
+    # Segnali NATI nella finestra (FA-100): su `triggered_at`, l'ultima
+    # revisione, entrava anche un segnale nato settimane prima e rivisto dentro.
     rows = db.execute(
         select(Alert.stock_id, tone_col, Alert.signal_name, func.count(Alert.id))
-        .where(Alert.triggered_at >= since, Alert.archived_at.is_(None))
+        .where(Alert.emitted_at >= since, Alert.archived_at.is_(None))
         .group_by(Alert.stock_id, tone_col, Alert.signal_name)
     ).all()
 

@@ -2,6 +2,11 @@
 
 All functions are pure: take a Session, return a dataclass. No mutation,
 no side effects. Designed to be composed by `app/api/dashboard.py`.
+
+⚠️ Every window here counts alerts by BIRTH (`Alert.emitted_at`), never by
+`triggered_at`, which is the LAST REVISION: a persisting signal is revised on
+every scan, so a window on it counts every older signal still alive. Measured
+2026-09-26: the 24h KPI read 555 against 71 alerts actually born (FA-100).
 """
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -52,7 +57,7 @@ def get_alerts_by_index(
         )
         .join(StockIndex, StockIndex.index_id == Index.id)
         .join(Alert, Alert.stock_id == StockIndex.stock_id)
-        .where(Alert.triggered_at >= cutoff, Alert.archived_at.is_(None))
+        .where(Alert.emitted_at >= cutoff, Alert.archived_at.is_(None))
         .group_by(Index.id)
         .order_by(func.count(Alert.id).desc(), Index.code.asc())
     ).all()
@@ -73,15 +78,15 @@ def get_kpi_summary(db: Session) -> KpiSummary:
 
     last_24h = db.execute(
         select(func.count(Alert.id)).where(
-            Alert.triggered_at > cutoff_24h,
+            Alert.emitted_at > cutoff_24h,
             Alert.archived_at.is_(None),
         )
     ).scalar_one()
 
     prev_24h = db.execute(
         select(func.count(Alert.id)).where(
-            Alert.triggered_at > cutoff_48h,
-            Alert.triggered_at <= cutoff_24h,
+            Alert.emitted_at > cutoff_48h,
+            Alert.emitted_at <= cutoff_24h,
             Alert.archived_at.is_(None),
         )
     ).scalar_one()
@@ -110,7 +115,7 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
     Days with no alerts are included with count=0 and by_kind={}, so the chart
     is continuous (no gaps).
 
-    Date semantics: UTC throughout. We group by `func.date(triggered_at)`
+    Date semantics: UTC throughout. We group by `func.date(emitted_at)`
     which SQLite/Postgres compute on the stored UTC timestamp, so the
     "today" bucket must also be UTC. Mixing UTC bucketing with a local
     `date.today()` boundary causes the chart to drop alerts during the
@@ -122,12 +127,12 @@ def get_alerts_by_day(db: Session, days: int = 30) -> list[AlertsByDayPoint]:
 
     rows = db.execute(
         select(
-            func.date(Alert.triggered_at).label("d"),
+            func.date(Alert.emitted_at).label("d"),
             Alert.signal_name.label("signal_name"),
             func.count(Alert.id).label("c"),
         )
         .where(
-            Alert.triggered_at >= cutoff_dt,
+            Alert.emitted_at >= cutoff_dt,
             Alert.archived_at.is_(None),
         )
         .group_by("d", Alert.signal_name)
@@ -176,7 +181,7 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
             Alert.stock_id,
             func.count(Alert.id).label("c"),
         )
-        .where(Alert.triggered_at >= cutoff, Alert.archived_at.is_(None))
+        .where(Alert.emitted_at >= cutoff, Alert.archived_at.is_(None))
         .group_by(Alert.stock_id)
         .order_by(func.count(Alert.id).desc(), Alert.stock_id.asc())
         .limit(limit)
@@ -198,7 +203,7 @@ def get_top_stocks(db: Session, *, days: int = 30, limit: int = 10) -> list[TopS
             select(Alert.signal_name.label("signal_name"), func.count(Alert.id).label("c"))
             .where(
                 Alert.stock_id == sid,
-                Alert.triggered_at >= cutoff,
+                Alert.emitted_at >= cutoff,
                 Alert.archived_at.is_(None),
             )
             .group_by(Alert.signal_name)
@@ -280,7 +285,7 @@ def get_top_alerted_stock_7d(db: Session) -> tuple[Stock, int] | None:
     row = db.execute(
         select(StockModel, func.count(Alert.id).label("cnt"))
         .join(Alert, Alert.stock_id == StockModel.id)
-        .where(Alert.triggered_at >= cutoff)
+        .where(Alert.emitted_at >= cutoff)
         .where(Alert.archived_at.is_(None))
         .group_by(StockModel.id)
         .order_by(func.count(Alert.id).desc())

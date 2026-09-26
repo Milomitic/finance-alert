@@ -104,8 +104,10 @@ def _peers_clause(name: str, day, tone: str, stock_id: int):
     with the number beside it would be the defect this project keeps closing —
     a count describing one population and a view showing another. The obvious
     link, `/alerts` filtered by detector and date, would have been exactly that:
-    its date filter reads `triggered_at`, the breadth reads `signal_date`, and
-    2.807 visible alerts carry a different value in the two.
+    its date filter reads the alert's birth (`emitted_at` since FA-100,
+    `triggered_at` before), the breadth reads `signal_date`, which every
+    revision moves forward. On `triggered_at`, 2.807 visible alerts carried a
+    different value in the two.
 
     ARCHIVED ALERTS ARE COUNTED, deliberately. CLAUDE.md's rule — never filter
     a measurement on a field the USER writes — was learned the expensive way

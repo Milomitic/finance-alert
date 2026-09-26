@@ -235,6 +235,9 @@ def _recent_signal_facets(db: Session, stock_ids: list[int]) -> dict[int, dict]:
     if not stock_ids:
         return {}
     cutoff = datetime.now(UTC) - timedelta(days=14)
+    # ⚠️ `triggered_at` di proposito, non `emitted_at` (FA-100): qui «recente»
+    # vuol dire VIVO, e un segnale nato tre settimane fa che l'ultima scansione
+    # ha rivisto e' un segnale di adesso. Contare le nascite e' un'altra domanda.
     rows = db.execute(
         select(Alert.stock_id, Alert.snapshot).where(
             Alert.signal_name.isnot(None),

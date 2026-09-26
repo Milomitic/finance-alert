@@ -79,10 +79,12 @@ def _recent_scans(db: Session, limit: int = 10) -> list[RecentScanOut]:
     for r in rows:
         alerts_count: int | None = None
         if r.started_at and r.completed_at:
+            # Gli alert NATI durante la scansione (FA-100). Su `triggered_at`
+            # contava anche ogni alert che la scansione aveva solo rivisto.
             alerts_count = db.execute(
                 select(func.count()).select_from(Alert).where(
-                    Alert.triggered_at >= r.started_at,
-                    Alert.triggered_at <= r.completed_at,
+                    Alert.emitted_at >= r.started_at,
+                    Alert.emitted_at <= r.completed_at,
                 )
             ).scalar_one()
         duration_s: float | None = None
@@ -271,6 +273,8 @@ def _data_health(db: Session) -> DataHealthOut:
         lambda: _age("SELECT MAX(date) FROM ohlcv_daily"), "eta ohlcv")
     out.macro_age_days = _q(
         lambda: _age("SELECT MAX(date) FROM macro_observations"), "eta macro")
+    # `triggered_at` di proposito (FA-100): l'eta' dice se la scansione TOCCA
+    # ancora gli alert, e una revisione lo prova quanto una nascita.
     out.alert_age_days = _q(
         lambda: _age("SELECT MAX(triggered_at) FROM alerts"), "eta alert")
     out.catalog_stocks = _q(

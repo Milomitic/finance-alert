@@ -39,24 +39,18 @@ from app.services.ohlcv_service import (
 # query time via the dialect-portable json_text() (json_extract on SQLite,
 # ->>'key' on Postgres) so they sort correctly across all rows and backends.
 _SORTABLE: dict[str, Any] = {
-    # ⚠️ Il GIORNO in cui l'alert e' comparso, cioe' quello su cui poggiano il
+    # ⚠️ L'istante in cui l'alert e' COMPARSO, cioe' quello su cui poggiano il
     # prezzo d'ingresso e il piano. E' la data che la lista mostra, quindi e'
     # anche quella su cui si ordina: `triggered_at` descrive l'ultima
     # revisione, e ordinandoci sopra tutti i segnali che PERSISTONO finiscono
     # in cima ogni giorno a prescindere da quando sono nati.
     #
-    # Il giorno e non l'istante, per due ragioni che si sommano: la colonna
-    # mostra un giorno, e i due campi coalescati hanno forme testuali diverse
-    # (ISO con la T contro il testo che Postgres rende da un timestamp), quindi
-    # oltre il decimo carattere il confronto non sarebbe piu' confrontabile.
-    # Il pareggio dentro la stessa giornata lo rompe `Alert.id`, gia' in coda
-    # all'ORDER BY.
-    "emissione": func.substr(
-        func.coalesce(
-            json_text(Alert.snapshot, "first_emitted_at"),
-            sqlalchemy.cast(Alert.triggered_at, sqlalchemy.String),
-        ), 1, 10,
-    ),
+    # Fino a FA-100 era il GIORNO del testo di `coalesce(first_emitted_at,
+    # triggered_at)`, estratto dal JSON a ogni richiesta: i due campi avevano
+    # forme testuali diverse e oltre il decimo carattere non si confrontavano.
+    # `emitted_at` e' quella stessa regola in una colonna tipata e indicizzata,
+    # quindi si ordina sull'istante; il pareggio lo rompe `Alert.id`.
+    "emissione": Alert.emitted_at,
     "triggered_at": Alert.triggered_at,
     "signal_date": Alert.signal_date,
     "ticker": Stock.ticker,
@@ -145,10 +139,13 @@ def _apply_filters(
     if rule_kind:
         name = rule_kind[len("signal:"):] if rule_kind.startswith("signal:") else rule_kind
         stmt = stmt.where(Alert.signal_name == name)
+    # Il periodo filtra sulla NASCITA, cioe' sul giorno che la lista mostra e su
+    # cui si ordina (FA-100): sull'ultima revisione «Oggi» mostrava ogni segnale
+    # ancora vivo, nato anche settimane prima.
     if date_from:
-        stmt = stmt.where(Alert.triggered_at >= date_from)
+        stmt = stmt.where(Alert.emitted_at >= date_from)
     if date_to:
-        stmt = stmt.where(Alert.triggered_at < date_to)
+        stmt = stmt.where(Alert.emitted_at < date_to)
     if archived is True:
         stmt = stmt.where(Alert.archived_at.isnot(None))
     elif archived is False:
@@ -330,7 +327,7 @@ def list_alerts(
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
     # Build ORDER BY: requested column (with NULLS LAST) + stable id tiebreaker.
-    sort_col = _SORTABLE.get(sort_by, Alert.triggered_at)
+    sort_col = _SORTABLE.get(sort_by, Alert.emitted_at)
     direction = asc if sort_dir == "asc" else desc
     rows = db.execute(
         base.order_by(direction(sort_col).nullslast(), Alert.id.desc()).limit(limit + 1).offset(offset)
@@ -644,8 +641,8 @@ def bulk_action(db: Session, ids: list[int], action: str) -> int:
 class DuplicateGroup:
     """One event that the warehouse holds several times.
 
-    `original_id` is the EARLIEST row by triggered_at — the one that recorded
-    the event when it happened. `blockers` is why this group must not be
+    `original_id` is the EARLIEST-BORN row (`emitted_at`) — the one that
+    recorded the event when it happened. `blockers` is why this group must not be
     reconciled without a person looking: a non-empty list is data, not a
     failure.
     """
@@ -678,10 +675,10 @@ def find_duplicate_alert_groups(db: Session) -> list[DuplicateGroup]:
     """
     rows = db.execute(
         select(Alert.id, Alert.stock_id, Alert.signal_name, Alert.signal_date,
-               json_text(Alert.snapshot, "tone"), Alert.triggered_at, Stock.ticker)
+               json_text(Alert.snapshot, "tone"), Alert.emitted_at, Stock.ticker)
         .join(Stock, Stock.id == Alert.stock_id)
         .where(Alert.signal_date.is_not(None))
-        .order_by(Alert.triggered_at.asc(), Alert.id.asc())
+        .order_by(Alert.emitted_at.asc(), Alert.id.asc())
     ).all()
 
     by_key: dict[tuple, list[tuple]] = {}
@@ -691,7 +688,7 @@ def find_duplicate_alert_groups(db: Session) -> list[DuplicateGroup]:
     if not dupes:
         return []
 
-    # Rows already ordered by triggered_at, so [0] is the original.
+    # Rows already ordered by birth, so [0] is the original.
     originals = {v[0].id for v in dupes.values()}
     excess = {r.id for v in dupes.values() for r in v[1:]}
 

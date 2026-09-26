@@ -245,6 +245,8 @@ def refresh_data_health_gauges(db: Session) -> None:
 
     _try("ohlcv age", lambda: _age("ohlcv_daily", OhlcvDaily.date))
     _try("macro age", lambda: _age("macro_observations", MacroObservation.date))
+    # `triggered_at`, non la nascita: misura se la scansione tocca ancora gli
+    # alert, e una revisione lo prova quanto una nascita (FA-100).
     _try("alert age", lambda: _age("alerts", Alert.triggered_at))
 
     def _setups() -> None:

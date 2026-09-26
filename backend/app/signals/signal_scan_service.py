@@ -458,7 +458,10 @@ def evaluate_signals(
             _convert_setup(db, prior, m.tone, sig_date, last_close)
             continue
         # New alert: pin the original emission timestamp (never overwritten by
-        # later refreshes), no amendment yet.
+        # later refreshes), no amendment yet. The indexed column
+        # `Alert.emitted_at` is derived from it at insert (`models.alert.nascita`),
+        # so the two cannot disagree — and the revision branch above never
+        # names the column, so a revision cannot move it (FA-100).
         snapshot["first_emitted_at"] = now_iso
         # Il prezzo di quel momento, fissato insieme all'istante: `trigger_price`
         # lo perdera' alla prima revisione.

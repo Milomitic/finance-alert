@@ -621,3 +621,44 @@ def test_la_migrazione_SCARTATI_gira_su_POSTGRES_andata_e_ritorno(monkeypatch) -
         command.downgrade(cfg, _PRIMA)
         assert "signal_candidates" not in set(inspect(eng).get_table_names())
         command.upgrade(cfg, "head")
+
+
+def test_la_migrazione_EMITTED_AT_riempie_lo_storico_su_POSTGRES(monkeypatch) -> None:
+    """FA-100 su Postgres, dove gira in produzione: il riempimento passa da un
+    UPDATE tipato (timestamptz) e da una copia fra colonne, poi NOT NULL e
+    default arrivano con due ALTER invece che con la tabella ricreata di
+    SQLite. Andata, ritorno, andata."""
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text
+
+    from alembic import command
+
+    _PRIMA = "f7a3c9e2b1d4"
+
+    with _database_vuoto(monkeypatch) as (cfg, eng):
+        command.upgrade(cfg, _PRIMA)
+        with eng.begin() as c:
+            _inserisci(c, "stocks", id=1, ticker="AAA", exchange="NYSE", name="Aaa")
+            # Rivisto: nato il 20, ultima revisione il 25.
+            _inserisci(c, "alerts", id=1, stock_id=1, trigger_price=50.0,
+                       snapshot=json.dumps({"first_emitted_at": "2026-09-20T23:32:00+00:00"}),
+                       triggered_at="2026-09-25T23:33:00+00:00")
+            # Mai rivisto, senza il campo: la nascita e' la scrittura.
+            _inserisci(c, "alerts", id=2, stock_id=1, trigger_price=50.0, snapshot="{}",
+                       triggered_at="2026-09-22T23:31:00+00:00")
+        command.upgrade(cfg, "head")
+
+        with eng.connect() as c:
+            nascite = dict(c.execute(text("SELECT id, emitted_at FROM alerts")).all())
+        assert nascite == {
+            1: datetime(2026, 9, 20, 23, 32, tzinfo=UTC),
+            2: datetime(2026, 9, 22, 23, 31, tzinfo=UTC),
+        }
+        colonna = {col["name"]: col for col in inspect(eng).get_columns("alerts")}["emitted_at"]
+        assert colonna["nullable"] is False and colonna["default"] is not None
+        assert "ix_alerts_emitted_at" in {i["name"] for i in inspect(eng).get_indexes("alerts")}
+
+        command.downgrade(cfg, _PRIMA)
+        assert "emitted_at" not in {col["name"] for col in inspect(eng).get_columns("alerts")}
+        command.upgrade(cfg, "head")

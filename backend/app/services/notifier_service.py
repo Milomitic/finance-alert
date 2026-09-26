@@ -199,16 +199,27 @@ def _stocks_by_id(db: Session, alerts: list[Alert]) -> dict[int, Stock]:
 
 
 def _fetch_alerts_last_24h(db: Session) -> list[Alert]:
+    """Gli alert NATI nelle ultime 24 ore (FA-100). Su `triggered_at`, che e'
+    l'ultima revisione, il digest contava anche ogni segnale piu' vecchio
+    ancora vivo: «723 alert» il 24/09 contro 87 nati nella finestra."""
     cutoff = datetime.now(UTC) - timedelta(hours=24)
     return list(
         db.execute(
             select(Alert)
-            .where(Alert.triggered_at > cutoff)
-            .order_by(Alert.triggered_at.desc())
+            .where(Alert.emitted_at > cutoff)
+            .order_by(Alert.emitted_at.desc())
         )
         .scalars()
         .all()
     )
+
+
+def _prezzo_d_ingresso(alert: Alert, snap: dict[str, Any]) -> Any:
+    """Il prezzo a cui l'alert e' comparso — lo stesso che la lista mostra come
+    ingresso (`lib/alertEntry.entryPrice`). `trigger_price` avanza a ogni
+    revisione; il ripiego serve agli alert che precedono `first_price`."""
+    prezzo = snap.get("first_price")
+    return prezzo if isinstance(prezzo, (int, float)) else alert.trigger_price
 
 
 def build_digest_message(db: Session, alerts: list[Alert]) -> str:
@@ -227,23 +238,25 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     stocks_by_id = _stocks_by_id(db, alerts)
 
     lines = [f"🔔 <b>Finance Alert — Digest del {today}</b>", ""]
-    lines.append(f"<b>{n} alert</b> nelle ultime 24h:")
+    lines.append(f"<b>{n} {'nuovo alert' if n == 1 else 'nuovi alert'}</b> nelle ultime 24h:")
     lines.append("")
     lines.append("<b>Per segnale:</b>")
     for label, count in sorted(counts.items(), key=lambda kv: -kv[1]):
         lines.append(f"• {label}: {count}")
     lines.append("")
     top = alerts[:DIGEST_TOP_N]
-    lines.append(f"<b>Top {len(top)} alert per timestamp:</b>")
+    lines.append(
+        "<b>Il più recente:</b>" if len(top) == 1 else f"<b>I {len(top)} più recenti:</b>"
+    )
     for a in top:
         snap = _parse_snapshot(a)
         emoji = _alert_emoji(a, snap)
         label = _alert_label(a, snap)
         stock = stocks_by_id.get(a.stock_id)
         ticker = stock.ticker if stock else f"#{a.stock_id}"
-        ts = a.triggered_at.strftime("%H:%M")
+        ts = a.emitted_at.strftime("%H:%M")
         metrics = _forza_prob(snap)
-        line = f"{emoji} {ticker} — {label} ({_fmt_price(a.trigger_price)})"
+        line = f"{emoji} {ticker} — {label} ({_fmt_price(_prezzo_d_ingresso(a, snap))})"
         if metrics:
             line += f" — {metrics}"
         line += f" — {ts}"
