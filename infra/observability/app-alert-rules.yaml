@@ -188,6 +188,29 @@ spec:
               pipeline che crolla. La causa e' in scan_runs.error_message e nei
               log del pod ("[scan_runner] ScanRun ... crashed").
 
+        # FA-103 (2026-09-26). The Dow Jones catalogue failed its Saturday
+        # refresh six weeks in a row: Wikipedia had moved the constituents to
+        # their own page, the wipe guard refused to empty the index — rightly —
+        # and nothing said so. Each refresh already retries three times over
+        # ~2.5 minutes, so one failure is rarely a blip; two in a row are two
+        # different Saturdays, i.e. a page that changed shape. The refresh is
+        # weekly, so this pages one week after the first failure, not five.
+        - alert: FinanceAlertCatalogRefreshFailing
+          expr: |
+            finance_alert_catalog_refresh_failure_streak >= 2
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "il catalogo di {{ $labels.index_code }} non si rinnova ({{ $value | printf \"%.0f\" }} sabati di fila)"
+            description: >-
+              Il rinnovo settimanale dei componenti di {{ $labels.index_code }}
+              e' fallito {{ $value | printf "%.0f" }} volte di fila: la
+              composizione dell'indice e' ferma all'ultimo rinnovo riuscito. La
+              causa e' in catalog_refresh_log.error_message — di solito la
+              pagina Wikipedia della fonte ha cambiato forma, e la correzione e'
+              in INDEX_SOURCES (catalog_refresh_service.py).
+
         # The gauge missing ENTIRELY is a different failure from a stale one:
         # a series that never appears cannot be compared against time(), so the
         # rule above would stay silent forever. Split out because it usually

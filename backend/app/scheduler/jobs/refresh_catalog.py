@@ -1,6 +1,7 @@
 """APScheduler job: weekly catalog refresh + market-cap refresh."""
 from loguru import logger
 
+from app.core import app_metrics
 from app.core.db import SessionLocal
 from app.services.catalog_refresh_service import refresh_all
 from app.services.market_cap_service import refresh_market_caps
@@ -12,6 +13,9 @@ def run_refresh_all() -> None:
     try:
         results = refresh_all(db)
         db.commit()
+        # Right away, not at the next scan: the refresh runs Saturday 03:00 and
+        # the first scan after it is Monday's (FA-103).
+        app_metrics.refresh_catalog_failure_streak_gauge(db)
         for r in results:
             logger.info(
                 f"  {r.index_code}: status={r.status} added={r.stocks_added} "

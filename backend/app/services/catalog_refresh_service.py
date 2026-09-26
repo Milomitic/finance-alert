@@ -53,13 +53,19 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "currency": "USD",
     },
     "DJI": {
-        "url": "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average",
+        # 2026-08: the same split as the Nasdaq-100 above. The constituents
+        # left the main article for their own list page, and the article's
+        # table 1 is now the annual closing values. Six Saturday refreshes
+        # failed in a row (2026-08-22 .. 09-26) behind the wipe guard, and
+        # nothing said so until the catalogue-streak alert existed (FA-103).
+        # The list page carries Company/Exchange/Symbol/Sector at table 0.
+        "url": "https://en.wikipedia.org/wiki/List_of_Dow_Jones_Industrial_Average_companies",
         "name": "Dow Jones Industrial Average",
         "country": "US",
-        "table_index": 1,
+        "table_index": 0,
         "ticker_col": "Symbol",
         "name_col": "Company",
-        "sector_col": "Industry",
+        "sector_col": "Sector",
         "industry_col": None,
         "default_exchange": "NYSE",
         "currency": "USD",
@@ -287,6 +293,17 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
     result = RefreshResult(index_code=index_code, status="in_progress")
     try:
         df = _fetch_table(str(src["url"]), int(src["table_index"]))  # type: ignore[arg-type]
+        # A table without the ticker column is not an empty index: it is a
+        # DIFFERENT table, because the page moved. Say that, with the columns
+        # that were found, instead of the "no usable constituents" the wipe
+        # guard below would report — that message names the symptom, and it
+        # took five weeks of Dow Jones failures to read it for what it was.
+        if src["ticker_col"] not in df.columns:
+            raise CatalogSourceError(
+                f"{index_code}: table {src['table_index']} has no "
+                f"{src['ticker_col']!r} column (found {[str(c) for c in df.columns][:6]}) "
+                f"— the source page changed shape, update INDEX_SOURCES"
+            )
         # Optional top-N slice (e.g., HSI30 takes top 30 of more constituents)
         slice_n = src.get("slice_n")
         if slice_n is not None:

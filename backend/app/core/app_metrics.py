@@ -96,6 +96,56 @@ def failure_streak(db: Session, kind: str = KIND_ALERTS_SCAN) -> int:
     return n
 
 
+# ⚠️ The same shape for the CATALOGUE (FA-103, 2026-09-26). The Dow Jones
+# constituents failed their weekly refresh six Saturdays in a row: Wikipedia
+# had moved them to their own page, the wipe guard refused — correctly — to
+# empty the index, and nothing said so for five weeks. One series per ACTIVE
+# source in `INDEX_SOURCES`: a retired index (SSE 50, CSI 300) keeps its old
+# failures in the log, and an alert no refresh can ever clear is noise.
+CATALOG_REFRESH_FAILURE_STREAK = Gauge(
+    "finance_alert_catalog_refresh_failure_streak",
+    "Consecutive failed catalogue refreshes of this index since its last success.",
+    ["index_code"],
+)
+
+
+def catalog_failure_streaks(db: Session) -> dict[str, int]:
+    """Failed refreshes per active index since its last success. A refresh
+    still in progress is not an outcome; an index never refreshed reads 0, so
+    its series exists and the rule can compare it."""
+    from app.models import CatalogRefreshLog
+    from app.services.catalog_refresh_service import INDEX_SOURCES
+
+    serie: dict[str, int] = {}
+    for codice in INDEX_SOURCES:
+        esiti = db.execute(
+            select(CatalogRefreshLog.status)
+            .where(CatalogRefreshLog.index_code == codice,
+                   CatalogRefreshLog.status.in_(("success", "failed")))
+            .order_by(CatalogRefreshLog.started_at.desc(), CatalogRefreshLog.id.desc())
+            .limit(_STREAK_LOOKBACK)
+        ).scalars().all()
+        n = 0
+        for esito in esiti:
+            if esito == "success":
+                break
+            n += 1
+        serie[codice] = n
+    return serie
+
+
+def refresh_catalog_failure_streak_gauge(db: Session) -> dict[str, int] | None:
+    """Recompute and publish the catalogue streaks. Never raises."""
+    try:
+        serie = catalog_failure_streaks(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[metrics] catalogue-streak recount failed: {exc}")
+        return None
+    for codice, n in serie.items():
+        CATALOG_REFRESH_FAILURE_STREAK.labels(index_code=codice).set(float(n))
+    return serie
+
+
 def refresh_failure_streak_gauge(db: Session, kind: str = KIND_ALERTS_SCAN) -> int | None:
     """Recompute and publish the streak for `kind`. Never raises: a metrics
     problem must not turn a finished run, or a cleanup, into a crash."""
@@ -258,6 +308,9 @@ def refresh_data_health_gauges(db: Session) -> None:
 
     _try("catalog", lambda: CATALOG_STOCKS.set(
         float(db.execute(text("SELECT COUNT(*) FROM stocks")).scalar_one())))
+    # Here too, not only in the Saturday job: this runs at boot, so a deploy
+    # does not reset a failing streak to "no series" until the next refresh.
+    refresh_catalog_failure_streak_gauge(db)
 
     def _keys() -> None:
         for provider, value in (
