@@ -28,7 +28,7 @@ import {
   giornoDelSegnale,
   isAlertDelayed,
 } from "@/lib/alertDates";
-import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
+import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, getAlertMeta, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { ESITO_META, formatR, raccontaPiano, stopTroppoStretto } from "@/lib/planOutcome";
 import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
@@ -332,12 +332,17 @@ export function AlertsTable({
             menu (non-embedded only). The menu positions itself at the cursor. */}
         <TableRow onContextMenu={embedded ? undefined : openColumnMenu}>
           {showCheckbox && (
-            <TableHead className="w-8">
+            /* ⚠️ `<td>`, non `<th>` (FA-108). Un'intestazione senza testo e'
+               una colonna senza nome per gli assistivi, e axe la conta
+               (`empty-table-header`); il nome sta sulla casella. Anche la
+               colonna delle azioni, in fondo. */
+            <td className="w-8 px-2 align-middle">
               <Checkbox
+                aria-label="Seleziona tutti i segnali della pagina"
                 checked={allSelected}
                 onCheckedChange={(checked) => onSelectAll(!!checked)}
               />
-            </TableHead>
+            </td>
           )}
           {showDataSegnale && (
             onSort ? (
@@ -458,8 +463,8 @@ export function AlertsTable({
             </TableHead>
           )}
           {showArchive && (
-            /* Action column — empty header, fixed narrow width. */
-            <TableHead className="w-10" aria-label="Azioni" />
+            /* Colonna azioni: niente intestazione, vedi la casella in testa. */
+            <td className="w-10" />
           )}
         </TableRow>
       </TableHeader>
@@ -497,7 +502,10 @@ export function AlertsTable({
           >
             {showCheckbox && (
               <TableCell onClick={(e) => e.stopPropagation()}>
+                {/* Il nome dice QUALE segnale: 38 caselle chiamate uguale sono
+                    38 caselle senza nome (FA-108, `button-name`). */}
                 <Checkbox
+                  aria-label={`Seleziona ${getAlertMeta(a).label} su ${a.ticker ?? "questo titolo"}`}
                   checked={selectedIds.has(a.id)}
                   onCheckedChange={(c) => onSelect(a.id, !!c)}
                 />

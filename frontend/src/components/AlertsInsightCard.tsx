@@ -117,17 +117,15 @@ function TopRow({
     <li>
       {/* Row click = drill-down: filters the alerts table below to this
           ticker (the row used to be a dead-end nav-only Link). The ticker
-          TEXT keeps the stock-detail navigation, with stopPropagation. */}
+          TEXT keeps the stock-detail navigation, with stopPropagation.
+
+          ⚠️ The row is NOT a role="button" any more (FA-108): it contained
+          the ticker link, i.e. a control inside a control — axe counts it
+          (`nested-interactive`, ten rows) and a screen reader announces only
+          one of the two. The mouse still clicks anywhere on the row; the
+          keyboard reaches the rank BUTTON and the link separately. */}
       <div
-        role="button"
-        tabIndex={0}
         onClick={() => onSelect?.(c.ticker)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect?.(c.ticker);
-          }
-        }}
         // Seven fixed columns — 1 + 4.25 + 3 + 2.25 + 2 + 5.25rem plus six
         // gaps and the padding — come to roughly 370px at this root size.
         // A 375px phone has about 330 once page and card padding are taken,
@@ -143,7 +141,19 @@ function TopRow({
         className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded-md hover:bg-accent/50 transition-colors min-w-0 cursor-pointer"
         title={`${c.name ?? c.ticker} · forza confluenza ${pct} · forza max ${maxForza ?? "—"} · ${c.n_signals} segnali${c.effective_n != null ? ` (${c.effective_n} indip.)` : ""}${c.multi_horizon ? " · multi-orizzonte" : ""}${c.contested ? " · conteso" : ""} — clic per filtrare la tabella`}
       >
-        <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground">{rank}</span>
+        {onSelect ? (
+          /* No onClick of its own: its click — Enter and Space included —
+             bubbles to the row's handler, so the filter runs exactly once. */
+          <button
+            type="button"
+            aria-label={`Filtra i segnali su ${c.ticker}`}
+            className="w-4 shrink-0 rounded-sm text-right text-xs font-mono tabular-nums text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {rank}
+          </button>
+        ) : (
+          <span className="w-4 shrink-0 text-right text-xs font-mono tabular-nums text-muted-foreground">{rank}</span>
+        )}
         {/* Titolo — logo + ticker + name in ONE flex-1 cell so the meta columns
             align with the header. */}
         <div className="min-w-0 flex-1 basis-[calc(100%-1.5rem)] sm:basis-auto flex items-center gap-2">
