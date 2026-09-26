@@ -300,7 +300,14 @@ export default function StockDetailPage() {
   // sidebar of context cards) under a sticky header.
   if (detail.isLoading) {
     return (
-      <div className="space-y-3">
+      // ⚠️ La `key` NON e' decorativa (FA-106). Scheletro e pagina hanno la
+      // stessa radice e un `<div className="grid…">` nella stessa posizione:
+      // senza chiavi diverse React RIUSA quel nodo e lo trasforma nella
+      // griglia vera. Per il browser e' lo stesso elemento che salta di 75px,
+      // e con uno scheletro alto 2.600px la scossa valeva CLS 0,83 su un
+      // tablet — il RUM in produzione diceva 0,98. Con le chiavi lo scheletro
+      // viene smontato: nodi nuovi, nessuna scossa.
+      <div key="scheletro" className="space-y-3">
         {/* Header strip: ticker / live price / score chips */}
         <CardSkeleton label={ticker?.toUpperCase()} rows={2} className="h-[100px]" />
         <div className="grid lg:grid-cols-[1fr_320px] gap-3 [&>*]:min-w-0">
@@ -346,7 +353,7 @@ export default function StockDetailPage() {
   const hasMacd = (d.indicators.macd_line?.length ?? 0) > 0;
 
   return (
-    <div className="space-y-3">
+    <div key="pagina" className="space-y-3">
       {/* Il ritorno al contesto di provenienza.
           Modello copiato da `SectorDetailPage` e `InstitutionalDetailPage`,
           che lo avevano gia: un `<Link>` verso la pagina padre invece di un
