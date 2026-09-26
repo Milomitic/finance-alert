@@ -152,6 +152,23 @@ def test_il_job_del_sabato_aggiorna_il_gauge_appena_finito(db: Session, monkeypa
     assert _gauge("DJI") == 1
 
 
+def test_il_rinnovo_manuale_aggiorna_il_gauge(db: Session, monkeypatch) -> None:
+    """Il bottone «Aggiorna» del catalogo: un rinnovo riuscito deve spegnere
+    l'allarme subito, non alla scansione di lunedi'. Trovato verificando
+    FA-103 in produzione — un rinnovo lanciato fuori dal processo dell'app
+    lascia il gauge dell'app dov'era."""
+    from app.api import catalog
+
+    monkeypatch.setattr(catalog, "SessionLocal", lambda: db)
+    _log(db, "DJI", "failed", 1)
+    db.commit()
+    app_metrics.CATALOG_REFRESH_FAILURE_STREAK.labels(index_code="DJI").set(-1)
+
+    with patch("app.services.catalog_refresh_service._fetch_table", return_value=DOW):
+        catalog._run_refresh("DJI")
+    assert _gauge("DJI") == 0
+
+
 def test_la_regola_scatta_a_due_sabati_falliti() -> None:
     regole = (Path(__file__).resolve().parents[2] / "infra" / "observability"
               / "app-alert-rules.yaml").read_text(encoding="utf-8")

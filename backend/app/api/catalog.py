@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
+from app.core import app_metrics
 from app.core.db import SessionLocal
 from app.models import CatalogRefreshLog, User
 from app.schemas.catalog import CatalogStatusOut, IndexStatusOut, RefreshAccepted, RefreshRequest
@@ -20,6 +21,9 @@ def _run_refresh(index_code: str | None) -> None:
         else:
             refresh_index(db, index_code)
         db.commit()
+        # The FA-103 gauge lives in THIS process: without this a successful
+        # manual refresh would leave the alert firing until the next scan.
+        app_metrics.refresh_catalog_failure_streak_gauge(db)
     finally:
         db.close()
 
