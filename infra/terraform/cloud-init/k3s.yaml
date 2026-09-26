@@ -15,6 +15,24 @@
 #   unannounced is an outage; kernel updates therefore need a DELIBERATE reboot
 #   (see docs/cloud/ROADMAP.md M9).
 write_files:
+  # Pulizia delle immagini del nodo (FA-101, 2026-09-26). Con i valori
+  # predefiniti (85/80%) kubelet cancella le immagini inutilizzate solo oltre
+  # l'85% di disco, cioe' alla soglia dell'allarme critico
+  # FinanceAlertNodeRootFilling: il 26/09 c'erano 69 immagini dell'app e 37 GB
+  # di containerd, perche' ogni push ne scarica una nuova. kubelet unisce i file
+  # di questa cartella in ordine alfabetico, quindi questo vince su
+  # 00-k3s-defaults.conf, che k3s riscrive a ogni avvio. Sul nodo vivo e' stato
+  # scritto a mano e verificato con `configz` il 2026-09-26: cloud-init gira
+  # solo alla creazione della macchina. Un test nel backend tiene la soglia
+  # sotto quella dell'allarme.
+  - path: /var/lib/rancher/k3s/agent/etc/kubelet.conf.d/50-image-gc.conf
+    permissions: "0600"
+    content: |
+      apiVersion: kubelet.config.k8s.io/v1beta1
+      kind: KubeletConfiguration
+      imageMaximumGCAge: 72h
+      imageGCHighThresholdPercent: 70
+      imageGCLowThresholdPercent: 60
   - path: /opt/k3s/install.sh
     permissions: "0755"
     content: |
