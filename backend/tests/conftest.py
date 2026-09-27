@@ -36,18 +36,36 @@ le ultime due dal fix B4-2 sui test flaky):
    flaky, e avvelenava il breaker condiviso). NB: il TestClient di
    starlette usa un transport in-process proprio, NON httpx.HTTPTransport,
    quindi i test API non sono toccati.
+
+5. Il motore GLOBALE nasce su un database vuoto in memoria (2026-09-28).
+   Il punto 2 copre solo i test che chiedono la fixture `db`; un test che non
+   la chiede e passa per `SessionLocal` — `stock_news_service.clear_cache()`,
+   ogni scrittura in cache L2 — usava `./data/app.db`, cioe' in locale IL
+   DATABASE DI SVILUPPO: la suite ne cancellava la cache delle notizie e ci
+   lasciava titoli finti («From marketaux fallback» su AAPL). E con `-n auto`
+   i worker condividevano quel file, quindi un test leggeva cio' che un altro
+   aveva appena scritto: e' il rosso sporadico di
+   `test_falls_back_to_finnhub_when_yfinance_empty`. In CI il file non esiste
+   e nasce vuoto, quindi il difetto era solo locale — e invisibile li'.
+   ⚠️ Non basta sostituire `db_module.SessionLocal`: quaranta moduli lo
+   importano per nome al caricamento. Va cambiato l'URL PRIMA di importare
+   `app`, e per questo sta qui in cima e non in una fixture.
 """
-from collections.abc import Iterator
+import os
 
-import pytest
-from sqlalchemy import String, create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-import app.models  # noqa: F401
-from app.core import db as db_module
-from app.core.config import settings
-from app.core.db import Base
+from collections.abc import Iterator  # noqa: E402
+
+import pytest  # noqa: E402
+from sqlalchemy import String, create_engine, event  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+import app.models  # noqa: E402, F401
+from app.core import db as db_module  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.db import Base  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

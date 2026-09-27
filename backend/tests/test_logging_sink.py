@@ -49,7 +49,7 @@ def _fallisce_con_un_segreto_in_mano():
     _invia(chiave_api)
 
 
-def test_il_traceback_non_scrive_i_valori_delle_variabili(capsys):
+def test_il_traceback_non_scrive_i_valori_delle_variabili(capsys, tmp_path):
     """⚠️ FA-102 (2026-09-26). `diagnose` di loguru e' attivo di default e
     stampa, sotto ogni riga del traceback, il VALORE di ogni variabile del
     frame. Il traceback del rinnovo catalogo di quella notte lo faceva, e
@@ -59,23 +59,31 @@ def test_il_traceback_non_scrive_i_valori_delle_variabili(capsys):
     Il pavimento conta quanto l'asserzione: il traceback DEVE esserci (tipo
     d'eccezione e marcatore), altrimenti «il segreto non compare» sarebbe vero
     anche di un log che non ha scritto niente."""
-    from pathlib import Path
+    import os
 
-    configure_logging()
-    registro = Path("./data/logs/app.log")
-    # Il file si ACCUMULA fra un'esecuzione e l'altra: si legge solo cio' che
-    # questo test ci scrive, altrimenti un giro precedente col difetto dentro
-    # lo farebbe fallire per sempre (e uno senza lo farebbe passare comunque).
-    partenza = registro.stat().st_size if registro.exists() else 0
+    # ⚠️ In una cartella del test, non nel registro di sviluppo. Il file vero
+    # `data/logs/app.log` ruota a 10 MB, e su Windows la rotazione FALLISCE se
+    # un backend locale lo tiene aperto — il caso normale mentre si sviluppa:
+    # da li' ogni scrittura si perde e questo test diventava rosso senza che
+    # nessuno avesse toccato il codice (2026-09-28, alle 01:32). `os.chdir` e
+    # non `monkeypatch`: annullarlo con `undo()` toglierebbe anche la guardia
+    # anti-rete del conftest, che usa la stessa istanza.
+    cartella = os.getcwd()
+    os.chdir(tmp_path)
     try:
-        _fallisce_con_un_segreto_in_mano()
-    except ValueError:
-        logger.exception("marcatore-fa102-traceback")
+        configure_logging()
+        try:
+            _fallisce_con_un_segreto_in_mano()
+        except ValueError:
+            logger.exception("marcatore-fa102-traceback")
+        coda = (tmp_path / "data" / "logs" / "app.log").read_text(encoding="utf-8", errors="replace")
+    finally:
+        os.chdir(cartella)
+        configure_logging()  # chiude il file temporaneo e rimette i sink di sempre
 
     stdout = capsys.readouterr().out
     assert "marcatore-fa102-traceback" in stdout and "ValueError" in stdout
     assert "sk-segreto-9f3a" not in stdout, "il traceback su stdout espone una variabile locale"
 
-    coda = registro.read_bytes()[partenza:].decode("utf-8", errors="replace")
     assert "marcatore-fa102-traceback" in coda
     assert "sk-segreto-9f3a" not in coda, "il traceback nel file espone una variabile locale"
