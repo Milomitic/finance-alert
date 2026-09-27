@@ -27,7 +27,8 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -68,11 +69,11 @@ _STATE: dict = {
 }
 
 
-def us_market_open_now() -> bool:
+def us_market_open_now(now_et: datetime | None = None) -> bool:
     """Best-effort: US regular session is Mon-Fri 09:30-16:00 ET.
     Holidays not modelled (acceptable — worst case the card shows on a
     holiday with the prior session's pre-market, still informative)."""
-    now_et = datetime.now(_ET)
+    now_et = (now_et or datetime.now(_ET)).astimezone(_ET)
     if now_et.weekday() >= 5:  # Sat/Sun
         return False
     return _RTH_OPEN <= now_et.time() < _RTH_CLOSE
@@ -141,17 +142,30 @@ _NAME_BY_TICKER: dict[str, str] = {}
 _TYPE_BY_TICKER: dict[str, str] = {}
 
 
-def _premarket_from_frame(df) -> tuple[float, float, int | None] | None:
-    """(premarket_price, prev_regular_close, premarket_volume) from a
-    single-ticker 5m prepost frame, or None when there's no usable
-    pre-market bar. `premarket_volume` = summed Volume over today's
+class LetturaPremarket(NamedTuple):
+    price: float
+    prev_close: float
+    volume: int | None
+    # Il giorno (ET) della barra letta. ⚠️ NON e' per forza oggi: il frame
+    # copre cinque giorni, e un titolo che oggi non ha ancora scambiato in
+    # pre-market ha come ultima barra quella di una seduta prima (FA-107).
+    session: date
+
+
+def _premarket_from_frame(df) -> LetturaPremarket | None:
+    """(premarket_price, prev_regular_close, premarket_volume, session) from
+    a single-ticker 5m prepost frame, or None when there's no usable
+    pre-market bar. `premarket_volume` = summed Volume over that session's
     pre-market bars; None when Volume is absent/all-NaN (many thin
     names report no pre-market volume).
 
     pre-market = bars with ET time in [04:00, 09:30); the reference
     close is the last regular-session (09:30-16:00) bar STRICTLY before
     the latest pre-market bar's date — i.e. the prior session close,
-    matching Yahoo's `preMarketChangePercent` denominator."""
+    matching Yahoo's `preMarketChangePercent` denominator.
+
+    `session` is the date of that pre-market bar, and the CALLER decides
+    whether it is the one it wants: the reading itself cannot know."""
     if df is None or df.empty or "Close" not in df:
         return None
     idx = df.index
@@ -194,7 +208,7 @@ def _premarket_from_frame(df) -> tuple[float, float, int | None] | None:
                     any_v = True
         if any_v:
             pm_volume = int(tot)
-    return float(closes[pm_i]), prev_close, pm_volume
+    return LetturaPremarket(float(closes[pm_i]), prev_close, pm_volume, pm_date)
 
 
 # Single-ticker pre-market quote cache (ticker → (fetched_at, result)).
@@ -205,14 +219,21 @@ _SINGLE_TTL = timedelta(seconds=60)
 _SINGLE_CACHE: dict[str, tuple[datetime, tuple[float, float] | None]] = {}
 
 
-def premarket_quote(ticker: str) -> tuple[float, float] | None:
+def premarket_quote(
+    ticker: str, *, oggi_et: date | None = None,
+) -> tuple[float, float] | None:
     """(premarket_price, prev_regular_close) for ONE US ticker via a 5m prepost
     frame — the SAME source the homepage pre-market movers use, so the
     stock-detail header agrees with them. yfinance `fast_info` does NOT expose
     extended-hours prices (it echoes the prior regular close), which is why the
     detail header needs this. None when there's no usable pre-market bar or the
-    fetch fails. Cached ~60s."""
+    fetch fails. Cached ~60s.
+
+    Only TODAY's pre-market counts (FA-107): the caller asks during today's
+    window, and a bar from a previous session — a ticker that has not traded
+    yet this morning — would be shown as a fresh «PRE» price days old."""
     now = datetime.now(UTC)
+    oggi = oggi_et or datetime.now(_ET).date()
     cached = _SINGLE_CACHE.get(ticker)
     if cached is not None and (now - cached[0]) < _SINGLE_TTL:
         return cached[1]
@@ -238,9 +259,8 @@ def premarket_quote(ticker: str) -> tuple[float, float] | None:
             else:
                 df = df.droplevel(0, axis=1)           # last resort
         res = _premarket_from_frame(df)
-        if res is not None:
-            pm_price, prev_close, _vol = res
-            result = (float(pm_price), float(prev_close))
+        if res is not None and res.session == oggi:
+            result = (float(res.price), float(res.prev_close))
     except Exception as exc:  # noqa: BLE001 — best-effort enrichment
         logger.debug(f"[premarket] single quote {ticker} failed: {exc}")
         result = None
@@ -364,16 +384,16 @@ def _recompute(db: Session) -> None:
                     sub = data if single else data[t]
                     res = _premarket_from_frame(sub)
                     if res is not None:
-                        pm_price, prev_close, pm_vol = res
-                        chg = (pm_price - prev_close) / prev_close * 100.0
+                        chg = (res.price - res.prev_close) / res.prev_close * 100.0
                         rows.append({
                             "ticker": t,
                             "name": _NAME_BY_TICKER.get(t, t),
-                            "price": round(pm_price, 4),
-                            "prev_close": round(prev_close, 4),
+                            "price": round(res.price, 4),
+                            "prev_close": round(res.prev_close, 4),
                             "change_pct": round(chg, 2),
-                            "volume": pm_vol,
+                            "volume": res.volume,
                             "instrument_type": _TYPE_BY_TICKER.get(t, "equity"),
+                            "_session": res.session,
                         })
                 except Exception as exc:  # noqa: BLE001 — per-ticker
                     logger.debug(f"[premarket] {t} skipped: {exc}")
@@ -391,6 +411,15 @@ def _recompute(db: Session) -> None:
             _STATE["refreshing"] = False
             _STATE["last_error"] = "all chunk fetches failed"
         return
+
+    # Una seduta sola (FA-107). Il frame copre cinque giorni, quindi un titolo
+    # che oggi non ha ancora scambiato porta la variazione di una seduta
+    # prima: misurato il 2026-09-27, 5 su 136 a pre-market concluso, e nella
+    # prima ora quasi tutti. Vale la seduta piu' recente fra quelle lette, e
+    # l'etichetta della scheda dichiara QUELLA — non la data di oggi, che alle
+    # 03:55 ET e' un giorno dopo i dati.
+    session = max((r["_session"] for r in rows), default=None)
+    rows = [r for r in rows if r.pop("_session") == session]
 
     rows.sort(key=lambda r: r["change_pct"], reverse=True)
     gainers = [r for r in rows if r["change_pct"] > 0][:_TOP_N]
@@ -419,7 +448,7 @@ def _recompute(db: Session) -> None:
         _STATE["progress_done"] = _STATE["progress_total"]
 
     now = datetime.now(UTC)
-    as_of = datetime.now(_ET).date().isoformat()
+    as_of = (session or datetime.now(_ET).date()).isoformat()
     with _LOCK:
         _STATE.update({
             "as_of": as_of,
