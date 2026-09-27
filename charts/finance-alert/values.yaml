@@ -134,6 +134,22 @@ parityCheck:
   # non-root: verificato con una sonda dentro il cluster, non dedotto.
   image: alpine/k8s:1.31.3
 
+# ─── Niente rilascio durante una scansione (FA-109) ────────────────────────
+# Hook PreSync di ArgoCD: prima di applicare un rilascio aspetta che la
+# scansione in corso finisca. Dettagli in templates/hook-attesa-scansione.yaml
+# e files/attesa-scansione.sh.
+deployGate:
+  enabled: false
+  # Stessa immagine della sonda di parita': gira ogni 15 minuti, quindi e'
+  # sempre gia' sul nodo. Contiene curl — verificato con una sonda nel cluster
+  # il 2026-09-28, non dedotto dal commento qui sopra, che nomina solo wget.
+  image: alpine/k8s:1.31.3
+  # Una scansione dura ~10 minuti. ⚠️ Il tetto e' un compromesso esplicito: oltre
+  # questo il rilascio procede comunque, perche' un rilascio fermo costa piu' di
+  # una scansione rifatta.
+  maxWaitSeconds: 900
+  stepSeconds: 20
+
 # ─── Drill di ripristino ───────────────────────────────────────────────────
 # Prova SETTIMANALMENTE che il backup Postgres si possa RILEGGERE, non solo
 # che venga prodotto. Vedi il commento in templates/cronjob-restore-drill.yaml

@@ -41,6 +41,7 @@ from app.core.errors import UpstreamError
 from app.core.logging import configure_logging, hydrate_log_buffer_from_disk
 from app.models import User
 from app.scheduler import get_scheduler, start_scheduler, stop_scheduler
+from app.services import scan_lock
 
 configure_logging()
 
@@ -719,10 +720,20 @@ app.include_router(kpi_router.router)
 #
 # Declaring it async runs it directly on the event loop, so it stays
 # answerable no matter how full the threadpool is. Safe because the body does
-# no I/O — both values are in-memory attribute reads.
+# no I/O — every value is an in-memory read.
+#
+# `scan_running` (FA-109) is what the ArgoCD PreSync hook reads before a
+# release: a restart mid-scan throws ~10 minutes of work away. It is the
+# single-scan LOCK, a non-blocking in-memory acquire — never a query on
+# scan_runs, which would put the database back in the probe's path.
 @app.get("/api/health")
 async def health() -> dict[str, object]:
-    return {"status": "ok", "scheduler_running": get_scheduler().running, "version": app.version}
+    return {
+        "status": "ok",
+        "scheduler_running": get_scheduler().running,
+        "version": app.version,
+        "scan_running": scan_lock.is_running(),
+    }
 
 
 @app.post("/api/admin/warmup-fundamentals", dependencies=[Depends(require_json)])

@@ -37,3 +37,17 @@ spec:
       prune: false
     syncOptions:
       - CreateNamespace=false
+    # ⚠️ Senza retry, una sincronizzazione FALLITA non si ripete per la stessa
+    # revisione: il rilascio resta fermo finche' non arriva un commit nuovo, e
+    # nessun semaforo lo dice — la sonda di parita' confronta il pod con lo
+    # StatefulSet, che non e' cambiato. Serve dal 2026-09-28, quando un hook
+    # PreSync (FA-109, templates/hook-attesa-scansione.yaml) e' entrato nel
+    # percorso di ogni rilascio: lo script esce sempre 0, ma il suo pod puo'
+    # fallire per ragioni sue (immagine, nodo). Applicato a mano, come il
+    # resto di questo file.
+    retry:
+      limit: 5
+      backoff:
+        duration: 1m
+        factor: 2
+        maxDuration: 10m

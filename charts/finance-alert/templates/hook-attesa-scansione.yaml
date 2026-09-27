@@ -1,0 +1,72 @@
+{{- if .Values.deployGate.enabled }}
+{{- /*
+  Niente rilascio durante una scansione (FA-109).
+
+  Un hook PreSync: ArgoCD lo esegue PRIMA di applicare il resto del chart, e
+  applica solo quando il Job e' finito. Lo script (files/attesa-scansione.sh)
+  chiede all'app viva se sta scansionando e, se si', aspetta — fino a un tetto,
+  oltre il quale lascia passare il rilascio comunque. Esce sempre 0: perche',
+  e' scritto nello script.
+
+  ⚠️ Dentro il cluster e non in CI, per la stessa ragione del CronJob di
+  parita': CI non raggiunge il nodo, ArgoCD si'. E' l'unico punto che vede
+  insieme «sta per partire un rilascio» e «l'app sta lavorando».
+
+  ⚠️ Le etichette NON sono quelle del selettore dell'app. Un pod con
+  `app.kubernetes.io/name=finance-alert` finisce fra quelli che una ricerca
+  per etichetta trova — e' cosi' che la sonda di parita' ha letto per sette
+  ore il pod sbagliato (CLAUDE.md, 2026-09-13).
+
+  Nessun ServiceAccount con permessi: l'hook fa solo una GET HTTP al Service.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "finance-alert.fullname" . }}-attesa-scansione
+  labels:
+    app.kubernetes.io/part-of: {{ include "finance-alert.name" . }}
+    app.kubernetes.io/component: attesa-scansione
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 2
+  # Largo sopra il tetto dello script: se scattasse, il Job fallirebbe e
+  # fermerebbe il rilascio — cioe' il guasto che lo script evita uscendo 0.
+  activeDeadlineSeconds: {{ add .Values.deployGate.maxWaitSeconds 300 }}
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: {{ include "finance-alert.name" . }}
+        app.kubernetes.io/component: attesa-scansione
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+      containers:
+        - name: attesa
+          image: {{ .Values.deployGate.image | quote }}
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests: { cpu: "10m", memory: "16Mi" }
+            limits: { cpu: "100m", memory: "32Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          env:
+            - name: URL
+              value: {{ printf "http://%s:%v/api/health" (include "finance-alert.fullname" .) .Values.service.port | quote }}
+            - name: ATTESA_MAX_S
+              value: {{ .Values.deployGate.maxWaitSeconds | quote }}
+            - name: PASSO_S
+              value: {{ .Values.deployGate.stepSeconds | quote }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+{{ .Files.Get "files/attesa-scansione.sh" | indent 14 }}
+{{- end }}

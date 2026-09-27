@@ -138,5 +138,8 @@ parityCheck:
 
 # Il drill di ripristino gira solo qui: e' l'unico ambiente con backup veri
 # su object storage e con un nodo il cui disco vada rispettato.
+deployGate:
+  enabled: true
+
 restoreDrill:
   enabled: true
