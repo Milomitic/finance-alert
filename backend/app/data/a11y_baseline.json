@@ -1,15 +1,11 @@
 {
-  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.  ⚠️ NON stringere una voce su UNA sola osservazione: /calendar nested-interactive e' stato portato 3 -> 2 da una singola corsa verde e la successiva ha riletto 3, facendo arrossare la CI su codice che nessuno aveva toccato. Quella rotta rende per DATA, quindi il conteggio oscilla col giorno in cui gira il gate: si stringe al massimo osservato, non al minimo visto una volta.  2026-09-15: /alerts (button-name 46 -> 39, nested-interactive 12 -> 10) e /stocks/AAPL (scrollable-region-focusable 3 -> 1) stretti dopo QUATTRO corse identiche del gate senza rete (FA-074), alle 00:49, 08:18, 08:33 e 08:45 UTC. /calendar NO, benche' abbia letto nested-interactive 3 -> 1 le stesse quattro volte: erano tutte nello stesso giorno, e quella rotta rende per data.",
+  "_perche": "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce che cresca; non pretende che sia zero, perche' un cancello che nasce rosso viene disattivato. Rigenerare con E2E_UPDATE_BASELINE=1 npm run e2e, e solo dopo aver CORRETTO qualcosa - mai per far passare la CI.  ⚠️ NON stringere una voce su UNA sola osservazione: /calendar nested-interactive e' stato portato 3 -> 2 da una singola corsa verde e la successiva ha riletto 3, facendo arrossare la CI su codice che nessuno aveva toccato. Quella rotta rende per DATA, quindi il conteggio oscilla col giorno in cui gira il gate: si stringe al massimo osservato, non al minimo visto una volta.  2026-09-15: /alerts (button-name 46 -> 39, nested-interactive 12 -> 10) e /stocks/AAPL (scrollable-region-focusable 3 -> 1) stretti dopo QUATTRO corse identiche del gate senza rete (FA-074), alle 00:49, 08:18, 08:33 e 08:45 UTC. /calendar NO, benche' abbia letto nested-interactive 3 -> 1 le stesse quattro volte: erano tutte nello stesso giorno, e quella rotta rende per data.  2026-09-28: /alerts portato a ZERO (51 -> 0) dopo SETTE corse identiche, dal 26 al 27 settembre: e' la correzione di FA-108 (9a710c4f, caselle con nome, colonne senza <th> vuoto, niente pulsanti annidati), cioe' codice e non dati. /calendar ancora NO: nested-interactive legge 1 in quattordici corse fra il 24 e il 27, ma tutte nella stessa vista mensile — va riletto dopo il cambio di mese.",
   "rotte": {
     "/": {
       "aria-hidden-focus": 1,
       "aria-valid-attr-value": 2
     },
-    "/alerts": {
-      "button-name": 39,
-      "empty-table-header": 2,
-      "nested-interactive": 10
-    },
+    "/alerts": {},
     "/setups": {},
     "/positions": {},
     "/stocks": {},
