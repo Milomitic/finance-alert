@@ -98,11 +98,33 @@ _ACTION_PATTERNS: tuple[tuple[str, str, str], ...] = (
     # (regex, action_code, price_target_action_label)
     (r"\b(?:downgrade[sd]?|cut[s]?\s+rating|lower[s]?\s+rating)\b", "down", "Downgrade"),
     (r"\b(?:upgrade[sd]?|rais(?:e|es|ed)\s+rating|boost[s]?\s+rating)\b", "up", "Upgrade"),
+    # ⚠️ A rating change written as "cuts Rollins to Neutral" / "Cuts to
+    # Underweight" (FA-107, 2026-09-28): none of the verbs above appear, so
+    # these fell through to nothing. The grade after "to" is what makes it a
+    # RATING and not a target ("cuts target to $48" has a dollar there).
+    (r"\b(?:cut[s]?|lower(?:s|ed)?)\b(?:\s+\S+){0,4}?\s+to\s+(?:underweight|underperform|"
+     r"neutral|hold|sell|reduce|equal[\s-]?weight|market\s+perform|sector\s+perform|in[\s-]?line)\b",
+     "down", "Downgrade"),
+    (r"\b(?:rais(?:e|es|ed)|lift(?:s|ed)?|boost(?:s|ed)?)\b(?:\s+\S+){0,4}?\s+to\s+(?:buy|"
+     r"strong\s+buy|outperform|overweight|accumulate|market\s+outperform|sector\s+outperform)\b",
+     "up", "Upgrade"),
     (r"\b(?:initiate[sd]?|start(?:s|ed)?\s+coverage|begin(?:s|ning)?\s+coverage)\b", "init", "Initiates"),
-    (r"\b(?:rais(?:e|es|ed)|boost(?:s|ed)?|lift(?:s|ed)?|increas(?:e|es|ed)|hik(?:e|es|ed))\b.{0,30}\btarget\b", "target_up", "Raises"),
+    (r"\b(?:rais(?:e|es|ed)|boost(?:s|ed)?|lift(?:s|ed)?|increas(?:e|es|ed)|hik(?:e|es|ed)|upp(?:ed|s)?)\b"
+     r".{0,30}\b(?:target|price\s+forecast)\b", "target_up", "Raises"),
     (r"\b(?:lower(?:s|ed)?|cut(?:s)?|slash(?:es|ed)?|trim(?:s|med)?|reduc(?:e|es|ed))\b.{0,30}\btarget\b", "target_down", "Lowers"),
+    # ⚠️ The PASSIVE form, target before the verb: "Price Target Hiked to
+    # $760", "price target raised by UBS", "Price Target Hike". Six of
+    # twenty-five real headlines (2026-09-28) read this way, and all six fell
+    # to the generic rule below as "Maintains" — a raise shown as a
+    # confirmation. Must stay ABOVE the "maintains" and generic rules.
+    (r"\b(?:price\s+target|target\s+price|price\s+forecast|PT)\b.{0,20}?\b(?:rais(?:e|es|ed)|"
+     r"hik(?:e|es|ed)|lift(?:s|ed)?|boost(?:s|ed)?|increas(?:e|es|ed)|upp(?:ed|s)?)\b",
+     "target_up", "Raises"),
+    (r"\b(?:price\s+target|target\s+price|price\s+forecast|PT)\b.{0,20}?\b(?:cut(?:s)?|"
+     r"lower(?:s|ed)?|trim(?:s|med)?|slash(?:es|ed)?|reduc(?:e|es|ed))\b",
+     "target_down", "Lowers"),
     (r"\b(?:maintain(?:s|ed)?|reiterat(?:e|es|ed)|stick(?:s)?\s+with|keep[s]?|hold[s]?)\b.{0,30}\b(?:rating|outperform|buy|sell|hold|target)\b", "main", "Maintains"),
-    (r"\bprice\s+target\b", "main", "Maintains"),  # generic "price target raised/cut" without explicit verb
+    (r"\bprice\s+target\b", "main", "Maintains"),  # generic "price target" without a direction verb
 )
 
 
@@ -231,8 +253,10 @@ def extract_from_news_item(
         if m:
             date_str = m.group(1)
 
-    # First pass: title alone.
-    title_mention = _try_extract(title, date_str=date_str, link=link, source_title=title)
+    # First pass: title alone — or, in a market wrap, the ONE clause that
+    # carries the analyst action (see `_action_clause`).
+    title_scope = _action_clause(title) if title else title
+    title_mention = _try_extract(title_scope, date_str=date_str, link=link, source_title=title)
 
     # Build the merged "best-effort" mention from title + body — only
     # then apply the ticker-presence gate (so the gate sees the
@@ -267,8 +291,18 @@ def extract_from_news_item(
     # otherwise we treat the extraction as cross-ticker contamination
     # and drop it. Callers without ticker context (legacy code, tests)
     # bypass the gate.
-    haystack_known = " ".join(filter(None, [title, summary])).strip()
+    # ⚠️ The FIRM is never the subject of its own note: "Nebius Stock Soars as
+    # BNP Paribas Delivers Massive Price Target Hike" was BNP Paribas' action
+    # on Nebius, and BNP.PA's feed took it as its own because "BNP" is in the
+    # title. The firm's name is removed before looking for the subject.
+    haystack_known = _without_firm(" ".join(filter(None, [title, summary])).strip(), merged.firm)
     if ticker and not _is_news_about_ticker(haystack_known, ticker, company_name):
+        return None
+    # ⚠️ In a market wrap the subject must be in the SAME clause as the
+    # action, and the summary does not rescue it: it usually covers every
+    # name in the headline.
+    if ticker and merged is title_mention and title_scope != title \
+            and not _is_news_about_ticker(_without_firm(title_scope, merged.firm), ticker, company_name):
         return None
 
     # ── Body-fetch last-resort enrichment ──
@@ -299,7 +333,7 @@ def extract_from_news_item(
             # the body must confirm it — guards against contamination
             # via "story XYZ also mentioned in passing".
             if ticker and not _is_news_about_ticker(
-                haystack_known + " " + body_excerpt, ticker, company_name,
+                haystack_known + " " + _without_firm(body_excerpt, merged.firm), ticker, company_name,
             ):
                 pass  # gate failed even with body → drop the enrichment
             else:
@@ -312,6 +346,36 @@ def extract_from_news_item(
                     merged.to_grade = _match_grade(body_excerpt) or ""
 
     return merged
+
+
+def _without_firm(text: str, firm: str) -> str:
+    """`text` with every mention of the analyst `firm` blanked out."""
+    for canonical, pattern in _FIRM_PATTERNS:
+        if canonical == firm:
+            text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+    return text
+
+
+def _action_clause(title: str) -> str:
+    """The clause of a headline that carries the analyst action.
+
+    ⚠️ FA-107 (2026-09-28). Market-wrap headlines put several companies in
+    one title, one per clause: "Humana Jumps 7% on Barclays Upgrade and $515
+    Target; UnitedHealth Nudges Higher". Read whole, UnitedHealth's news feed
+    extracted Barclays' upgrade of HUMANA as its own, because its name is in
+    the title — three of twenty-five real headlines did this. The action, its
+    grade and its subject all belong to the clause that names the firm; the
+    grade too ("…; AT&T and Verizon Hold Steady" read as a Hold).
+
+    Single-clause titles come back unchanged.
+    """
+    parts = [p.strip() for p in title.split(";") if p.strip()]
+    if len(parts) <= 1:
+        return title
+    for part in parts:
+        if _match_firm(part) and _match_action(part):
+            return part
+    return title
 
 
 def _try_extract(
