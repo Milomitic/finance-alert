@@ -371,6 +371,12 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
         </div>
       )}
 
+      {/* ⚠️ Non durante il primo caricamento (FA-106). I log arrivano da una
+          chiamata veloce e lo snapshot da una lenta: disegnato subito, il log
+          stava sotto l'intestazione e poi veniva spinto giu' di oltre 2.000px
+          da banner e schede — CLS 0,62 su un tablet. Cosi' compare gia' al suo
+          posto. Se lo snapshot FALLISCE il log c'e', che e' quando serve. */}
+      {(health || !healthLoading) && (
       <div ref={logStreamRef} className="scroll-mt-4">
         <LogStream
           records={onInfraOrigin ? infraLogs.records : logs}
@@ -390,6 +396,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
           }}
         />
       </div>
+      )}
     </div>
   );
 }

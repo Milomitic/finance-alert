@@ -23,6 +23,7 @@ import { usePremarketMovers } from "@/hooks/usePremarketMovers";
 import { cumulativeVolumeFraction } from "@/lib/intradayVolume";
 import { formatLivello, formatVariazione, posizioneNelRange } from "@/lib/marketNumber";
 import { agendaDelGiorno, agendaVuota } from "@/lib/oggiMercato";
+import { PANIERE_CONTESTO } from "@/lib/paniereLive";
 import { sparklinePoints } from "@/lib/sparkline";
 import { etToday, formatDelta, usSessionClock, type UsPhase } from "@/lib/usSession";
 import { cn } from "@/lib/utils";
@@ -194,9 +195,15 @@ function perche(a: LiveAsset | undefined, nome: string): string {
  * Nasdaq o sul Dow: lo dicono il testo e il suggerimento. I conti stanno in
  * `lib/vix`, coi loro test.
  */
-function RiquadroVix({ vix, sp500 }: { vix: LiveAsset; sp500: LiveAsset | undefined }) {
-  const valore = vix.quote?.price ?? null;
-  const cambio = vix.quote?.change_pct ?? null;
+function RiquadroVix({ vix, sp500, inArrivo }: {
+  vix: LiveAsset | undefined;
+  sp500: LiveAsset | undefined;
+  /** Le quotazioni non sono ancora arrivate: il riquadro c'e' gia', con la
+   *  sua forma, e dice che i valori stanno arrivando. */
+  inArrivo: boolean;
+}) {
+  const valore = vix?.quote?.price ?? null;
+  const cambio = vix?.quote?.change_pct ?? null;
   const seduta = movimentoSeduta(valore);
   const trenta = movimentoTrentaGiorni(valore);
   const q = sp500?.quote;
@@ -220,7 +227,7 @@ function RiquadroVix({ vix, sp500 }: { vix: LiveAsset; sp500: LiveAsset | undefi
         <span className="text-lg font-bold leading-none tabular-nums">
           {valore != null
             ? <FlashValue value={valore} format={(v) => formatLivello(v) ?? "—"} noTween />
-            : <NoValue hint={perche(vix, "VIX")} />}
+            : <NoValue hint={inArrivo ? "VIX: quotazioni in arrivo" : perche(vix, "VIX")} />}
         </span>
         {cambio != null && (
           <span className={cn("text-sm font-semibold tabular-nums", tonoVariazioneVix(cambio))}>
@@ -233,11 +240,17 @@ function RiquadroVix({ vix, sp500 }: { vix: LiveAsset; sp500: LiveAsset | undefi
           </span>
         )}
       </div>
-      {seduta != null && (
+      {/* ⚠️ Le due righe ci sono SEMPRE, con «—» dove manca un valore
+          (FA-106). Rese solo coi dati, il riquadro passava da una riga a tre
+          quando arrivava il VIX, e tutto cio' che sta sotto scendeva di
+          ~40px. Stessa forma prima e dopo: arrivano i numeri, non le righe. */}
+      {(
         <div className="mt-1 text-xs leading-snug text-muted-foreground">
           <div>
             S&P atteso in una seduta{" "}
-            <span className="font-semibold tabular-nums text-foreground">±{formatPercento(seduta)}%</span>
+            <span className="font-semibold tabular-nums text-foreground">
+              {seduta != null ? `±${formatPercento(seduta)}%` : "—"}
+            </span>
             {intervallo && (
               <>
                 {" · "}
@@ -248,9 +261,10 @@ function RiquadroVix({ vix, sp500 }: { vix: LiveAsset; sp500: LiveAsset | undefi
             )}
           </div>
           <div>
-            {trenta != null && (
-              <>a 30 giorni <span className="font-semibold tabular-nums text-foreground">±{formatPercento(trenta, 1)}%</span></>
-            )}
+            a 30 giorni{" "}
+            <span className="font-semibold tabular-nums text-foreground">
+              {trenta != null ? `±${formatPercento(trenta, 1)}%` : "—"}
+            </span>
             {multiplo != null && (
               <>
                 {" · oggi "}
@@ -782,7 +796,14 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
   }, [levaQ.data]);
 
   const vix = perSimbolo.get("^VIX");
-  const contesto = assets.filter((a) => !USA.includes(a.symbol) && a.symbol !== "^VIX");
+  /* Prima che le quotazioni arrivino, le voci del paniere senza valori: la
+   * riga ha subito la sua forma e arrivano solo i numeri (FA-106, vedi
+   * `lib/paniereLive`). */
+  const contesto: LiveAsset[] = assetsQ.isLoading
+    ? PANIERE_CONTESTO.map((v) => ({
+        ...v, name: NOMI_BREVI[v.symbol] ?? v.symbol, quote: null, history: null,
+      }))
+    : assets.filter((a) => !USA.includes(a.symbol) && a.symbol !== "^VIX");
   const gruppi: [string, LiveAsset[]][] = [
     ["Indici", contesto.filter((a) => a.category === "index")],
     ["Materie prime", contesto.filter((a) => a.category === "commodity")],
@@ -897,7 +918,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 </span>
               </div>
             )}
-            {vix && <RiquadroVix vix={vix} sp500={perSimbolo.get("^GSPC")} />}
+            <RiquadroVix vix={vix} sp500={perSimbolo.get("^GSPC")} inArrivo={assetsQ.isLoading} />
           </div>
 
           <div className="grid min-w-0 grid-cols-3 gap-2">

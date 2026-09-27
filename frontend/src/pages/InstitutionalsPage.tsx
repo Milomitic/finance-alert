@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 import type { InstitutionalSummary, TickerAggregate } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
 import { SmartMoneyHighlights } from "@/components/institutionals/SmartMoneyHighlights";
 
@@ -385,6 +386,22 @@ export default function InstitutionalsPage() {
           statistiche che dicono su che base sono calcolate. Ha ASSORBITO le
           schede «Acquisti recenti» e «Vendite recenti», che mostravano
           esattamente questi dati con lo stesso ordinamento del server. */}
+      {/* ⚠️ Scheletro per il PRIMO caricamento (FA-106). Le tre schede si
+          disegnavano subito con le tabelle vuote e le righe arrivavano dopo:
+          «Le mosse» cresceva di 280px, «Most-picked» di 480, e ognuna spingeva
+          giu' quelle sotto — CLS 0,53 su un tablet. Ora il contenuto compare
+          in un colpo solo. Le `key` distinte impediscono a React di
+          trasformare lo scheletro nella pagina (vedi StockDetailPage). */}
+      {agg.isLoading || list.isLoading ? (
+        <div key="scheletro" className="flex flex-col gap-4" aria-busy="true">
+          <CardSkeleton label="LE MOSSE CHE CONTANO" rows={6} strongHeader className="h-[500px]" />
+          <div className="grid gap-3 lg:grid-cols-[2fr_1fr] [&>*]:min-w-0">
+            <CardSkeleton label="MOST-PICKED" rows={10} strongHeader className="h-[540px]" />
+            <CardSkeleton label="SETTORI" rows={6} strongHeader className="h-[540px]" />
+          </div>
+        </div>
+      ) : (
+      <div key="contenuto" className="flex flex-col gap-4">
       <SmartMoneyHighlights agg={agg.data} fondi={list.data} />
 
       {/* Chi e' posseduto da piu' fondi, e come si distribuisce il capitale. */}
@@ -529,6 +546,8 @@ export default function InstitutionalsPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
+      )}
     </div>
   );
 }

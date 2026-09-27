@@ -16,8 +16,14 @@ let eventi: CalendarEvent[] = [];
 /** Quotazioni del paniere a leva (`/api/stocks/quotes`). */
 let quotazioni: unknown[] = [];
 
+/** Le quotazioni live non sono ancora arrivate (FA-106). */
+let quotazioniInArrivo = false;
+
 vi.mock("@/hooks/useLiveAssets", () => ({
-  useLiveAssets: () => ({ data: { assets }, isLoading: false }),
+  useLiveAssets: () =>
+    quotazioniInArrivo
+      ? { data: undefined, isLoading: true }
+      : { data: { assets }, isLoading: false },
 }));
 vi.mock("@/hooks/usePremarketMovers", () => ({
   usePremarketMovers: () => ({ data: premarket }),
@@ -700,5 +706,37 @@ describe("il VIX tradotto in movimento atteso", () => {
     conVix(-3.2);
     montaA(SEDUTA);
     expect(screen.getByText("−3,20%").className).toContain("emerald");
+  });
+});
+
+describe("MarketPulseJumbotron — la forma c'e' prima dei dati (FA-106)", () => {
+  /* Le quotazioni live costano in media 1,7 s in produzione. Finche' non
+   * arrivavano, il riquadro VIX non esisteva e la riga di contesto era vuota:
+   * poi comparivano e spingevano giu' tutto, CLS 0,22 su un telefono. Ora la
+   * forma c'e' subito e arrivano solo i valori. */
+  it("mentre le quotazioni arrivano, le voci di contesto sono gia' a schermo per nome", () => {
+    quotazioniInArrivo = true;
+    try {
+      montaA(SEDUTA);
+      for (const nome of ["Nikkei", "Stoxx 50", "Oro", "Bitcoin", "Ethereum"]) {
+        expect(screen.getByText(nome)).toBeInTheDocument();
+      }
+    } finally {
+      quotazioniInArrivo = false;
+    }
+  });
+
+  it("il riquadro VIX ha le sue tre righe anche senza valori", () => {
+    quotazioniInArrivo = true;
+    try {
+      montaA(SEDUTA);
+      expect(screen.getByText("VIX")).toBeInTheDocument();
+      // Le due righe del movimento atteso, con «—» al posto dei numeri: senza,
+      // il riquadro nascerebbe di una riga e ne guadagnerebbe due all'arrivo.
+      expect(screen.getByText(/S&P atteso in una seduta/)).toHaveTextContent("—");
+      expect(screen.getByText(/a 30 giorni/)).toHaveTextContent("—");
+    } finally {
+      quotazioniInArrivo = false;
+    }
   });
 });

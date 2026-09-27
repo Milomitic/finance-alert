@@ -11,9 +11,11 @@ import { AlertsInsightCard } from "@/components/AlertsInsightCard";
 import { AlertsTable } from "@/components/AlertsTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
 import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
 import { useBulkAlerts, usePatchAlert } from "@/hooks/useAlertMutations";
+import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import {
   esitoNascostoDallArchivio, filtersFromSearch, searchFromState,
 } from "@/lib/alertFilters";
@@ -99,6 +101,16 @@ export function SignalsView() {
   // Confluence is always fetched now (no more view toggle) — it feeds the
   // insight card that sits above the table.
   const conf = useConfluence(7);
+  // La stessa query che `SignalStatsSection` legge da sola: react-query la
+  // condivide per chiave, qui serve solo a sapere quando e' arrivata.
+  const prestazioni = useDetectorPerformance();
+  // Vero dal primo arrivo di tutte e tre in poi (un errore conta come
+  // arrivo): solo il caricamento INIZIALE usa lo scheletro unico. Aggiornato
+  // in render, come React documenta per lo stato che segue altro stato.
+  const [haCaricato, setHaCaricato] = useState(false);
+  const arrivate = [list, conf, prestazioni].every((q) => q.data !== undefined || q.isError);
+  if (!haCaricato && arrivate) setHaCaricato(true);
+  const primoCaricamento = !haCaricato;
   const bulk = useBulkAlerts();
   const patchAlert = usePatchAlert();
 
@@ -153,6 +165,21 @@ export function SignalsView() {
         </Button>
       </div>
 
+      {/* ⚠️ Il PRIMO caricamento e' un blocco solo (FA-106). Statistiche,
+          confluenze e tabella arrivano da tre chiamate diverse, ognuna sopra
+          uno scheletro piu' basso del contenuto vero (statistiche +108px,
+          confluenze +421): ognuna spingeva giu' quelle sotto, CLS 0,12 su un
+          tablet. In produzione costano 0,18 / 0,49 / 0,39 s in parallelo,
+          quindi aspettarle tutte vale circa la piu' lenta. I ricaricamenti
+          dopo un filtro restano per sezione: partono da un clic. */}
+      {primoCaricamento ? (
+        <div key="scheletro" className="space-y-4" aria-busy="true">
+          <CardSkeleton label="EFFICACIA DEI SEGNALI" rows={3} strongHeader className="h-[240px]" />
+          <CardSkeleton label="CONFLUENZE ATTIVE" rows={10} strongHeader className="h-[560px]" />
+          <CardSkeleton label="SEGNALI" rows={12} strongHeader className="h-[640px]" />
+        </div>
+      ) : (
+      <div key="contenuto" className="space-y-4">
       {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
           tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
       <SignalStatsSection />
@@ -296,6 +323,9 @@ export function SignalsView() {
             </Button>
           </div>
         </div>
+      )}
+
+      </div>
       )}
 
       <AlertDetailDialog alert={openDetail} onClose={() => setOpenDetail(null)} />

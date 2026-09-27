@@ -341,6 +341,12 @@ export function SetupsView({ vista }: SetupsViewProps) {
   // lo dica.
   const offset = offsetDa(params.get("pagina"));
   const q = useSetups(tone, ticker, view, { detector, sort, offset });
+  // Vero dal primo arrivo di dati in poi, per tutta la vita della vista: solo
+  // il caricamento INIZIALE usa lo scheletro unico. Aggiornato in render e non
+  // in un effect, come React documenta per lo stato che segue una prop.
+  const [haCaricato, setHaCaricato] = useState(false);
+  if (!haCaricato && (q.data || q.isError)) setHaCaricato(true);
+  const primoCaricamento = q.isLoading && !haCaricato;
 
   const all = useMemo(() => q.data?.setups ?? [], [q.data?.setups]);
   // ⚠️ I conteggi vengono dal SERVER e descrivono la popolazione. Prima erano
@@ -415,6 +421,29 @@ export function SetupsView({ vista }: SetupsViewProps) {
         </div>
       )}
 
+      {/* ⚠️ Il PRIMO caricamento e' un blocco solo (FA-106). Misure, filtri e
+          lista arrivavano insieme ma sopra uno scheletro alto 96px invece dei
+          ~230 veri, e la riga dei filtri si allungava quando compaiono le
+          condizioni: tutto cio' che stava sotto scendeva, CLS 0,22 su un
+          desktop. I ricaricamenti successivi (un filtro, una pagina) tengono
+          gli scheletri per sezione: partono da un clic, e un clic non e' una
+          scossa inattesa. Le `key` impediscono a React di trasformare lo
+          scheletro nel contenuto (vedi StockDetailPage). */}
+      {primoCaricamento ? (
+        <div key="scheletro" className="space-y-4" aria-busy="true">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <CardSkeleton key={i} rows={2} className="h-[96px]" />
+            ))}
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <CardSkeleton key={i} rows={2} className="h-[110px]" />
+            ))}
+          </div>
+        </div>
+      ) : (
+      <div key="contenuto" className="space-y-4">
       {/* Le misure SOPRA la lista (richiesta dell'utente, 2026-09-16), con le
           metriche principali in evidenza. `conversion_stats` non guarda i
           filtri della lista: le misure sono di tutti i setup del database, e
@@ -590,6 +619,8 @@ export function SetupsView({ vista }: SetupsViewProps) {
           </div>
         )}
       </div>
+      </div>
+      )}
       <SetupDetailDialog setup={openSetup} onClose={() => setOpenSetup(null)} />
       {/* Il terzo anello: setup → segnale → posizione. Lo stesso dialogo che
           la pagina Segnali e la pagina Posizioni aprono, e che contiene

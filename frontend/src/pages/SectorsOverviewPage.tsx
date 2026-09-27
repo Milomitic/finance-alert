@@ -84,12 +84,18 @@ export default function SectorsOverviewPage() {
     return den > 0 ? num / den : null;
   }, [data]);
 
-  if (isLoading) {
+  // ⚠️ Lo scheletro aspetta ANCHE le classifiche (FA-106). Arrivavano dopo il
+  // resto con uno scheletro da ~170px contro i ~480 veri, e spingevano giu' la
+  // matrice dei settori: CLS 0,11 su ogni viewport. In produzione le due
+  // chiamate costano uguale (~0,6 s di media), quindi attenderle entrambe non
+  // rallenta la pagina. Le `key` sulle due radici impediscono a React di
+  // trasformare lo scheletro nella pagina (vedi StockDetailPage).
+  if (isLoading || boardsLoading) {
     // Skeleton strutturato che rispecchia la pagina (4 tile riassuntive
     // + griglia di card settore) — stesso pattern di SectorDetailPage,
     // era un semplice "Caricamento…" testuale.
     return (
-      <div className="space-y-6">
+      <div key="scheletro" className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Esplora</h2>
         {/* Mirrors the real layout: three ranking cards, then the two lenses. */}
         <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
@@ -130,7 +136,7 @@ export default function SectorsOverviewPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div key="pagina" className="space-y-6">
       {/* ─── Header + universe totals on one line ──────────────────── */}
       <div>
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">

@@ -16,7 +16,28 @@ import { ROTTE, expect, test } from "./fixtures";
  * cinque, escluse quelle subito dopo un input. Si misura il CARICAMENTO — dalla
  * navigazione a pagina ferma — che e' dove i dati arrivano e spostano cio' che
  * e' gia' a schermo.
+ *
+ * Il tetto e' UNO per tutte le rotte e i viewport: la soglia «buono» di
+ * web-vitals. Misurato prima di accenderlo (2026-09-28, seme e2e): tutte le
+ * rotte fra 0 e 0,044 dopo le correzioni, contro 0,11-0,62 prima. Le cause,
+ * sempre della stessa famiglia — un blocco che arriva coi dati e spinge giu'
+ * cio' che c'e' gia':
+ *
+ *   - lo scheletro trasformato nella pagina da React (stessa radice, stesso
+ *     `<div>` nella stessa posizione): dettaglio titolo, esplora;
+ *   - il log disegnato subito e spinto giu' dallo snapshot: diagnostica;
+ *   - sezioni che caricano ognuna per conto suo sopra scheletri piu' bassi:
+ *     superinvestor, in formazione, segnali — ora il primo caricamento e' un
+ *     blocco solo;
+ *   - il riquadro VIX e la riga di contesto del jumbotron, nati vuoti.
+ *
+ * ⚠️ Il seme non ha rete: quotazioni, notizie e fondamentali falliscono
+ * subito. Una scossa che nasce solo coi dati veri — una scheda che si allunga
+ * quando arrivano le notizie — qui NON si vede. Il RUM in produzione resta la
+ * misura di quella meta'.
  */
+
+const TETTO = 0.1;
 
 type Scossa = { valore: number; t: number; chi: string[] };
 type Misura = { cls: number; scosse: Scossa[] };
@@ -91,8 +112,37 @@ for (const rotta of ROTTE) {
     const peggiori = [...m.scosse].sort((a, b) => b.valore - a.valore).slice(0, 4)
       .map((s) => `${s.valore.toFixed(3)} a ${s.t}ms: ${s.chi.join(" | ")}`);
     console.log(`CLS ${info.project.name} ${rotta.path}: ${m.cls.toFixed(3)}\n  ${peggiori.join("\n  ")}`);
+    expect(
+      m.cls,
+      `${rotta.path} salta mentre carica: CLS ${m.cls.toFixed(3)} oltre ${TETTO}. ` +
+        `Le scosse piu' grandi, con l'elemento spostato e da dove a dove:\n  ${peggiori.join("\n  ")}`,
+    ).toBeLessThanOrEqual(TETTO);
   });
 }
+
+test("il misuratore SA vedere una scossa", async ({ page }) => {
+  /* Controllo negativo: senza, un osservatore rotto — un tipo di voce
+   * sbagliato, un `buffered` dimenticato — renderebbe verde ogni rotta per
+   * costruzione. Un blocco inserito in cima a <main> a pagina ferma, senza
+   * input, sposta tutto cio' che c'e' sotto: deve contare. */
+  await osserva(page);
+  await page.goto("/positions", { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  const prima = await page.evaluate(() => window.__cls!.cls);
+  expect(prima).toBeLessThanOrEqual(TETTO);
+
+  await page.evaluate(() => {
+    const main = document.querySelector("main")!;
+    const sonda = document.createElement("div");
+    sonda.style.height = `${Math.round(window.innerHeight / 2)}px`;
+    sonda.textContent = "SONDA";
+    main.prepend(sonda);
+  });
+  await page.waitForTimeout(500);
+  const dopo = await page.evaluate(() => window.__cls!.cls);
+  expect(dopo, "una sonda alta mezzo schermo in cima a <main> deve produrre una scossa")
+    .toBeGreaterThan(TETTO);
+});
 
 test.afterAll(async ({}, info) => {
   const file = process.env.E2E_CLS_OUT;
