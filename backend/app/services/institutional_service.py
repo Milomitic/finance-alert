@@ -79,6 +79,19 @@ _SHARE_CLASS_PRIMARY: dict[str, str] = {
 }
 
 
+#: Una riga e' una POSIZIONE solo se porta azioni. Il salvataggio scrive di
+#: proposito righe a zero azioni con `action="sold_out"`, perche' la pagina
+#: titolo mostri chi e' uscito; ma chi e' uscito non detiene. NULL conta:
+#: alcune righe di Dataroma portano il valore senza il numero di azioni.
+#:
+#: ⚠️ Proprietario unico (FA-107). Il badge smart-money applicava gia' questa
+#: regola e «I piu' scelti» no: misurato in produzione il 2026-09-28, 7.468
+#: righe fantasma negli ultimi depositi, 5.091 titoli con il conteggio
+#: gonfiato, e nella top 25 Visa a 51 detentori invece di 49 e ADI dentro
+#: con 31 invece di 29.
+_DETIENE = func.coalesce(InstitutionalHolding.shares, 1) > 0
+
+
 def _freshness_cutoff(months: int = MAX_FILING_AGE_MONTHS) -> date:
     """Oldest period_end_date still considered 'current'."""
     return date.today() - timedelta(days=int(30.4 * months))
@@ -923,7 +936,7 @@ def get_aggregate_stats(
             func.coalesce(func.sum(InstitutionalHolding.portfolio_pct), 0.0).label("total_pct"),
         )
         .join(InstitutionalFiling, InstitutionalFiling.id == InstitutionalHolding.filing_id)
-        .where(InstitutionalHolding.filing_id.in_(latest_filing_ids))
+        .where(InstitutionalHolding.filing_id.in_(latest_filing_ids), _DETIENE)
         .group_by(canon_ticker)
         .order_by(
             func.count(func.distinct(InstitutionalFiling.institutional_id)).desc(),
@@ -949,6 +962,7 @@ def get_aggregate_stats(
             .where(
                 InstitutionalHolding.filing_id.in_(latest_filing_ids),
                 canon_ticker.in_(top_tickers),
+                _DETIENE,
             )
             .order_by(InstitutionalHolding.portfolio_pct.desc().nullslast())
         ).all()
@@ -1417,8 +1431,7 @@ def holder_counts_for_tickers(
         .where(
             InstitutionalHolding.ticker.in_(wanted),
             InstitutionalFiling.period_end_date >= cutoff,
-            # shares==0 = sold_out phantom row; NULL shares still count.
-            func.coalesce(InstitutionalHolding.shares, 1) > 0,
+            _DETIENE,
         )
         .group_by(InstitutionalHolding.ticker)
     ).all()
