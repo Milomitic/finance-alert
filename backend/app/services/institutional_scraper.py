@@ -264,27 +264,36 @@ def _parse_period_end(soup: BeautifulSoup) -> date | None:
     return None
 
 
+# The amount that FOLLOWS the label, not the first amount in the tag: an outer
+# container carries the whole page's text, and its first "$" may be anything.
+_TOTAL_LABEL = re.compile(
+    r"(?:portfolio|total)\s+value\s*:?\s*\$\s*([0-9][0-9,.]*)\s*(bn|mn|billion|million|b|m)?\b",
+    re.I,
+)
+
+
 def _parse_total_value(soup: BeautifulSoup) -> int | None:
-    """Look for "Total Value: $X" near the page header."""
-    for tag in soup.find_all(["p", "span", "div", "h2", "h3"]):
-        text = tag.get_text(" ", strip=True)
-        if "total value" not in text.lower():
-            continue
-        # Pull the first dollar-amount-like substring after the label
-        m = re.search(r"\$([0-9,\.]+)\s*(B|M|bn|mn|billion|million)?", text, re.I)
-        if not m:
-            continue
-        try:
-            num = float(m.group(1).replace(",", ""))
-        except ValueError:
-            continue
-        unit = (m.group(2) or "").lower()
-        if unit.startswith("b"):
-            return int(num * 1_000_000_000)
-        if unit.startswith("m"):
-            return int(num * 1_000_000)
-        return int(num)
-    return None
+    """Read "Portfolio value: $X" (today's label) or "Total Value: $X".
+
+    ⚠️ FA-107 (2026-09-28): the page writes "Portfolio value:" and this looked
+    only for "total value", so it NEVER matched — 226 of 357 filings in
+    production, every Dataroma one, carried an empty total, i.e. the
+    superinvestors' "Tot $" column was blank. Found by the first test that ran
+    the parser on a real page.
+    """
+    m = _TOTAL_LABEL.search(soup.get_text(" ", strip=True))
+    if not m:
+        return None
+    try:
+        num = float(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    unit = (m.group(2) or "").lower()
+    if unit.startswith("b"):
+        return int(num * 1_000_000_000)
+    if unit.startswith("m"):
+        return int(num * 1_000_000)
+    return int(num)
 
 
 def _parse_holdings_rows(soup: BeautifulSoup) -> Iterable[ScrapedHolding]:
@@ -378,15 +387,17 @@ def _resolve_columns(headers: list[str]) -> dict[str, int]:
             idx.setdefault("stock", i)
         elif h == "value" or (h.startswith("value") or "$ value" in h):
             idx.setdefault("value", i)
-    # Canonical Dataroma "Holdings" layout — used when label matching
-    # missed a key. These are the indices observed at 2026-Q1; if
-    # Dataroma rebrands and labels stop matching, the dynamic resolution
-    # above kicks in and these become irrelevant.
+    # Canonical Dataroma "Holdings" layout (2026-Q1) — ONLY when no label
+    # matched at all, i.e. there is no header to read.
+    #
+    # ⚠️ It used to fill every key label matching MISSED, one by one. With a
+    # header that has lost its "Recent Activity" column, "activity" then
+    # pointed at index 3 — the SHARES — and every share count was classified
+    # as a trading action. A header we can read is the authority on what the
+    # page contains; a key it does not name stays absent.
+    if not idx:
+        return {"stock": 1, "pct_portfolio": 2, "activity": 3, "shares": 4, "value": 6}
     idx.setdefault("stock", 1)
-    idx.setdefault("pct_portfolio", 2)
-    idx.setdefault("activity", 3)
-    idx.setdefault("shares", 4)
-    idx.setdefault("value", 6)
     return idx
 
 
@@ -413,8 +424,11 @@ def _parse_one_row(
     shares = _parse_int(_cell_text(cells, idx.get("shares")))
     pct_port = _parse_pct(_cell_text(cells, idx.get("pct_portfolio")))
     value = _parse_money(_cell_text(cells, idx.get("value")))
-    activity = _cell_text(cells, idx.get("activity")) or ""
-    action = _classify_action(activity)
+    # No activity COLUMN is not the same as an empty activity CELL: the first
+    # means we do not know, the second that the position did not change.
+    activity_col = idx.get("activity")
+    activity = _cell_text(cells, activity_col) or ""
+    action = _classify_action(activity) if activity_col is not None else None
     # Q/Q POSITION change is encoded inside the Recent Activity cell:
     # "Reduce 0.34%" → -0.34, "Add 12.5%" → +12.5, "New" / "Sold out" → null.
     # Sign is inferred from the verb (reduce/sell → negative).
@@ -505,16 +519,29 @@ def _parse_money(s: str) -> int | None:
 
 
 def _classify_action(text: str) -> str | None:
-    """Map Dataroma activity tags to our 5-value action enum."""
+    """Map a Dataroma "Recent Activity" cell to our 5-value action enum.
+
+    Called only when the page HAS the activity column. Three rules, each
+    measured on the live pages of 2026-09-28 (FA-107):
+
+    - an EMPTY cell means the position did not change in the quarter ->
+      "hold", the label the SEC path uses within +-2%. It was None, so the
+      unchanged half of a portfolio read as "unknown";
+    - "Buy" is Dataroma's word for a position OPENED this quarter -> "new".
+      It fell through to "hold", and "Le mosse che contano" counts only
+      new/add as buys: superinvestors' new positions never appeared there;
+    - text we do not recognise is UNKNOWN (None), never "hold": a page that
+      changes shape must not produce plausible labels.
+    """
     t = text.strip().lower()
     if not t:
-        return None
-    if "new" in t:
+        return "hold"
+    if "new" in t or t.startswith("buy"):
         return "new"
     if "add" in t:
         return "add"
-    if "reduce" in t or "sell" in t and "out" not in t:
-        return "reduce"
     if "sold out" in t or "sell out" in t:
         return "sold_out"
-    return "hold"
+    if "reduce" in t or "sell" in t:
+        return "reduce"
+    return None
