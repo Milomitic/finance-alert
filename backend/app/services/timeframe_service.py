@@ -447,18 +447,18 @@ class TimeframeKpis:
     ema20: float | None
     ema50: float | None
     ema200: float | None
-    ema20_above: bool | None  # last_close > ema20
+    ema20_above: bool | None  # last_close > ema20; None when equal or unknown
     ema50_above: bool | None
     ema200_above: bool | None
     bb_upper: float | None
     bb_middle: float | None
     bb_lower: float | None
-    bb_position: float | None  # 0..1 inside the band; None if outside or no band
+    bb_position: float | None  # 0..1 inside the band, <0 or >1 outside; None with no band
     macd_line: float | None
     macd_signal: float | None
     macd_hist: float | None
     macd_tone: str  # "bullish" | "bearish" | "neutral"
-    # Aggregated bullish/bearish score, range -3..+3:
+    # Aggregated bullish/bearish score, range -4..+4 (four terms):
     #   +1 each for: price > EMA20, price > EMA50, MACD bullish
     #   -1 each for: price < EMA20, price < EMA50, MACD bearish
     #   RSI overbought adds -1 (caps the score at +2 from a hot rally),
@@ -499,15 +499,18 @@ def compute_timeframe_kpis(bars: list[Bar], timeframe: str) -> TimeframeKpis:
         else "neutral"
     )
 
-    ema20_above = (
-        last_close > ema20 if last_close is not None and ema20 is not None else None
-    )
-    ema50_above = (
-        last_close > ema50 if last_close is not None and ema50 is not None else None
-    )
-    ema200_above = (
-        last_close > ema200 if last_close is not None and ema200 is not None else None
-    )
+    # ⚠️ Uguale non e' «sotto» (FA-107): su una serie piatta il prezzo
+    # coincide con le medie, `>` rendeva False, e un titolo fermo — per esempio
+    # sotto offerta pubblica — prendeva -2 e l'etichetta «bearish». None e'
+    # «ne' sopra ne' sotto» e non pesa sul punteggio.
+    def _sopra(media: float | None) -> bool | None:
+        if last_close is None or media is None or last_close == media:
+            return None
+        return last_close > media
+
+    ema20_above = _sopra(ema20)
+    ema50_above = _sopra(ema50)
+    ema200_above = _sopra(ema200)
 
     bb_position = None
     if (
