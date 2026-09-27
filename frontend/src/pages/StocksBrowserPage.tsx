@@ -435,7 +435,13 @@ export default function StocksBrowserPage() {
         <CardContent className="p-4 flex items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold">Screener</h2>
-            <p className="text-sm text-muted-foreground">
+            {/* ⚠️ Due righe riservate sul telefono (FA-106). Prima dei dati la
+                frase e' «— con i filtri attuali · 0 indici · 0 paesi» e sta su
+                una riga; coi numeri va a capo, la scheda cresce di 20px e
+                spinge giu' filtri e tabella: CLS 0,19 nel gate a 375px, nelle
+                corse in cui i conteggi arrivano dopo il primo frame. Da `sm` la
+                frase sta su una riga in entrambe le forme. */}
+            <p className="min-h-10 text-sm text-muted-foreground sm:min-h-0">
               {total > 0 ? `${total.toLocaleString()} stock` : "—"} con i filtri attuali ·{" "}
               {totalIndices} indici · {totalCountries} paesi
             </p>
