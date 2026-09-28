@@ -11,9 +11,6 @@ export interface ConfluenceComponent {
    *  contrario. `confidence` resta come alias legacy. */
   strength?: number;
   confidence: number;
-  /** Per-signal Probabilità (historical hit-rate). Optional — absent on
-   *  legacy clusters whose components predate the two-score split. */
-  probability?: number;
   tone: string;
   horizon: string;
   signal_date: string | null;

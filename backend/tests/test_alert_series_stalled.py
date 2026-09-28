@@ -179,3 +179,15 @@ def test_l_api_accetta_i_quattro_valori(client, valore):
 def test_l_api_rifiuta_un_valore_inventato(client):
     r = client.get("/api/alerts?outcome=bloccato")
     assert r.status_code == 422
+
+
+def test_la_bandiera_arriva_fino_al_JSON(client, db):
+    """⚠️ Il difetto trovato da FA-111: tutti i test sopra leggono il
+    dizionario di `list_alerts`, e `AlertOut` scartava i due campi. La lista
+    e il dettaglio si guardano qui dalla parte di chi li riceve."""
+    ultima = date(2026, 7, 10)
+    a = _alert(db, _titolo(db, "MORTO", streak=336, ultima_barra=ultima))
+    (voce,) = client.get("/api/alerts").json()["items"]
+    assert (voce["series_stalled"], voce["series_last_bar"]) == (True, ultima.isoformat())
+    dettaglio = client.get(f"/api/alerts/{a.id}").json()
+    assert (dettaglio["series_stalled"], dettaglio["series_last_bar"]) == (True, ultima.isoformat())

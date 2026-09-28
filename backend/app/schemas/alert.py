@@ -163,6 +163,14 @@ class AlertOut(BaseModel):
     #: «posizione» o «preferito» se il titolo conta per chi usa l'app
     #: (FA-113, `rilevanza_service`); None per il resto del catalogo.
     rilevanza: str | None = None
+    #: La serie del titolo si e' fermata: il segnale non potra' maturare, e
+    #: la data dice quando e' arrivata l'ultima barra.
+    #: ⚠️ `_row_to_item` li calcolava da settimane e l'API li SCARTAVA: un
+    #: campo non dichiarato qui Pydantic lo toglie in silenzio. I test
+    #: guardavano il dizionario del servizio, non il JSON — la forma di FA-055.
+    #: Trovato dal confronto fra tipi scritti a mano e generati (FA-111).
+    series_stalled: bool = False
+    series_last_bar: date | None = None
 
     @field_validator("snapshot", mode="before")
     @classmethod
