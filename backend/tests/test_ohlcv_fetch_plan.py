@@ -105,7 +105,11 @@ def test_iter_fetch_chunks_smart_skip_and_chunking(db):
     db.commit()
 
     plan = build_fetch_plan(db, [s1, s2, s3])
-    chunks = list(iter_fetch_chunks(plan, chunk_size=2))
+    # ⚠️ `today` esplicito: TODAY e' calcolato all'IMPORT del modulo, cioe'
+    # alla raccolta. Una corsa raccolta prima della mezzanotte ed eseguita dopo
+    # vedeva la barra «di oggi» gia' vecchia di un giorno — rosso in CI il
+    # 2026-09-28 alle 00:00:46 UTC, su un commit che non toccava il backend.
+    chunks = list(iter_fetch_chunks(plan, chunk_size=2, today=TODAY))
 
     # Stable sort: LAG1 (staler) first, then UPD1/UPD2 in input order.
     assert [(k, [s.ticker for s in c]) for c, k, _st, _p in chunks] == [

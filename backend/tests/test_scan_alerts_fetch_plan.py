@@ -7,6 +7,7 @@ split: fresh stocks fetch incrementally from start=min(latest)+1, only truly
 stale/empty stocks pay the 10y backfill, and an all-up-to-date population
 skips yfinance entirely.
 """
+import functools
 from datetime import date, timedelta
 
 import app.core.db as db_module
@@ -30,6 +31,10 @@ def _bar(db, stock_id: int, d: date) -> None:
 def _run(monkeypatch, db):
     """Run the job against the test DB, capturing fetch_and_upsert calls."""
     monkeypatch.setattr(job, "SessionLocal", db_module.SessionLocal)
+    # ⚠️ Il giorno del TEST, non quello dell'orologio: TODAY e' fissato
+    # all'import, e una corsa che attraversa la mezzanotte (rossa in CI il
+    # 2026-09-28 alle 00:00:46 UTC) faceva sembrare vecchia la barra di oggi.
+    monkeypatch.setattr(job, "iter_fetch_chunks", functools.partial(job.iter_fetch_chunks, today=TODAY))
     calls: list[tuple[list[str], str | None, date | None]] = []
 
     def fake_fetch(session, stocks, *, period=None, start=None):
