@@ -5,6 +5,7 @@ import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { PreferitiStrip } from "@/components/dashboard/PreferitiStrip";
+import { SettimanaCard } from "@/components/dashboard/SettimanaCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { MarketPulseJumbotron } from "@/components/dashboard/MarketPulseJumbotron";
@@ -233,6 +234,10 @@ function HomePageContent() {
           aprire un titolo, e da qui e' un clic. Una riga di altezza fissa:
           non sposta niente quando la lista arriva. */}
       <PreferitiStrip />
+      {/* Che cosa arriva nei prossimi giorni (FA-088, idea dell'utente): macro
+          importanti e trimestrali dei titoli seguiti. Colonne di altezza fissa,
+          quindi non sposta i segnali qui sotto quando risponde. */}
+      <SettimanaCard />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
           {/* Nascosto sul telefono: la barra di navigazione dice gia' dove
