@@ -4,6 +4,12 @@
 
 import type { AlertListParams } from "@/api/alerts";
 
+/** L'ordine della lista quando nessuno ne chiede un altro (FA-113): prima i
+ *  titoli in posizione, poi i preferiti, poi il resto, e dentro ogni gruppo
+ *  dal piu' recente. Nascono ~70 segnali al giorno: in cima vanno quelli sui
+ *  titoli che si seguono, non gli ultimi arrivati dell'intero catalogo. */
+export const ORDINE_PREDEFINITO = "rilevanza";
+
 /** Exported for tests: the stale-parameter handling below is invisible on
  *  screen — a dropped filter looks exactly like no filter — so it needs a
  *  test that reads the behaviour directly. */
@@ -17,6 +23,7 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     // altrimenti un segnalibro riaprirebbe una lista diversa da quella
     // condivisa.
     include_archived: sp.get("include_archived") === "true" || undefined,
+    solo_rilevanti: sp.get("solo_rilevanti") === "true" || undefined,
     ticker: s("ticker"),
     q: s("q"),
     rule_kind: s("rule_kind"),
@@ -70,7 +77,7 @@ function numParam(sp: URLSearchParams, key: string): number | undefined {
 const CHIAVI_PROPRIE = [
   "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
   "date_from", "date_to", "strength_min", "archived", "include_archived",
-  "page", "sort_by", "sort_dir",
+  "solo_rilevanti", "page", "sort_by", "sort_dir",
 ] as const;
 
 export function searchFromState(
@@ -94,8 +101,9 @@ export function searchFromState(
   if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
   if (filters.archived) sp.set("archived", "true");
   if (filters.include_archived) sp.set("include_archived", "true");
+  if (filters.solo_rilevanti) sp.set("solo_rilevanti", "true");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
-  if (sortBy !== "emissione") sp.set("sort_by", sortBy);
+  if (sortBy !== ORDINE_PREDEFINITO) sp.set("sort_by", sortBy);
   if (sortDir !== "desc") sp.set("sort_dir", sortDir);
   return sp;
 }

@@ -141,5 +141,9 @@ parityCheck:
 deployGate:
   enabled: true
 
+telegram:
+  # FA-113: accesa dal 2026-09-28, decisione dell'utente.
+  pushPerSignal: true
+
 restoreDrill:
   enabled: true

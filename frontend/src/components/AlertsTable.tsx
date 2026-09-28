@@ -1,6 +1,6 @@
 import {
-  Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Check, Clock, Hourglass,
-  Target, Unplug, X,
+  Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Check, Clock, Hourglass,
+  Star, Target, Unplug, X,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { Link } from "react-router-dom";
@@ -380,6 +380,20 @@ export function AlertsTable({
                     {sortBy === "ticker" && sortDir === "asc" && <ArrowUp className="h-3 w-3" />}
                     {sortBy !== "ticker" && <ArrowUpDown className="h-3 w-3 opacity-30" />}
                   </button>
+                  {/* FA-113: prima i tuoi titoli. Un interruttore, quindi
+                      `aria-pressed` e un nome fisso. */}
+                  <button
+                    type="button"
+                    onClick={() => onSort("rilevanza")}
+                    aria-pressed={sortBy === "rilevanza"}
+                    aria-label="Prima i tuoi titoli: posizioni e preferiti"
+                    className={cn(
+                      "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-muted transition-colors",
+                      sortBy === "rilevanza" ? "text-foreground" : "opacity-50",
+                    )}
+                  >
+                    <Star className={cn("h-3.5 w-3.5", sortBy === "rilevanza" && "fill-current")} aria-hidden />
+                  </button>
                   <TableSearchInput
                     value={q}
                     onChange={onQueryChange}
@@ -563,6 +577,20 @@ export function AlertsTable({
                       </Link>
                     ) : (
                       <span className="font-semibold">—</span>
+                    )}
+                    {/* Perche' la riga sta in cima (FA-113). Il testo per gli
+                        assistivi: l'icona da sola non si legge. */}
+                    {a.rilevanza === "posizione" && (
+                      <span className="shrink-0 self-center text-muted-foreground">
+                        <Briefcase className="h-3 w-3" aria-hidden />
+                        <span className="sr-only">in posizione</span>
+                      </span>
+                    )}
+                    {a.rilevanza === "preferito" && (
+                      <span className="shrink-0 self-center">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300" aria-hidden />
+                        <span className="sr-only">preferito</span>
+                      </span>
                     )}
                     {a.name && (
                       <span

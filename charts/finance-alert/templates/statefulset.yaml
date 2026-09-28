@@ -170,6 +170,12 @@ spec:
             # for every link the pod puts in a Telegram message.
             - name: PUBLIC_BASE_URL
               value: {{ .Values.publicBaseUrl | default (printf "https://%s" .Values.ingress.host) | quote }}
+            # La notifica Telegram per singolo segnale (FA-113): solo i segnali
+            # nuovi su posizioni aperte e preferiti. Un valore e non il Secret,
+            # perche' non e' una credenziale — e il Secret e' dove le funzioni di
+            # questo chart sono gia' rimaste spente tre volte senza un errore.
+            - name: TELEGRAM_PUSH_PER_SIGNAL
+              value: {{ .Values.telegram.pushPerSignal | quote }}
             # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
             # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
             # (flip the flag back to false and the untouched .db is authoritative

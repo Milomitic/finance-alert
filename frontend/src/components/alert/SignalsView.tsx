@@ -17,7 +17,7 @@ import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
 import { useBulkAlerts, usePatchAlert } from "@/hooks/useAlertMutations";
 import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import {
-  esitoNascostoDallArchivio, filtersFromSearch, searchFromState,
+  esitoNascostoDallArchivio, filtersFromSearch, ORDINE_PREDEFINITO, searchFromState,
 } from "@/lib/alertFilters";
 
 const PAGE_SIZE = 50;
@@ -59,7 +59,7 @@ export function SignalsView() {
     // il giorno in cui l'alert e' comparso, e ci si ordina sopra.
     () => {
       const sb = searchParams.get("sort_by");
-      return sb && sb !== "probability" && sb !== "triggered_at" ? sb : "emissione";
+      return sb && sb !== "probability" && sb !== "triggered_at" ? sb : ORDINE_PREDEFINITO;
     },
   );
   const [sortDir, setSortDir] = useState<"asc" | "desc">(() =>
@@ -89,6 +89,14 @@ export function SignalsView() {
   });
 
   const handleSort = (col: string) => {
+    // La rilevanza e' un interruttore, non una colonna: un secondo tocco torna
+    // all'ordine per nascita invece di mettere IN CIMA i titoli che non segui.
+    if (col === "rilevanza" && sortBy === "rilevanza") {
+      setSortBy("emissione");
+      setSortDir("desc");
+      setPage(0);
+      return;
+    }
     if (col === sortBy) {
       setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     } else {

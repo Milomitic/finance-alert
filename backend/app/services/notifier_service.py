@@ -3,8 +3,9 @@
 Six send surfaces, all sharing the same bot/chat config + scrubbed logging:
 
 1. `send_daily_digest`   — the 24h summary (cron `send_digest`, manual API).
-2. `notify_signal_alerts` — OPTIONAL per-scan push of strong signals, gated on
-   `settings.telegram_push_per_signal` + `telegram_push_min_strength`.
+2. `notify_signal_alerts` — OPTIONAL per-scan push of the NEW signals on the
+   titles that matter — open positions and preferiti (FA-113) — gated on
+   `settings.telegram_push_per_signal`.
 3. `notify_price_alerts`  — instant push when a price-target alert fires
    intraday (no flag: the user explicitly set the target, being told
    immediately is the whole point).
@@ -30,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Alert, Stock
+from app.services import rilevanza_service
 
 # Maximum alerts to enumerate in the digest message body
 DIGEST_TOP_N = 10
@@ -222,9 +224,34 @@ def _prezzo_d_ingresso(alert: Alert, snap: dict[str, Any]) -> Any:
     return prezzo if isinstance(prezzo, (int, float)) else alert.trigger_price
 
 
+#: Il segno accanto al ticker di un titolo che conta (FA-113).
+_SEGNO_RILEVANZA = {
+    rilevanza_service.POSIZIONE: "💼",
+    rilevanza_service.PREFERITO: "★",
+}
+
+
+def _riga_alert(a: Alert, stocks_by_id: dict[int, Stock], rilevanza: str | None) -> str:
+    snap = _parse_snapshot(a)
+    stock = stocks_by_id.get(a.stock_id)
+    ticker = stock.ticker if stock else f"#{a.stock_id}"
+    segno = f"{_SEGNO_RILEVANZA[rilevanza]} " if rilevanza else ""
+    prezzo = _fmt_price(_prezzo_d_ingresso(a, snap))
+    line = f"{_alert_emoji(a, snap)} {segno}{ticker} — {_alert_label(a, snap)} ({prezzo})"
+    metrics = _forza_prob(snap)
+    if metrics:
+        line += f" — {metrics}"
+    return line
+
+
 def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     """Format the digest as Telegram HTML — grouped by signal label, with
-    per-alert tone emoji + Forza/Probabilità when the snapshot carries them."""
+    per-alert tone emoji + Forza/Probabilità when the snapshot carries them.
+
+    FA-113: apre coi segnali sui titoli che contano — posizioni aperte e
+    preferiti — prima del conteggio per segnale. Prima il digest elencava i
+    dieci piu' recenti dell'intero catalogo, cioe' ~70 al giorno di cui quasi
+    nessuno su un titolo seguito."""
     n = len(alerts)
     today = datetime.now(UTC).strftime("%Y-%m-%d")
 
@@ -236,34 +263,36 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
         counts[label] = counts.get(label, 0) + 1
 
     stocks_by_id = _stocks_by_id(db, alerts)
+    rilevanti = rilevanza_service.titoli_rilevanti(db)
+    miei = sorted(
+        (a for a in alerts if a.stock_id in rilevanti),
+        key=lambda a: -rilevanza_service.PESO[rilevanti[a.stock_id]],
+    )
 
     lines = [f"🔔 <b>Finance Alert — Digest del {today}</b>", ""]
     lines.append(f"<b>{n} {'nuovo alert' if n == 1 else 'nuovi alert'}</b> nelle ultime 24h:")
     lines.append("")
+    if miei:
+        lines.append(f"<b>Sui tuoi titoli ({len(miei)}):</b>")
+        for a in miei[:DIGEST_TOP_N]:
+            lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
+        if len(miei) > DIGEST_TOP_N:
+            lines.append(f"... e altri {len(miei) - DIGEST_TOP_N}.")
+        lines.append("")
     lines.append("<b>Per segnale:</b>")
     for label, count in sorted(counts.items(), key=lambda kv: -kv[1]):
         lines.append(f"• {label}: {count}")
-    lines.append("")
-    top = alerts[:DIGEST_TOP_N]
-    lines.append(
-        "<b>Il più recente:</b>" if len(top) == 1 else f"<b>I {len(top)} più recenti:</b>"
-    )
-    for a in top:
-        snap = _parse_snapshot(a)
-        emoji = _alert_emoji(a, snap)
-        label = _alert_label(a, snap)
-        stock = stocks_by_id.get(a.stock_id)
-        ticker = stock.ticker if stock else f"#{a.stock_id}"
-        ts = a.emitted_at.strftime("%H:%M")
-        metrics = _forza_prob(snap)
-        line = f"{emoji} {ticker} — {label} ({_fmt_price(_prezzo_d_ingresso(a, snap))})"
-        if metrics:
-            line += f" — {metrics}"
-        line += f" — {ts}"
-        lines.append(line)
-
-    if n > DIGEST_TOP_N:
-        lines.append(f"... e altri {n - DIGEST_TOP_N}.")
+    # Gli altri: i segnali sui tuoi titoli sono gia' sopra, non si ripetono.
+    altri = [a for a in alerts if a.stock_id not in rilevanti]
+    top = altri[:DIGEST_TOP_N]
+    if top:
+        lines.append("")
+        titolo = "Il più recente" if len(top) == 1 else f"I {len(top)} più recenti"
+        lines.append(f"<b>{titolo}{' fra gli altri' if miei else ''}:</b>")
+        for a in top:
+            lines.append(f"{_riga_alert(a, stocks_by_id, None)} — {a.emitted_at.strftime('%H:%M')}")
+        if len(altri) > DIGEST_TOP_N:
+            lines.append(f"... e altri {len(altri) - DIGEST_TOP_N}.")
 
     lines.append("")
     lines.append(f"🔗 Vedi tutti: {settings.public_base_url}/alerts")
@@ -292,14 +321,19 @@ def send_daily_digest(db: Session) -> DigestResult:
 
 
 def notify_signal_alerts(db: Session, alerts: list[Alert]) -> PushResult:
-    """OPTIONAL instant push for the signal alerts of a completed scan.
+    """OPTIONAL instant push for the NEW signal alerts of a completed scan.
 
-    Gated on `settings.telegram_push_per_signal` (default OFF) + Telegram
-    being configured. Only alerts whose snapshot Forza (strength, with the
-    transitional `confidence` fallback) >= `telegram_push_min_strength` are
-    included — ONE compact message, strongest first, max PUSH_TOP_N lines
-    + "e altri N". Callers must treat this as best-effort (the scan_runner
-    wraps it in try/except): a Telegram failure never fails the scan.
+    Gated on `settings.telegram_push_per_signal` + Telegram being configured.
+    Only alerts on the titles that matter are included — open positions first,
+    then preferiti (FA-113, `rilevanza_service`) — ONE compact message, max
+    PUSH_TOP_N lines + "e altri N". Callers must treat this as best-effort
+    (the scan_runner wraps it in try/except): a Telegram failure never fails
+    the scan.
+
+    ⚠️ Filtrava su Forza >= 75. Lo studio del 2026-09-23 dice che la Forza non
+    ordina gli esiti dentro nessun detector: la soglia sceglieva su un numero
+    che non distingue i segnali migliori, e mandava segnali su titoli che
+    nessuno seguiva. La rilevanza non pretende di prevedere niente.
     """
     if not settings.telegram_push_per_signal:
         return PushResult(sent=False, reason="push_disabled")
@@ -307,43 +341,33 @@ def notify_signal_alerts(db: Session, alerts: list[Alert]) -> PushResult:
         logger.info("[notifier] signal push skipped: Telegram disabled")
         return PushResult(sent=False, reason="telegram_disabled")
 
-    threshold = float(settings.telegram_push_min_strength)
-    strong: list[tuple[float, Alert, dict[str, Any]]] = []
-    for a in alerts:
-        if not a.signal_name:
-            continue  # price alerts have their own instant push
-        snap = _parse_snapshot(a)
-        s = _snapshot_strength(snap)
-        if s is not None and s >= threshold:
-            strong.append((s, a, snap))
-    if not strong:
+    rilevanti = rilevanza_service.titoli_rilevanti(db)
+    # I segnali di prezzo hanno la loro notifica istantanea.
+    scelti = [a for a in alerts if a.signal_name and a.stock_id in rilevanti]
+    if not scelti:
         return PushResult(sent=False, reason="no_alerts")
 
-    strong.sort(key=lambda t: -t[0])
-    stocks_by_id = _stocks_by_id(db, [a for _, a, _ in strong])
+    stocks_by_id = _stocks_by_id(db, scelti)
+    scelti.sort(key=lambda a: (
+        -rilevanza_service.PESO[rilevanti[a.stock_id]],
+        stocks_by_id[a.stock_id].ticker if a.stock_id in stocks_by_id else "",
+    ))
 
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
-    lines = [f"⚡ <b>Segnali forti — scan del {now}</b>", ""]
-    for _, a, snap in strong[:PUSH_TOP_N]:
-        stock = stocks_by_id.get(a.stock_id)
-        ticker = stock.ticker if stock else f"#{a.stock_id}"
-        label = _alert_label(a, snap)
-        metrics = _forza_prob(snap)
-        line = f"{_alert_emoji(a, snap)} <b>{ticker}</b> — {label} ({_fmt_price(a.trigger_price)})"
-        if metrics:
-            line += f" — {metrics}"
-        lines.append(line)
-    if len(strong) > PUSH_TOP_N:
-        lines.append(f"... e altri {len(strong) - PUSH_TOP_N}.")
+    lines = [f"⚡ <b>Segnali sui tuoi titoli — scan del {now}</b>", ""]
+    for a in scelti[:PUSH_TOP_N]:
+        lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
+    if len(scelti) > PUSH_TOP_N:
+        lines.append(f"... e altri {len(scelti) - PUSH_TOP_N}.")
     lines.append("")
     lines.append(f"🔗 {settings.public_base_url}/alerts")
 
     text = _truncate("\n".join(lines))
     if not _send_telegram(text, what="signal push"):
-        return PushResult(sent=False, alerts_count=len(strong), reason="http_error")
+        return PushResult(sent=False, alerts_count=len(scelti), reason="http_error")
 
-    logger.info(f"[notifier] signal push sent: {len(strong)} strong alert(s)")
-    return PushResult(sent=True, alerts_count=len(strong), reason="ok")
+    logger.info(f"[notifier] signal push sent: {len(scelti)} alert(s) sui titoli seguiti")
+    return PushResult(sent=True, alerts_count=len(scelti), reason="ok")
 
 
 def notify_price_alerts(fired: list[tuple[Alert, Stock]]) -> PushResult:

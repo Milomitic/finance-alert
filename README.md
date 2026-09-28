@@ -108,8 +108,7 @@ another source).
 | `FINNHUB_API_KEY` | optional | Earnings actuals + company news + analyst upgrade/downgrade + recommendation trends — free from [Finnhub](https://finnhub.io) (60 req/min) |
 | `MARKETAUX_API_KEY` | optional | News fallback (100 req/day free; quota-guarded + circuit-broken) |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | optional | Enables all Telegram surfaces: daily digest, instant price-alert + position-close pushes |
-| `TELEGRAM_PUSH_PER_SIGNAL` | default `false` | Opt-in instant push of strong signals at scan end |
-| `TELEGRAM_PUSH_MIN_STRENGTH` | default `75` | Min Forza for the per-signal push |
+| `TELEGRAM_PUSH_PER_SIGNAL` | default `false` | Opt-in instant push, at scan end, of the new signals on open positions and preferiti (FA-113) |
 | `SCAN_HOUR` / `SCAN_MINUTE` | default 23:30 | Nightly scan time (Europe/Rome) |
 | `DIGEST_HOUR` / `DIGEST_MINUTE` | default 08:00 | Telegram digest time |
 

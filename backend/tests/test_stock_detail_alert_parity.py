@@ -61,6 +61,9 @@ _CANONICI = {
     # un titolo passa da `list_alerts`, cioe' dallo stesso serializzatore —
     # che e' esattamente il difetto FA-055 che questo file sorveglia, evitato.
     "plan",
+    # FA-113: «posizione» o «preferito» se il titolo conta. Anche questo passa
+    # dallo stesso serializzatore, quindi la pagina titolo lo riceve gratis.
+    "rilevanza",
 }
 
 

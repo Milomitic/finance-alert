@@ -182,6 +182,25 @@ def test_build_digest_message_price_alert_label(db: Session) -> None:
     assert "Price target ↑" in message
 
 
+def test_il_digest_apre_coi_tuoi_titoli_e_non_li_ripete(db: Session) -> None:
+    """FA-113: prima i segnali su posizioni e preferiti, poi il resto. Un
+    titolo seguito non ricompare fra «gli altri»."""
+    seguito = _preferito(db, _mk_stock(db, "ENI.MI"))
+    altro = _mk_stock(db, "IBM")
+    alerts = [_mk_signal_alert(db, altro), _mk_signal_alert(db, seguito)]
+    message = build_digest_message(db, alerts)
+    assert "Sui tuoi titoli (1):" in message
+    assert message.index("★ ENI.MI") < message.index("Per segnale:")
+    assert message.count("ENI.MI") == 1
+    assert "fra gli altri" in message and "IBM" in message
+
+
+def test_senza_titoli_seguiti_il_digest_non_ha_la_sezione(db: Session) -> None:
+    alert = _mk_signal_alert(db, _mk_stock(db, "IBM"))
+    message = build_digest_message(db, [alert])
+    assert "Sui tuoi titoli" not in message and "fra gli altri" not in message
+
+
 def test_build_digest_message_tolerates_garbage_snapshot(db: Session) -> None:
     stock = _mk_stock(db, "IBM")
     alert = Alert(
@@ -197,14 +216,31 @@ def test_build_digest_message_tolerates_garbage_snapshot(db: Session) -> None:
     assert "Volume Breakout" in message
 
 
-# ─── notify_signal_alerts: flag + threshold gates ────────────────────────
+# ─── notify_signal_alerts: flag + rilevanza (FA-113) ─────────────────────
 
 
-def _push_env(monkeypatch: pytest.MonkeyPatch, *, enabled: bool = True, min_strength: int = 75) -> None:
+def _push_env(monkeypatch: pytest.MonkeyPatch, *, enabled: bool = True) -> None:
     monkeypatch.setattr(settings, "telegram_bot_token", "FAKE_TOKEN")
     monkeypatch.setattr(settings, "telegram_chat_id", "12345")
     monkeypatch.setattr(settings, "telegram_push_per_signal", enabled)
-    monkeypatch.setattr(settings, "telegram_push_min_strength", min_strength)
+
+
+def _preferito(db: Session, stock: Stock) -> Stock:
+    from app.models.preferito import Preferito
+
+    db.add(Preferito(stock_id=stock.id))
+    db.commit()
+    return stock
+
+
+def _posizione(db: Session, stock: Stock) -> Stock:
+    from decimal import Decimal
+
+    from app.models import Position
+
+    db.add(Position(stock_id=stock.id, entry_price=Decimal("10")))
+    db.commit()
+    return stock
 
 
 def test_notify_signal_alerts_disabled_by_default(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -230,61 +266,68 @@ def test_notify_signal_alerts_requires_telegram_config(db: Session, monkeypatch:
     assert result.reason == "telegram_disabled"
 
 
-def test_notify_signal_alerts_respects_strength_threshold(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
-    _push_env(monkeypatch, min_strength=75)
+def test_notify_signal_alerts_ignora_i_titoli_che_non_segui(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FA-113: Forza 99 su un titolo che nessuno segue NON si notifica. Il
+    vecchio criterio (Forza >= 75) l'avrebbe mandato."""
+    _push_env(monkeypatch)
     stock = _mk_stock(db)
-    weak = _mk_signal_alert(db, stock, strength=60)
+    fortissimo = _mk_signal_alert(db, stock, strength=99)
     with patch("app.services.notifier_service.httpx.post") as mock_post:
-        result = notify_signal_alerts(db, [weak])
-    assert result.sent is False
+        result = notify_signal_alerts(db, [fortissimo])
+    assert (result.sent, result.reason) == (False, "no_alerts")
+    assert not mock_post.called
+
+
+def test_notify_signal_alerts_manda_i_titoli_seguiti_a_qualunque_forza(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E il contrario: un segnale debole su un preferito si manda. La Forza
+    non ordina gli esiti (studio 2026-09-23), quindi non sceglie piu'."""
+    _push_env(monkeypatch)
+    seguito = _preferito(db, _mk_stock(db, "ENI.MI"))
+    altro = _mk_stock(db, "IBM")
+    debole = _mk_signal_alert(db, seguito, strength=40)
+    forte = _mk_signal_alert(db, altro, strength=95, signal_name="squeeze_expansion")
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
+        result = notify_signal_alerts(db, [debole, forte])
+    assert (result.sent, result.alerts_count) == (True, 1)
+    text = mock_post.call_args.kwargs["json"]["text"]
+    assert "Segnali sui tuoi titoli" in text
+    assert "★ ENI.MI" in text and "Forza 40%" in text
+    assert "IBM" not in text and "Squeeze + Espansione" not in text
+
+
+def test_la_posizione_aperta_viene_prima_del_preferito(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    _push_env(monkeypatch)
+    pref = _preferito(db, _mk_stock(db, "AAA"))
+    pos = _posizione(db, _mk_stock(db, "ZZZ"))
+    alerts = [_mk_signal_alert(db, pref), _mk_signal_alert(db, pos)]
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
+        notify_signal_alerts(db, alerts)
+    text = mock_post.call_args.kwargs["json"]["text"]
+    assert text.index("💼 ZZZ") < text.index("★ AAA")
+
+
+def test_una_posizione_chiusa_non_rende_rilevante_il_titolo(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    from datetime import UTC, datetime
+
+    from app.models import Position
+
+    _push_env(monkeypatch)
+    stock = _posizione(db, _mk_stock(db, "CHIUSA"))
+    db.query(Position).update({"closed_at": datetime.now(UTC)})
+    db.commit()
+    with patch("app.services.notifier_service.httpx.post") as mock_post:
+        result = notify_signal_alerts(db, [_mk_signal_alert(db, stock)])
     assert result.reason == "no_alerts"
     assert not mock_post.called
 
 
-def test_notify_signal_alerts_sends_strong_alerts(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
-    _push_env(monkeypatch, min_strength=75)
-    stock = _mk_stock(db)
-    weak = _mk_signal_alert(db, stock, strength=60)
-    strong = _mk_signal_alert(db, stock, strength=88, signal_name="squeeze_expansion")
-    with patch("app.services.notifier_service.httpx.post") as mock_post:
-        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
-        result = notify_signal_alerts(db, [weak, strong])
-    assert result.sent is True
-    assert result.alerts_count == 1  # only the strong one
-    text = mock_post.call_args.kwargs["json"]["text"]
-    assert "AAPL" in text
-    assert "Squeeze + Espansione" in text
-    assert "Forza 88%" in text
-    # The weak alert's kind must not appear
-    assert "Volume Breakout" not in text
-
-
-def test_notify_signal_alerts_legacy_confidence_counts_as_strength(
-    db: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`confidence` is the transitional alias of `strength` — a legacy
-    snapshot with only confidence must still pass the threshold gate."""
-    _push_env(monkeypatch, min_strength=75)
-    stock = _mk_stock(db)
-    alert = Alert(
-        signal_name="trend_pullback",
-        stock_id=stock.id,
-        trigger_price=50.0,
-        snapshot=json.dumps({"confidence": 80, "tone": "bull"}),
-    )
-    db.add(alert)
-    db.commit()
-    db.refresh(alert)
-    with patch("app.services.notifier_service.httpx.post") as mock_post:
-        mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
-        result = notify_signal_alerts(db, [alert])
-    assert result.sent is True
-    assert result.alerts_count == 1
-
-
 def test_notify_signal_alerts_batches_with_e_altri(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
-    _push_env(monkeypatch, min_strength=75)
-    stock = _mk_stock(db)
+    _push_env(monkeypatch)
+    stock = _preferito(db, _mk_stock(db))
     alerts = [_mk_signal_alert(db, stock, strength=80 + i % 15) for i in range(13)]
     with patch("app.services.notifier_service.httpx.post") as mock_post:
         mock_post.return_value = MagicMock(raise_for_status=lambda: None, status_code=200)
@@ -301,7 +344,7 @@ def test_notify_signal_alerts_http_error_reported_not_raised(
 ) -> None:
     import httpx as _httpx
     _push_env(monkeypatch)
-    stock = _mk_stock(db)
+    stock = _preferito(db, _mk_stock(db))
     alert = _mk_signal_alert(db, stock, strength=90)
     with patch(
         "app.services.notifier_service.httpx.post",
@@ -369,8 +412,8 @@ def _fake_scan_factory(db: Session, stock: Stock, *, strength: float = 90):
 def test_scan_runner_pushes_new_signal_alerts(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
     from app.services import scan_runner
 
-    _push_env(monkeypatch, min_strength=75)
-    stock = _mk_stock(db, "PUSHW")
+    _push_env(monkeypatch)
+    stock = _preferito(db, _mk_stock(db, "PUSHW"))
     monkeypatch.setattr(scan_runner, "scan_universe", _fake_scan_factory(db, stock))
 
     with patch("app.services.notifier_service.httpx.post") as mock_post:

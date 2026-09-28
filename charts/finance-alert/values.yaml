@@ -134,6 +134,13 @@ parityCheck:
   # non-root: verificato con una sonda dentro il cluster, non dedotto.
   image: alpine/k8s:1.31.3
 
+# ─── Telegram ──────────────────────────────────────────────────────────────
+# Le credenziali stanno nel Secret; qui solo cio' che non lo e'.
+telegram:
+  # Notifica per singolo segnale a fine scansione: solo i segnali NUOVI su
+  # posizioni aperte e preferiti (FA-113). Spenta di default.
+  pushPerSignal: false
+
 # ─── Niente rilascio durante una scansione (FA-109) ────────────────────────
 # Hook PreSync di ArgoCD: prima di applicare un rilascio aspetta che la
 # scansione in corso finisca. Dettagli in templates/hook-attesa-scansione.yaml

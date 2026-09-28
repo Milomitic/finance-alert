@@ -160,6 +160,9 @@ class AlertOut(BaseModel):
     next_earnings_date: date | None = None
     #: Il setup da cui l'alert e' nato, se ce n'e' uno. Vedi AlertSetupOriginOut.
     setup_origin: AlertSetupOriginOut | None = None
+    #: «posizione» o «preferito» se il titolo conta per chi usa l'app
+    #: (FA-113, `rilevanza_service`); None per il resto del catalogo.
+    rilevanza: str | None = None
 
     @field_validator("snapshot", mode="before")
     @classmethod

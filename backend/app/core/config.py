@@ -75,11 +75,10 @@ class Settings(BaseSettings):
     telegram_delivery_mode: str = "digest"  # only "digest" implemented in Fase 2
     # Push Telegram istantaneo per-segnale (oltre al digest giornaliero).
     # OFF di default: quando ON, a fine scan viene inviato UN messaggio
-    # compatto con i segnali della scansione la cui Forza (snapshot
-    # strength) >= telegram_push_min_strength. Vedi
-    # notifier_service.notify_signal_alerts.
+    # compatto coi segnali NUOVI sui titoli in posizione aperta o fra i
+    # preferiti (FA-113). Filtrava su Forza >= 75, una soglia tolta perche' la
+    # Forza non ordina gli esiti. Vedi notifier_service.notify_signal_alerts.
     telegram_push_per_signal: bool = False
-    telegram_push_min_strength: int = 75
     # Notifiche Telegram di SALUTE piattaforma (audit 2026-07-08: i cron 13F
     # sono rimasti morti per mesi senza che nulla lo segnalasse). ON di
     # default: (a) push quando uno scan termina 'failed' (crash, non cancel

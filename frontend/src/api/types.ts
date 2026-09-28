@@ -186,6 +186,9 @@ export interface PlanBrief {
 
 export interface Alert {
   id: number;
+  /** «posizione» o «preferito» se il titolo conta per chi usa l'app (FA-113);
+   *  null per il resto del catalogo. Assente sulle risposte piu' vecchie. */
+  rilevanza?: "posizione" | "preferito" | null;
   /** ISO date (YYYY-MM-DD) of the market-data bar where the rule's
    *  condition matched. May differ from `triggered_at` (the wall-clock
    *  moment the row was created): a scan run on Monday morning may detect

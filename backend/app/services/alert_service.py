@@ -20,6 +20,7 @@ from app.models import (
     StockSetup,
 )
 from app.models.stock_setup import STATUS_CONVERTED
+from app.services import rilevanza_service
 
 # ⚠️ Il predicato ha un proprietario unico in `ohlcv_service`, accanto a
 # `not_quarantined_clause` da cui va tenuto distinto: quella porta anche il
@@ -69,6 +70,9 @@ _SORTABLE: dict[str, Any] = {
         json_text(Alert.snapshot, "probability"), Float
     ),
     "tone": json_text(Alert.snapshot, "tone"),
+    # FA-113: prima i titoli in posizione, poi i preferiti, poi il resto; dentro
+    # ogni gruppo dal piu' recente (vedi l'ORDER BY in `list_alerts`).
+    "rilevanza": rilevanza_service.peso_sql(Alert.stock_id),
 }
 _SORTABLE_KEYS = frozenset(_SORTABLE)
 
@@ -271,8 +275,12 @@ def list_alerts(
     offset: int = 0,
     sort_by: str = "emissione",
     sort_dir: str = "desc",
+    solo_rilevanti: bool = False,
 ) -> tuple[list[dict[str, Any]], int, bool]:
-    """List alerts with stock.ticker. Returns (items, total, has_more)."""
+    """List alerts with stock.ticker. Returns (items, total, has_more).
+
+    `solo_rilevanti` tiene i soli titoli in posizione aperta o fra i preferiti
+    (FA-113)."""
     limit = max(1, min(limit, 500))
     # LEFT OUTER JOIN on the outcome warehouse: at most ONE row per alert
     # (unique index on signal_outcomes.alert_id), so the join can't fan out
@@ -324,13 +332,19 @@ def list_alerts(
         outcome=outcome,
         horizon=horizon,
     )
+    if solo_rilevanti:
+        base = base.where(rilevanza_service.filtro_rilevanti(Alert.stock_id))
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
     # Build ORDER BY: requested column (with NULLS LAST) + stable id tiebreaker.
     sort_col = _SORTABLE.get(sort_by, Alert.emitted_at)
     direction = asc if sort_dir == "asc" else desc
+    # Per la rilevanza il peso e' un gruppo, non un ordine: dentro il gruppo
+    # vale la data di nascita, piu' recente prima, in entrambi i versi.
+    dentro_il_gruppo = [Alert.emitted_at.desc()] if sort_by == "rilevanza" else []
     rows = db.execute(
-        base.order_by(direction(sort_col).nullslast(), Alert.id.desc()).limit(limit + 1).offset(offset)
+        base.order_by(direction(sort_col).nullslast(), *dentro_il_gruppo, Alert.id.desc())
+        .limit(limit + 1).offset(offset)
     ).all()
     has_more = len(rows) > limit
     page = rows[:limit]
@@ -348,11 +362,13 @@ def list_alerts(
         },
     )
     origins = _setup_origins(db, [row[0].id for row in page])
+    rilevanti = rilevanza_service.titoli_rilevanti(db) if page else {}
     items = [
         _row_to_item(
             row, earnings_by_ticker.get(row[1]), last_bars.get(row[0].stock_id),
             origins.get(row[0].id),
         )
+        | {"rilevanza": rilevanti.get(row[0].stock_id)}
         for row in page
     ]
     return items, total, has_more

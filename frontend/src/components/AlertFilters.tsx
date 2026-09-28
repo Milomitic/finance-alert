@@ -262,6 +262,7 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.nature ? 1 : 0) +
     (value.outcome ? 1 : 0) +
     (value.horizon ? 1 : 0) +
+    (value.solo_rilevanti ? 1 : 0) +
     (value.date_from || value.date_to ? 1 : 0);
 
   // Nine controls in a grid cost an entire phone screen before the first
@@ -309,9 +310,9 @@ export function AlertFilters({ value, onChange }: Props) {
 
         {/* Filters laid out horizontally (responsive grid) so the card stays
             short — was a tall vertical stack. Wraps to 2-5 cols on narrow
-            viewports, single row on xl+ (9 controls since Esito + Orizzonte
-            landed). */}
-        <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3", !open && "hidden")}>
+            viewports, single row on xl+ (10 controls since Titoli landed,
+            FA-113). */}
+        <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-3", !open && "hidden")}>
         {/* ⚠️ `SelectField` e non `Label` + `Select` a mano: le sette tendine
             erano sette bottoni SENZA NOME per chi usa uno screen reader. Il
             testo c'era, sopra il controllo, e non era associato a niente — un
@@ -329,6 +330,20 @@ export function AlertFilters({ value, onChange }: Props) {
               {o.label}
             </SelectItem>
           ))}
+        </SelectField>
+
+        {/* Titoli — tutti, o solo quelli in posizione e fra i preferiti
+            (FA-113). */}
+        <SelectField
+          labelClassName={ETICHETTA}
+          label="Titoli"
+          value={value.solo_rilevanti ? "miei" : "tutti"}
+          onValueChange={(v) =>
+            onChange({ ...value, solo_rilevanti: v === "miei" || undefined })
+          }
+        >
+          <SelectItem value="tutti">Tutti</SelectItem>
+          <SelectItem value="miei">Posizioni e preferiti</SelectItem>
         </SelectField>
 
         {/* Tipo segnale — maps to rule_kind. "tutti" sentinel clears the filter. */}

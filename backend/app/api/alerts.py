@@ -386,6 +386,7 @@ def list_alerts(
     offset: int = 0,
     sort_by: str = "emissione",
     sort_dir: str = "desc",
+    solo_rilevanti: bool = False,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> AlertListOut:
@@ -433,6 +434,7 @@ def list_alerts(
         offset=offset,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        solo_rilevanti=solo_rilevanti,
     )
     return AlertListOut(
         items=[AlertOut(**i) for i in items],
