@@ -16,10 +16,11 @@ Internally both call `services.timeframe_service.compute_timeframe_kpis`
 with the unified `fetch_bars()` helper that handles the source
 selection automatically.
 """
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -66,10 +67,39 @@ class MultiTfKpisOut(BaseModel):
     items: list[TimeframeKpisOut]
 
 
+def _timeframes_richiesti(valore: str | None) -> list[str] | None:
+    """`?timeframes=1h,1d` -> ["1h", "1d"]; assente -> None, cioe' tutti.
+
+    FA-110. La scheda della pagina titolo mostra quattro colonne, e l'endpoint
+    ne calcolava sei: 5m e 30m venivano scaricati da Yahoo a ogni apertura di un
+    titolo e scartati dal frontend — due chiamate su tre dell'intraday, in
+    un'app che ha gia' pagato i limiti di Yahoo con 43-50 secondi d'attesa. E
+    chiedere i gruppi separatamente fa arrivare subito i giornalieri, che
+    stanno nel database, senza aspettare la rete.
+
+    Un timeframe sconosciuto e' un 422, non un filtro che lo ignora: una lista
+    scritta male renderebbe una tabella vuota senza dire perche'."""
+    if valore is None:
+        return None
+    richiesti = [tf.strip() for tf in valore.split(",") if tf.strip()]
+    ignoti = sorted(set(richiesti) - set(VALID_TIMEFRAMES))
+    if not richiesti or ignoti:
+        raise HTTPException(
+            status_code=422,
+            detail=f"timeframes non validi: {ignoti or 'lista vuota'}; ammessi {list(VALID_TIMEFRAMES)}",
+        )
+    return richiesti
+
+
 def _compute_multi_tf(
-    ticker: str, *, db: Session | None = None, stock: Stock | None = None
+    ticker: str,
+    *,
+    db: Session | None = None,
+    stock: Stock | None = None,
+    timeframes: Sequence[str] | None = None,
 ) -> list[TimeframeKpisOut]:
-    """KPIs across every timeframe.
+    """KPIs across the requested timeframes (all of them when None), in
+    VALID_TIMEFRAMES order.
 
     The timeframes were fetched in a serial loop, so a stock detail page paid
     three back-to-back yfinance round-trips (5m/30m/1h) plus the DB reads. Those
@@ -77,11 +107,12 @@ def _compute_multi_tf(
     their latencies overlap instead of summing. DB-backed timeframes stay on the
     calling thread because the SQLAlchemy Session is not thread-safe; a market
     symbol (no `db`) hits yfinance for everything and parallelizes all of them."""
+    richiesti = [tf for tf in VALID_TIMEFRAMES if timeframes is None or tf in timeframes]
     if db is not None:
-        yf_tfs = [tf for tf in VALID_TIMEFRAMES if tf in _INTRADAY]
-        db_tfs = [tf for tf in VALID_TIMEFRAMES if tf not in _INTRADAY]
+        yf_tfs = [tf for tf in richiesti if tf in _INTRADAY]
+        db_tfs = [tf for tf in richiesti if tf not in _INTRADAY]
     else:
-        yf_tfs = list(VALID_TIMEFRAMES)
+        yf_tfs = list(richiesti)
         db_tfs = []
 
     results: dict[str, Any] = {}
@@ -99,7 +130,7 @@ def _compute_multi_tf(
             for fut, tf in futures.items():
                 results[tf] = compute_timeframe_kpis(fut.result(), tf)
 
-    return [_to_out(results[tf]) for tf in VALID_TIMEFRAMES]
+    return [_to_out(results[tf]) for tf in richiesti]
 
 
 def _to_out(kpis: Any) -> TimeframeKpisOut:
@@ -134,6 +165,7 @@ def _to_out(kpis: Any) -> TimeframeKpisOut:
 )
 def get_stock_multi_tf_kpis(
     ticker: str,
+    timeframes: str | None = Query(default=None, max_length=64),
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> MultiTfKpisOut:
@@ -154,7 +186,9 @@ def get_stock_multi_tf_kpis(
     stock_orm = db.execute(
         sql_select(Stock).where(Stock.id == stock.id)
     ).scalar_one()
-    items = _compute_multi_tf(ticker, db=db, stock=stock_orm)
+    items = _compute_multi_tf(
+        ticker, db=db, stock=stock_orm, timeframes=_timeframes_richiesti(timeframes)
+    )
     return MultiTfKpisOut(ticker=ticker, items=items)
 
 
@@ -164,6 +198,7 @@ def get_stock_multi_tf_kpis(
 )
 def get_market_multi_tf_kpis(
     symbol: str,
+    timeframes: str | None = Query(default=None, max_length=64),
     _user: User = Depends(get_current_user),
 ) -> MultiTfKpisOut:
     """Same shape as the stock variant but for non-catalog symbols
@@ -172,5 +207,6 @@ def get_market_multi_tf_kpis(
     valid_symbols = {d[0] for d in LIVE_ASSET_DEFINITIONS}
     if symbol not in valid_symbols:
         raise HTTPException(status_code=404, detail="Unknown market symbol")
-    items = _compute_multi_tf(symbol)  # no db → all timeframes via yfinance
+    # no db → all timeframes via yfinance
+    items = _compute_multi_tf(symbol, timeframes=_timeframes_richiesti(timeframes))
     return MultiTfKpisOut(ticker=symbol, items=items)

@@ -196,22 +196,37 @@ const ROWS: MatrixRowDef[] = [
 ];
 
 // V3.3: 30m column dropped — too noisy for the cross-TF snapshot view.
-const VISIBLE_TIMEFRAMES = ["1h", "1d", "1w", "1m", "all"];
+//
+// FA-110: due gruppi chiesti separatamente. I giornalieri stanno nel database e
+// arrivano subito; l'1h va a Yahoo e riempie la sua colonna quando risponde.
+// ⚠️ Prima la scheda chiedeva tutti i timeframe e ne scartava due, 5m e 30m,
+// scaricati da Yahoo a ogni apertura di un titolo. E c'era una colonna «All»
+// che il server non ha mai fornito: il suo filtro la toglieva sempre.
+const GIORNALIERI = ["1d", "1w", "1m"] as const;
+const INTRADAY = ["1h"] as const;
+const VISIBLE_TIMEFRAMES = [...INTRADAY, ...GIORNALIERI];
 
 const TF_DISPLAY: Record<string, string> = {
   "1h": "1h",
   "1d": "1d",
   "1w": "1w",
   "1m": "1m",
-  all: "All",
 };
+
+/** Una colonna: i suoi KPI, o null finche' non sono arrivati (`inArrivo`) o
+ *  se la loro richiesta e' fallita. */
+interface Colonna {
+  tf: string;
+  it: TimeframeKpis | null;
+  inArrivo: boolean;
+}
 
 function MatrixRowComponent({
   row,
-  items,
+  colonne,
 }: {
   row: MatrixRowDef;
-  items: TimeframeKpis[];
+  colonne: Colonna[];
 }) {
   return (
     <tr className="hover:bg-muted/20 transition-colors">
@@ -225,11 +240,20 @@ function MatrixRowComponent({
           </TooltipContent>
         </Tooltip>
       </td>
-      {items.map((it) => {
+      {colonne.map(({ tf, it, inArrivo }) => {
+        if (it == null) {
+          // La cella c'e' comunque, della stessa misura: la tabella ha gia' la
+          // sua forma quando l'intraday risponde, e non si sposta niente.
+          return (
+            <td key={tf} className="py-1 px-1 text-center text-xs text-muted-foreground">
+              {inArrivo ? "…" : "—"}
+            </td>
+          );
+        }
         const c = row.cell(it);
         return (
           <td
-            key={it.timeframe}
+            key={tf}
             className={cn(
               "py-1 px-1 text-center text-xs tabular-nums font-semibold rounded",
               SCALE_BG[c.score],
@@ -247,9 +271,12 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
   // Both hooks always run; the unused one is gated on its ticker arg
   // being empty so the request never fires. This avoids hook-order
   // issues from conditional useQuery calls.
-  const stockQ = useStockMultiTfKpis(kind === "stock" ? ticker : "");
-  const marketQ = useMarketMultiTfKpis(kind === "market" ? ticker : "");
-  const q = kind === "stock" ? stockQ : marketQ;
+  const stockGiorn = useStockMultiTfKpis(kind === "stock" ? ticker : "", GIORNALIERI);
+  const stockIntra = useStockMultiTfKpis(kind === "stock" ? ticker : "", INTRADAY);
+  const marketGiorn = useMarketMultiTfKpis(kind === "market" ? ticker : "", GIORNALIERI);
+  const marketIntra = useMarketMultiTfKpis(kind === "market" ? ticker : "", INTRADAY);
+  const q = kind === "stock" ? stockGiorn : marketGiorn;
+  const qIntra = kind === "stock" ? stockIntra : marketIntra;
 
   if (q.isLoading) {
     return (
@@ -269,7 +296,7 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
     );
   }
 
-  if (q.isError || !q.data || q.data.items.length === 0) {
+  if ((q.isError || !q.data || q.data.items.length === 0) && !qIntra.data?.items.length) {
     return (
       <Card>
         <CardContent className="p-4">
@@ -282,8 +309,13 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
     );
   }
 
-  // Filter out the 30m timeframe per V3.3 redesign
-  const items = q.data.items.filter((it) => VISIBLE_TIMEFRAMES.includes(it.timeframe));
+  const perTf = new Map<string, TimeframeKpis>();
+  for (const it of [...(q.data?.items ?? []), ...(qIntra.data?.items ?? [])]) perTf.set(it.timeframe, it);
+  const colonne: Colonna[] = VISIBLE_TIMEFRAMES.map((tf) => ({
+    tf,
+    it: perTf.get(tf) ?? null,
+    inArrivo: (INTRADAY as readonly string[]).includes(tf) ? qIntra.isLoading : q.isLoading,
+  }));
 
   return (
     <Card>
@@ -296,19 +328,19 @@ export function TechnicalKpiCard({ ticker, kind = "stock" }: Props) {
                 <th className="text-left font-semibold pb-1.5 pr-2">
                   Indicatore
                 </th>
-                {items.map((it) => (
+                {colonne.map(({ tf }) => (
                   <th
-                    key={it.timeframe}
+                    key={tf}
                     className="text-center font-semibold pb-1.5 px-1"
                   >
-                    {TF_DISPLAY[it.timeframe] ?? it.timeframe}
+                    {TF_DISPLAY[tf] ?? tf}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {ROWS.map((row) => (
-                <MatrixRowComponent key={row.label} row={row} items={items} />
+                <MatrixRowComponent key={row.label} row={row} colonne={colonne} />
               ))}
             </tbody>
           </table>

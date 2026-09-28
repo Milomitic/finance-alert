@@ -36,16 +36,26 @@ export interface MultiTfKpis {
   items: TimeframeKpis[];
 }
 
+function suffisso(timeframes: readonly string[] | undefined): string {
+  return timeframes && timeframes.length > 0
+    ? `?timeframes=${encodeURIComponent(timeframes.join(","))}`
+    : "";
+}
+
 /** Per-stock multi-timeframe KPIs. Catalog-resolved; daily timeframes
  *  are DB-fast, intraday hits yfinance + 5min cache. ~5min staleTime
  *  matches the backend's intraday cache so we don't refetch faster
- *  than the data could change. */
-export function useStockMultiTfKpis(ticker: string) {
+ *  than the data could change.
+ *
+ *  `timeframes` (FA-110) chiede solo quelli: la scheda chiede i giornalieri e
+ *  l'intraday separatamente, cosi' i primi arrivano dal database senza
+ *  aspettare Yahoo. Senza, il server li calcola tutti. */
+export function useStockMultiTfKpis(ticker: string, timeframes?: readonly string[]) {
   return useQuery({
-    queryKey: ["multi-tf-kpis", "stock", ticker],
+    queryKey: ["multi-tf-kpis", "stock", ticker, timeframes ?? "tutti"],
     queryFn: ({ signal }) =>
       api<MultiTfKpis>(
-        `/api/stocks/${encodeURIComponent(ticker)}/multi-tf-kpis`,
+        `/api/stocks/${encodeURIComponent(ticker)}/multi-tf-kpis${suffisso(timeframes)}`,
         { signal },
       ),
     staleTime: 5 * 60_000,
@@ -54,12 +64,12 @@ export function useStockMultiTfKpis(ticker: string) {
 }
 
 /** Per-market-symbol multi-TF KPIs (^GSPC, BTC-USD, GC=F, …). */
-export function useMarketMultiTfKpis(symbol: string) {
+export function useMarketMultiTfKpis(symbol: string, timeframes?: readonly string[]) {
   return useQuery({
-    queryKey: ["multi-tf-kpis", "market", symbol],
+    queryKey: ["multi-tf-kpis", "market", symbol, timeframes ?? "tutti"],
     queryFn: ({ signal }) =>
       api<MultiTfKpis>(
-        `/api/markets/${encodeURIComponent(symbol)}/multi-tf-kpis`,
+        `/api/markets/${encodeURIComponent(symbol)}/multi-tf-kpis${suffisso(timeframes)}`,
         { signal },
       ),
     staleTime: 5 * 60_000,
