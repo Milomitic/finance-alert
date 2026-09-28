@@ -534,6 +534,16 @@ kubectl annotate application -n argocd finance-alert   argocd.argoproj.io/refres
 ArgoCD status.** Compare the running image tag against the commit. The rule is
 the same one as `workflow_dispatch` below: green is not deployed.
 
+### I 404 su `/assets/*.js` subito dopo un rilascio sono una scheda VECCHIA (2026-09-29)
+
+Una scheda aperta prima del rilascio — tipicamente la PWA sul telefono, ripresa
+dal background — ha in memoria il bundle vecchio e chiede i chunk coi nomi
+vecchi. Nei log e' una raffica di `GET /assets/<nome>-<hash>.js -> 404` e NON
+e' un bundle rotto: quei nomi non esistono piu'. Da FA-116
+`lib/ricaricaDopoRilascio.ts` ricarica la pagina su `vite:preloadError`, una
+volta al minuto. ⚠️ `sw.js` e' network-first e questo caso NON lo copre:
+protegge le navigazioni, non gli `import()` di un JavaScript gia' caricato.
+
 ### Un rilascio puo' ASPETTARE fino a 15 minuti: l'hook di FA-109 (2026-09-28)
 
 Ogni sync di ArgoCD passa prima da un Job PreSync
@@ -2617,6 +2627,17 @@ rimettere la dipendenza su una copia e pretendere il rosso.
   output and exit 0 is the only acceptable result)
 - **Frontend build/typecheck**: `cd frontend && npm run build`
   (also: `npx tsc -b` for type-only check)
+- **Tipi generati (FA-111)**: dopo aver cambiato un modello Pydantic che l'API
+  espone, o un `export interface`/`type` sotto `frontend/src`,
+  `cd backend && ./.venv/Scripts/python.exe -m app.scripts.genera_tipi_frontend`.
+  `tests/test_tipi_frontend.py` fallisce se `schema.gen.ts` o
+  `tipi.verifica.ts` sono indietro; `npm run build` fallisce se un tipo scritto
+  a mano dichiara un campo che il server non manda. ⚠️ Il rimedio a quel rosso
+  NON e' un `?` sul campo: o il server deve mandarlo (`series_stalled`, che
+  l'API scartava in silenzio), o lo scrive il client e va in
+  `CAMPI_DEL_CLIENT` con la ragione. Il generatore abbina PER NOME (`X` ->
+  `XOut` o `X`): un tipo nuovo del frontend che coincide con un modello entra
+  nei controlli da solo.
 - **Single test file**: append the file path to the pytest command
 
 ### ⚠️ Il cancello del codice morto va letto con una copertura FRESCA (2026-09-18)
