@@ -534,6 +534,24 @@ kubectl annotate application -n argocd finance-alert   argocd.argoproj.io/refres
 ArgoCD status.** Compare the running image tag against the commit. The rule is
 the same one as `workflow_dispatch` below: green is not deployed.
 
+### Un rilascio puo' ASPETTARE fino a 15 minuti: l'hook di FA-109 (2026-09-28)
+
+Ogni sync di ArgoCD passa prima da un Job PreSync
+(`charts/finance-alert/templates/hook-attesa-scansione.yaml`) che legge
+`scan_running` da `/api/health` e, se c'e' una scansione in corso, aspetta fino
+a `deployGate.maxWaitSeconds` (900 s) prima di lasciar applicare il chart. Un
+pod che non ha ancora l'immagine nuova 5-10 minuti dopo il bump, alle 16:30 o
+alle 21:30 UTC, sta probabilmente aspettando QUESTO, non e' rotto. Si legge da
+Loki, perche' il Job si cancella da solo quando riesce:
+
+    kubectl get --raw "/api/v1/namespaces/monitoring/services/loki:3100/proxy/loki/api/v1/query_range?query=%7Bnamespace%3D%22finance-alert%22%2Cpod%3D~%22.*attesa-scansione.*%22%7D&limit=10&since=1h"
+
+⚠️ Lo script esce SEMPRE 0, e non e' un dettaglio da «sistemare»: un hook
+PreSync fallito ferma la sync, e la sonda di parita' non lo vedrebbe perche'
+lo StatefulSet non cambia. Per la stessa ragione l'Application porta un
+`retry` (in `infra/gitops/finance-alert-app.yaml`, applicato A MANO: ArgoCD non
+gestisce la propria Application).
+
 ### `workflow_dispatch` verifies but does NOT deploy
 
 `image`, `trivy` and `gitops` all carry
