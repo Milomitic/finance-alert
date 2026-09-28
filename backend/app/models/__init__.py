@@ -17,6 +17,7 @@ from app.models.modello_ombra import ModelloOmbra
 from app.models.ohlcv import OhlcvDaily
 from app.models.plan_outcome import PlanOutcome
 from app.models.position import Position
+from app.models.preferito import Preferito
 from app.models.price_alert import PriceAlert
 from app.models.revoked_session import RevokedSession
 from app.models.scan_run import ScanRun
@@ -66,4 +67,5 @@ __all__ = [
     "InstitutionalHolding",
     "CusipTickerMap",
     "UsoPagina",
+    "Preferito",
 ]

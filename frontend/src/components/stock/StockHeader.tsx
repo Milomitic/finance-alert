@@ -4,6 +4,7 @@ import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { EtfMembershipStrip } from "@/components/stock/EtfMembershipChips";
 import { IndexMembershipChips } from "@/components/stock/IndexMembershipChips";
+import { StellaPreferito } from "@/components/stock/StellaPreferito";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlashValue } from "@/components/ui/FlashValue";
@@ -157,8 +158,11 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
               </div>
               {/* Ticker + name */}
               <div className="min-w-0 flex flex-col gap-1">
-                <span className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums leading-none">
-                  {stock.ticker}
+                <span className="flex items-center gap-1">
+                  <span className="text-3xl sm:text-4xl font-bold tracking-tight tabular-nums leading-none">
+                    {stock.ticker}
+                  </span>
+                  <StellaPreferito ticker={stock.ticker} />
                 </span>
                 <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>
                   {stock.name}

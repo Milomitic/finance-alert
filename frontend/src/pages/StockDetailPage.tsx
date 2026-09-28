@@ -1,6 +1,6 @@
 import type { IChartApi } from "lightweight-charts";
 import { AlertCircle, ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import type { Alert, PriceAlert } from "@/api/types";
@@ -62,6 +62,7 @@ import { RsiPanel } from "@/components/stock/RsiPanel";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { StockAlertsHistoryCard } from "@/components/stock/StockAlertsHistoryCard";
 import { StockHeader } from "@/components/stock/StockHeader";
+import { aggiungiRecente } from "@/lib/titoliRecenti";
 import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
@@ -93,6 +94,12 @@ export default function StockDetailPage() {
   const range = resolveRange(searchParams.get("range"));
 
   const detail = useStockDetail(ticker, range);
+  // Fra i recenti (FA-112) solo quando il titolo esiste davvero: un indirizzo
+  // sbagliato non deve finire nella lista della home e della ricerca.
+  const caricato = detail.data !== undefined;
+  useEffect(() => {
+    if (caricato) aggiungiRecente(ticker);
+  }, [ticker, caricato]);
   const priceAlertsQuery = useStockPriceAlerts(ticker);
   const createPa = useCreatePriceAlert(ticker);
   const updatePa = useUpdatePriceAlert(ticker);

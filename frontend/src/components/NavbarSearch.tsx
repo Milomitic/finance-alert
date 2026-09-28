@@ -1,4 +1,4 @@
-import { Building2, History, Search, TrendingUp, X } from "lucide-react";
+import { Building2, History, Search, Star, TrendingUp, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,41 +6,23 @@ import type { IndexBreadth, Stock } from "@/api/types";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Input } from "@/components/ui/input";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { usePreferiti } from "@/hooks/usePreferiti";
 import { useStockSearch } from "@/hooks/useStockSearch";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { formatCompactMoney } from "@/lib/money";
 import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
 import { useIsPhone } from "@/hooks/useMediaQuery";
+import { aggiungiRecente, leggiRecenti } from "@/lib/titoliRecenti";
 import { cn } from "@/lib/utils";
 
-// ── localStorage recent searches ──────────────────────────
-const RECENT_KEY = "stock-search-recent";
-const RECENT_MAX = 5;
-
-function loadRecent(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushRecent(ticker: string) {
-  try {
-    const list = loadRecent().filter((t) => t !== ticker);
-    list.unshift(ticker);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
-  } catch {
-    // ignore quota errors
-  }
-}
+// I recenti hanno un proprietario unico, `lib/titoliRecenti.ts` (FA-112): li
+// registra la pagina titolo da qualunque parte si arrivi, non solo da qui.
 
 // ── helpers ───────────────────────────────────────────────
 
 
 // ── flat result row for unified keyboard nav ──────────────
-type RowKind = "index" | "stock" | "recent" | "mover";
+type RowKind = "index" | "stock" | "preferito" | "recent" | "mover";
 interface FlatRow {
   kind: RowKind;
   // For index navigation
@@ -56,7 +38,8 @@ export function NavbarSearch() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
-  const [recent, setRecent] = useState<string[]>(() => loadRecent());
+  const [recent, setRecent] = useState<string[]>(() => leggiRecenti());
+  const preferitiQ = usePreferiti();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +75,16 @@ export function NavbarSearch() {
     );
   }, [market.data, q]);
 
+  // Preferiti in cima allo stato vuoto (FA-112), e i recenti senza i doppioni.
+  const preferiti = useMemo(
+    () => (q.trim().length > 0 ? [] : (preferitiQ.data ?? []).map((p) => p.ticker)),
+    [q, preferitiQ.data],
+  );
+  const recentiVisibili = useMemo(
+    () => recent.filter((t) => !preferiti.includes(t)),
+    [recent, preferiti],
+  );
+
   // Top movers (gainers) — empty state
   const topMovers = useMemo(() => {
     if (q.trim().length > 0) return [];
@@ -105,11 +98,12 @@ export function NavbarSearch() {
       for (const i of indexMatches) rows.push({ kind: "index", indexCode: i.code });
       for (const s of stockItems) rows.push({ kind: "stock", ticker: s.ticker });
     } else {
-      for (const t of recent) rows.push({ kind: "recent", ticker: t });
+      for (const t of preferiti) rows.push({ kind: "preferito", ticker: t });
+      for (const t of recentiVisibili) rows.push({ kind: "recent", ticker: t });
       for (const m of topMovers) rows.push({ kind: "mover", ticker: m.ticker });
     }
     return rows;
-  }, [q, indexMatches, stockItems, recent, topMovers]);
+  }, [q, indexMatches, stockItems, preferiti, recentiVisibili, topMovers]);
 
   /* Riporta l'evidenziazione in cima quando i risultati cambiano.
    *
@@ -133,12 +127,19 @@ export function NavbarSearch() {
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  // Keyboard `/` shortcut to focus
+  // `/` e Ctrl+K (Cmd+K sul Mac) portano alla ricerca (FA-112).
+  // ⚠️ Ctrl+K vale anche da dentro un campo: e' una scorciatoia con un
+  // modificatore, non un carattere che l'utente sta scrivendo — «/» invece si',
+  // ed e' per questo che resta fuori dai campi di testo.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      const inCampo = document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA";
+      const ctrlK = (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k";
+      if (ctrlK || (e.key === "/" && !inCampo)) {
         e.preventDefault();
+        setRecent(leggiRecenti());
         inputRef.current?.focus();
+        inputRef.current?.select();
         setOpen(true);
       }
     };
@@ -147,8 +148,8 @@ export function NavbarSearch() {
   }, []);
 
   const goToTicker = (ticker: string) => {
-    pushRecent(ticker);
-    setRecent(loadRecent());
+    aggiungiRecente(ticker);
+    setRecent(leggiRecenti());
     setOpen(false);
     setQ("");
     navigate(`/stocks/${encodeURIComponent(ticker)}`);
@@ -306,7 +307,7 @@ export function NavbarSearch() {
       change == null ? "text-muted-foreground" :
       change > 0 ? "text-emerald-800 dark:text-emerald-400" :
       change < 0 ? "text-rose-600 dark:text-rose-400" : "";
-    const Icon = kind === "recent" ? History : TrendingUp;
+    const Icon = kind === "preferito" ? Star : kind === "recent" ? History : TrendingUp;
     // Recent + top-movers don't carry a Stock object (only the ticker
     // string), so country comes from the ticker suffix. Bare tickers
     // default to "us" — see `getFlagFromTicker` docstring.
@@ -349,7 +350,7 @@ export function NavbarSearch() {
 
   // ── render ──────────────────────────────────────────────
   const totalResults = stockItems.length + indexMatches.length;
-  const totalEmpty = recent.length + topMovers.length;
+  const totalEmpty = preferiti.length + recentiVisibili.length + topMovers.length;
 
   return (
     <div ref={containerRef} className="relative w-full max-w-2xl">
@@ -359,7 +360,7 @@ export function NavbarSearch() {
           ref={inputRef}
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { setRecent(leggiRecenti()); setOpen(true); }}
           onKeyDown={onKeyDown}
           role="combobox"
           aria-expanded={open}
@@ -374,7 +375,7 @@ export function NavbarSearch() {
           // is nonsense on a device with no keyboard. CSS cannot shorten a
           // placeholder — only the string itself can.
           placeholder={
-            isPhone ? "Cerca…" : "Cerca stock, indici, settori… (premi / per focus)"
+            isPhone ? "Cerca…" : "Cerca stock, indici, settori… (/ o Ctrl+K)"
           }
           className="pl-11 pr-10 h-12 text-base"
         />
@@ -456,12 +457,23 @@ export function NavbarSearch() {
                 </div>
               ) : (
                 <>
-                  {recent.length > 0 && (
+                  {preferiti.length > 0 && (
                     <div>
                       <div className="px-4 py-1.5 bg-muted/40 text-[0.6765rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
-                        🕓 Visti di recente ({recent.length})
+                        ★ Preferiti ({preferiti.length})
                       </div>
-                      {recent.map((t) => {
+                      {preferiti.map((t) => {
+                        const idx = cursor++;
+                        return <CompactRow key={`p-${t}`} ticker={t} idx={idx} kind="preferito" />;
+                      })}
+                    </div>
+                  )}
+                  {recentiVisibili.length > 0 && (
+                    <div>
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.6765rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                        🕓 Visti di recente ({recentiVisibili.length})
+                      </div>
+                      {recentiVisibili.map((t) => {
                         const idx = cursor++;
                         return <CompactRow key={`r-${t}`} ticker={t} idx={idx} kind="recent" />;
                       })}
