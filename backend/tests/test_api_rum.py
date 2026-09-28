@@ -63,8 +63,13 @@ def test_rum_accepts_valid_sample_and_bounds_contract(client: TestClient) -> Non
     ("/calendar#day", "/calendar"),
     ("/arbitrary/private-value", "/other"),
     ("/stocks/a/b", "/other"),
+    # La Diagnostica finiva sotto /other: la lista a mano nominava /health,
+    # che oggi e' solo un reindirizzamento (FA-114).
+    ("/diagnostics", "/diagnostics"),
+    ("/health", "/diagnostics"),
+    ("/setups", "/alerts"),
 ])
 def test_route_labels_have_finite_cardinality(path: str, expected: str) -> None:
-    from app.api.rum import _route
+    from app.core.rotte import rotta
 
-    assert _route(path) == expected
+    assert rotta(path) == expected

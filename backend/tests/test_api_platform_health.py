@@ -68,6 +68,9 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
         # eseguito, violazioni a11y note): a schermo e non solo in CI, perche'
         # un arretrato che nessuno vede non cala mai.
         "verification",
+        # Il contatore d'uso delle pagine (FA-114): nello snapshot e non con
+        # una chiamata sua, perche' la scheda arrivi insieme alle altre.
+        "uso_pagine",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)

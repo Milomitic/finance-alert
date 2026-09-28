@@ -143,6 +143,21 @@ export type Verification = {
   mutanti_sopravvissuti: Arretrato | null;
 };
 
+/** Il contatore d'uso delle pagine (FA-114). `dal` e' il primo giorno
+ *  contato: una finestra di 30 giorni su un contatore acceso ieri vale uno. */
+export type UsoRotta = {
+  rotta: string;
+  ultimi_7: number;
+  ultimi_30: number;
+  ultimo_giorno: string;
+};
+
+export type UsoPagine = {
+  dal: string | null;
+  oggi: string;
+  rotte: UsoRotta[];
+};
+
 export type PlatformHealth = {
   data_sources: DataSourceMetric[];
   yfinance_breaker: Record<string, unknown>;
@@ -168,6 +183,8 @@ export type PlatformHealth = {
   deploy?: DeployHealth | null;
   /** Arretrati misurati che i cancelli CI fanno rispettare. */
   verification?: Verification | null;
+  /** Quante volte si apre ogni pagina (FA-114). */
+  uso_pagine?: UsoPagine | null;
 };
 
 export type LogRecord = {

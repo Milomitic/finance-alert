@@ -15,6 +15,7 @@ import CacheCard from "@/components/health/CacheCard";
 import DataHealthCard from "@/components/health/DataHealthCard";
 import InfraCard from "@/components/health/InfraCard";
 import VerificationCard from "@/components/health/VerificationCard";
+import UsoPagineCard from "@/components/health/UsoPagineCard";
 import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
@@ -368,6 +369,9 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
               della capacita' predittiva, parlano di quanto e' sorvegliato
               cio' che gira. */}
           <VerificationCard verification={health.verification} />
+          {/* Nello snapshot e non con una chiamata sua: arriva insieme alle
+              altre schede e non sposta il log sotto quando risponde (FA-106). */}
+          <UsoPagineCard uso={health.uso_pagine} />
         </div>
       )}
 

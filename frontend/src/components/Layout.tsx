@@ -10,6 +10,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { UsoPagineReporter } from "@/components/UsoPagineReporter";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
 import { ScoreRecomputeToast } from "@/components/ScoreRecomputeToast";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -486,6 +487,10 @@ export default function Layout() {
       </ErrorBoundary>
       <ErrorBoundary fallback={null} label="ScoreRecomputeToast">
         <ScoreRecomputeToast />
+      </ErrorBoundary>
+      {/* Il contatore d'uso delle pagine (FA-114): non disegna niente. */}
+      <ErrorBoundary fallback={null} label="UsoPagineReporter">
+        <UsoPagineReporter />
       </ErrorBoundary>
     </div>
   );

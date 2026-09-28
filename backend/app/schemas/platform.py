@@ -206,6 +206,22 @@ class VerificationOut(BaseModel):
     mutanti_sopravvissuti: ArretratoOut | None = None
 
 
+class UsoRottaOut(BaseModel):
+    rotta: str
+    ultimi_7: int
+    ultimi_30: int
+    ultimo_giorno: str
+
+
+class UsoPagineOut(BaseModel):
+    """Quante volte si apre ogni pagina (FA-114). `dal` e' il primo giorno
+    contato: 30 giorni di finestra su un contatore acceso ieri valgono uno."""
+
+    dal: str | None = None
+    oggi: str
+    rotte: list[UsoRottaOut] = []
+
+
 class PlatformHealthOut(BaseModel):
     data_sources: list[DataSourceMetricOut]
     yfinance_breaker: dict   # the existing yfinance_health.status() shape
@@ -224,6 +240,7 @@ class PlatformHealthOut(BaseModel):
     # Gli arretrati che i cancelli fanno rispettare, a schermo invece che solo
     # in CI: un arretrato che nessuno vede non cala mai.
     verification: VerificationOut | None = None
+    uso_pagine: UsoPagineOut | None = None
 
 
 

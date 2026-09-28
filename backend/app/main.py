@@ -35,6 +35,7 @@ from app.api import setups as setups_router
 from app.api import spotlight as spotlight_router
 from app.api import stock_drawings as stock_drawings_router
 from app.api import stocks as stocks_router
+from app.api import uso as uso_router
 from app.api.deps import get_current_user, require_json
 from app.core.config import settings
 from app.core.errors import UpstreamError
@@ -703,6 +704,7 @@ app.include_router(calendar_router.router)
 app.include_router(institutionals_router.router)
 app.include_router(platform_health_router.router)
 app.include_router(rum_router.router)
+app.include_router(uso_router.router)
 app.include_router(kpi_router.router)
 
 

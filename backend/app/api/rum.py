@@ -6,6 +6,7 @@ from prometheus_client import Histogram
 from pydantic import BaseModel, Field
 
 from app.api.deps import get_current_user, require_json
+from app.core import rotte
 from app.models import User
 
 router = APIRouter(prefix="/api/rum", tags=["rum"])
@@ -27,23 +28,6 @@ class WebVitalIn(BaseModel):
     device: str = Field(pattern=r"^(mobile|desktop)$")
 
 
-def _route(value: str) -> str:
-    # Keep Prometheus cardinality bounded even if a future client sends a
-    # dynamic route. Query strings and IDs never belong in a RUM label.
-    clean = value.split("?", 1)[0].split("#", 1)[0].rstrip("/") or "/"
-    static = {"/", "/login", "/sectors", "/alerts", "/setups", "/positions",
-              "/health", "/calendar", "/stocks", "/institutionals", "/settings"}
-    if clean in static:
-        return clean
-    dynamic = {"stocks": "ticker", "markets": "symbol", "sectors": "name",
-               "macro": "seriesId", "institutionals": "slug"}
-    parts = clean.split("/")
-    if len(parts) == 3 and parts[0] == "" and parts[1] in dynamic and parts[2]:
-        return f"/{parts[1]}/:{dynamic[parts[1]]}"
-    return "/other"
-
-
-
 @router.post("/web-vitals", status_code=202, dependencies=[Depends(require_json)])
 def record_web_vital(
     payload: WebVitalIn, _user: User = Depends(get_current_user)
@@ -52,7 +36,8 @@ def record_web_vital(
     WEB_VITAL.labels(
         metric=payload.metric,
         unit=unit,
-        route=_route(payload.route),
+        # Proprietario unico delle rotte: `app.core.rotte` (FA-114).
+        route=rotte.rotta(payload.route),
         device=payload.device,
     ).observe(payload.value)
     return {"status": "accepted"}

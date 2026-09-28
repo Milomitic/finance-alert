@@ -34,6 +34,8 @@ from app.schemas.platform import (
     RecentScanOut,
     SchedulerJobStatOut,
     SignalDriftOut,
+    UsoPagineOut,
+    UsoRottaOut,
     VerificationOut,
 )
 from app.services import (
@@ -47,6 +49,7 @@ from app.services import (
     plan_performance_service,
     signal_drift_service,
     source_catalog,
+    uso_pagine_service,
     verification_posture,
     yfinance_health,
 )
@@ -174,6 +177,26 @@ def health_snapshot(
         data_health=_data_health(db),
         deploy=_deploy_health(),
         verification=_verification(),
+        uso_pagine=_uso_pagine(db),
+    )
+
+
+def _uso_pagine(db: Session) -> UsoPagineOut | None:
+    """Il contatore d'uso (FA-114). Una lettura che fallisce non toglie lo
+    snapshot intero: la scheda dice NON SO e le altre restano."""
+    try:
+        r = uso_pagine_service.riepilogo(db)
+    except Exception as exc:  # noqa: BLE001 — la salute non dipende da questo
+        logger.warning(f"[platform] uso delle pagine non leggibile: {exc}")
+        return None
+    return UsoPagineOut(
+        dal=r.dal.isoformat() if r.dal else None,
+        oggi=r.oggi.isoformat(),
+        rotte=[
+            UsoRottaOut(rotta=u.rotta, ultimi_7=u.ultimi_7, ultimi_30=u.ultimi_30,
+                        ultimo_giorno=u.ultimo_giorno.isoformat())
+            for u in r.rotte
+        ],
     )
 
 
