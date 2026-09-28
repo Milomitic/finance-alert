@@ -77,12 +77,16 @@ export function SettimanaCard() {
                     aria-label={etichettaGiorno(g.giorno, g.distanza)}
                     className={cn(ALTEZZA_COLONNA, "flex min-w-[9.5rem] flex-1 flex-col rounded-md border border-border/60 bg-muted/20 p-2")}
                   >
-                    <h3 className="mb-1 flex items-baseline justify-between gap-1 text-xs font-semibold">
+                    {/* Un `div` e non un'intestazione: la scheda sta sopra
+                        l'`h2` della pagina, e un `h3` qui salterebbe un livello
+                        (axe `heading-order`, trovato dal gate). Il nome della
+                        colonna lo porta gia' `aria-label`. */}
+                    <div className="mb-1 flex items-baseline justify-between gap-1 text-xs font-semibold">
                       <span>{etichettaGiorno(g.giorno, g.distanza)}</span>
                       {g.distanza > 1 && (
                         <span className="font-normal text-muted-foreground">tra {g.distanza} gg</span>
                       )}
-                    </h3>
+                    </div>
                     <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto text-[0.7059rem] leading-snug">
                       {g.macro.map((m) => (
                         <li key={`${m.etichetta}-${m.oraET}`} className="flex gap-1">
