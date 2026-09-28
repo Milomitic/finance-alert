@@ -3,7 +3,6 @@
  * Per ogni tipo scritto a mano che ha un modello del server, `tsc` pretende
  * che il tipo NON dichiari campi che il server non manda (FA-111). Le
  * eccezioni, ognuna con la sua ragione, stanno nello script. */
-/* eslint-disable */
 import type * as S from "./schema.gen";
 import type * as M0 from "@/api/alerts";
 import type * as M1 from "@/api/dashboard";

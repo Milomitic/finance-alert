@@ -62,8 +62,10 @@ INTESTAZIONE = """\
  *   backend/app/scripts/genera_tipi_frontend.py
  * e tenuto allineato da backend/tests/test_tipi_frontend.py, che fallisce se
  * questo file e' indietro rispetto ai modelli del server (FA-111).
+ *
+ * Niente `eslint-disable`: il file non viola nessuna regola, e una direttiva
+ * che non sopprime niente e' un avviso del lint completo.
  */
-/* eslint-disable */
 """
 
 _IDENT = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
@@ -189,7 +191,6 @@ def genera_verifica(schema_openapi: dict[str, Any], radice: Path = FRONTEND_SRC)
         " * Per ogni tipo scritto a mano che ha un modello del server, `tsc` pretende",
         " * che il tipo NON dichiari campi che il server non manda (FA-111). Le",
         " * eccezioni, ognuna con la sua ragione, stanno nello script. */",
-        "/* eslint-disable */",
         'import type * as S from "./schema.gen";',
     ]
     righe += [f'import type * as {alias[m]} from "{m}";' for m in usati]

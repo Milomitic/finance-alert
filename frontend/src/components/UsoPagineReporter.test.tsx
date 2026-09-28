@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect } from "react";
 import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -13,7 +13,11 @@ import { UsoPagineReporter } from "./UsoPagineReporter";
 let vai: (to: string) => void = () => undefined;
 function Navigatore() {
   const navigate = useNavigate();
-  vai = (to) => navigate(to);
+  // In un effetto, non in render: riassegnare una variabile del modulo durante
+  // il render e' un effetto collaterale (react-hooks/globals).
+  useEffect(() => {
+    vai = (to) => navigate(to);
+  }, [navigate]);
   return null;
 }
 
