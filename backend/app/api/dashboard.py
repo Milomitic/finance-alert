@@ -21,6 +21,7 @@ from app.services import (
     alert_service,
     analyst_actions_feed,
     premarket_service,
+    rilevanza_service,
     stats_service,
 )
 
@@ -70,6 +71,27 @@ def get_analyst_actions(
         limit=max(1, min(limit, 100)),
         actions=analyst_actions_feed.CHANGE_ACTIONS,
     )
+    # I titoli seguiti (FA-113) non spariscono sotto il tetto: le loro azioni
+    # degli ultimi 90 giorni restano anche oltre le prime `limit` del
+    # catalogo, e la riga porta il segno. Prima una promozione su una propria
+    # posizione poteva essere la 41esima del giorno, cioe' invisibile.
+    per_id = rilevanza_service.titoli_rilevanti(db)
+    rilevanti = {
+        ticker: per_id[sid]
+        for sid, ticker in db.execute(
+            select(Stock.id, Stock.ticker).where(Stock.id.in_(per_id))
+        ).all()
+    } if per_id else {}
+    if rilevanti:
+        extra = [
+            it for it in analyst_actions_feed.recent_actions(
+                limit=10_000, actions=analyst_actions_feed.CHANGE_ACTIONS,
+            )
+            if it.ticker in rilevanti and it not in items
+        ]
+        if extra:
+            items = sorted(items + extra, key=lambda it: it.ticker)
+            items.sort(key=lambda it: it.date, reverse=True)
     if not items:
         return []
     # Batch-resolve ticker → name in one query instead of N.
@@ -113,6 +135,7 @@ def get_analyst_actions(
             price_target_action=it.price_target_action,
             from_news=it.from_news,
             current_price=price_map.get(it.ticker),
+            rilevanza=rilevanti.get(it.ticker),
         )
         for it in items
     ]

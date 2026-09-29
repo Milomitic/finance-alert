@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Gavel, Newspaper } from "lucide-react";
+import { Briefcase, Gavel, Newspaper, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
@@ -139,6 +139,27 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
 }
 
+/** Il segno di un titolo seguito (FA-113), sull'angolo del logo.
+ *
+ *  ⚠️ Non accanto al ticker: la riga misura gia' 7px rimasti alla banca a
+ *  certe larghezze (vedi sotto), e un'icona `shrink-0` in piu' li toglierebbe
+ *  proprio al nome — l'identita' cede e la decorazione sopravvive. Sull'angolo
+ *  del logo non occupa larghezza. Il testo per gli assistivi, perche' l'icona
+ *  da sola non si legge. */
+export function SegnoRilevanza({ rilevanza }: { rilevanza?: string | null }) {
+  if (rilevanza !== "posizione" && rilevanza !== "preferito") return null;
+  return (
+    <span className="absolute -bottom-1 -right-1 rounded-full bg-card p-px leading-none">
+      {rilevanza === "posizione" ? (
+        <Briefcase className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />
+      ) : (
+        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300" aria-hidden />
+      )}
+      <span className="sr-only">{rilevanza === "posizione" ? "in posizione" : "preferito"}</span>
+    </span>
+  );
+}
+
 function ActionRow({ a }: { a: AnalystAction }) {
   return (
     <li className="border-b border-border/40 last:border-b-0 min-w-0">
@@ -148,7 +169,10 @@ function ActionRow({ a }: { a: AnalystAction }) {
         title={a.name ?? a.ticker}
       >
         {/* Compact identity: logo + ticker (company name → row tooltip). */}
-        <StockLogo ticker={a.ticker} size="xs" />
+        <span className="relative shrink-0 inline-flex">
+          <StockLogo ticker={a.ticker} size="xs" />
+          <SegnoRilevanza rilevanza={a.rilevanza} />
+        </span>
         <span className="shrink-0 w-[40px] text-[0.7647rem] font-bold tabular-nums leading-none truncate">
           {a.ticker}
         </span>

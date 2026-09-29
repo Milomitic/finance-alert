@@ -33,13 +33,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import Alert, Stock
-from app.services import rilevanza_service
-from app.services.promemoria_trimestrali_service import etichetta_data, ora_italiana
+from app.services import novita_titoli_service, rilevanza_service
+from app.services.promemoria_trimestrali_service import ROMA, etichetta_data, ora_italiana
 
 # Maximum alerts to enumerate in the digest message body
 DIGEST_TOP_N = 10
 # Maximum alert lines in an instant push message
 PUSH_TOP_N = 10
+# Righe di novita' sui titoli seguiti nel digest
+NOVITA_TOP_N = 10
 # Telegram message hard limit
 TELEGRAM_MAX_LEN = 4000
 
@@ -247,7 +249,17 @@ def _riga_alert(a: Alert, stocks_by_id: dict[int, Stock], rilevanza: str | None)
     return line
 
 
-def build_digest_message(db: Session, alerts: list[Alert]) -> str:
+def _righe_novita(novita: list[Any]) -> list[str]:
+    righe = [f"<b>Novità sui tuoi titoli ({len(novita)}):</b>"]
+    for nv in novita[:NOVITA_TOP_N]:
+        segno = _SEGNO_RILEVANZA.get(nv.rilevanza, "•")
+        righe.append(f"{segno} <b>{nv.ticker}</b> {nv.data.strftime('%d/%m')} — {nv.testo}")
+    if len(novita) > NOVITA_TOP_N:
+        righe.append(f"... e altre {len(novita) - NOVITA_TOP_N}.")
+    return righe
+
+
+def build_digest_message(db: Session, alerts: list[Alert], novita: list[Any] | None = None) -> str:
     """Format the digest as Telegram HTML — grouped by signal label, with
     per-alert tone emoji + Forza/Probabilità when the snapshot carries them.
 
@@ -273,6 +285,14 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     )
 
     lines = [f"🔔 <b>Finance Alert — Digest del {today}</b>", ""]
+    if novita:
+        lines += _righe_novita(novita)
+        lines.append("")
+    if not alerts:
+        lines.append("Nessun alert nuovo nelle ultime 24h.")
+        lines.append("")
+        lines.append(f"🔗 {settings.public_base_url}/")
+        return _truncate("\n".join(lines))
     lines.append(f"<b>{n} {'nuovo alert' if n == 1 else 'nuovi alert'}</b> nelle ultime 24h:")
     lines.append("")
     if miei:
@@ -303,6 +323,17 @@ def build_digest_message(db: Session, alerts: list[Alert]) -> str:
     return _truncate("\n".join(lines))
 
 
+def _novita_da_mandare(db: Session) -> list[Any]:
+    """Le novita' sui titoli seguiti (`novita_titoli_service`). Best-effort:
+    un errore qui non deve togliere il digest dei segnali."""
+    try:
+        return novita_titoli_service.da_mandare(db, datetime.now(ROMA).date())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[notifier] novita' non disponibili: {exc}")
+        db.rollback()
+        return []
+
+
 def send_daily_digest(db: Session) -> DigestResult:
     """Build and send the digest of the last 24 hours of alerts."""
     if not _telegram_enabled():
@@ -310,16 +341,23 @@ def send_daily_digest(db: Session) -> DigestResult:
         return DigestResult(sent=False, reason="telegram_disabled")
 
     alerts = _fetch_alerts_last_24h(db)
-    if not alerts:
+    novita = _novita_da_mandare(db)
+    if not alerts and not novita:
         logger.info("[notifier] digest skipped: no alerts in last 24h")
         return DigestResult(sent=False, reason="no_alerts")
 
-    text = build_digest_message(db, alerts)
+    text = build_digest_message(db, alerts, novita)
 
     if not _send_telegram(text, what="digest"):
         return DigestResult(sent=False, alerts_count=len(alerts), reason="http_error")
 
-    logger.info(f"[notifier] digest sent: {len(alerts)} alerts")
+    # Segnate SOLO dopo un invio riuscito: se Telegram fallisce, domattina
+    # ripartono.
+    try:
+        novita_titoli_service.segna_mandate(db, novita)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[notifier] novita' non segnate come mandate: {exc}")
+    logger.info(f"[notifier] digest sent: {len(alerts)} alerts, {len(novita)} novita'")
     return DigestResult(sent=True, alerts_count=len(alerts), reason="ok")
 
 

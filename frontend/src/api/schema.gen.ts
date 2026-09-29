@@ -1883,6 +1883,7 @@ export interface app__schemas__dashboard__AnalystActionOut {
   current_price_target?: number | null;
   prior_price_target?: number | null;
   price_target_action?: string | null;
+  rilevanza?: string | null;
   from_news?: boolean;
   current_price?: number | null;
 }

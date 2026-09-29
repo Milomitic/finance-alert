@@ -84,6 +84,8 @@ class AnalystActionOut(BaseModel):
     # "Initiates" axis — informative when paired with a Maintain
     # rating (firm holds the grade but moves the target).
     price_target_action: str | None = None
+    # «posizione» | «preferito» | None, come nella lista dei segnali (FA-113).
+    rilevanza: str | None = None
     from_news: bool = False
     # Latest stored close of the stock (same major unit as the target —
     # both pence→pounds scaled for .L). Lets the dashboard show the target's

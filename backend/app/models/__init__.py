@@ -14,6 +14,7 @@ from app.models.kpi_snapshot import KpiSnapshot
 from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.modello_ombra import ModelloOmbra
+from app.models.novita_notificata import NovitaNotificata
 from app.models.ohlcv import OhlcvDaily
 from app.models.plan_outcome import PlanOutcome
 from app.models.position import Position
@@ -67,5 +68,6 @@ __all__ = [
     "InstitutionalHolding",
     "CusipTickerMap",
     "UsoPagina",
+    "NovitaNotificata",
     "Preferito",
 ]

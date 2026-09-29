@@ -24,6 +24,9 @@ export type AnalystAction = {
    *  null when the stock has no stored OHLCV. */
   current_price?: number | null;
   from_news: boolean;
+  /** «posizione» | «preferito» | null: il titolo e' seguito (FA-113). Le sue
+   *  azioni restano nella lista anche oltre il tetto. */
+  rilevanza?: "posizione" | "preferito" | null;
 };
 
 /** One US pre-market gainer/loser — mirrors backend

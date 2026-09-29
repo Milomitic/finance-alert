@@ -124,3 +124,44 @@ def test_analyst_actions_current_price_none_without_ohlcv(
     assert resp.status_code == 200
     row = next(r for r in resp.json() if r["ticker"] == "NEWO")
     assert row["current_price"] is None
+
+
+def test_le_azioni_sui_titoli_seguiti_restano_oltre_il_tetto(
+    client: TestClient, db: Session,
+) -> None:
+    """FA-113 sulla scheda analisti: con il tetto a 1 il catalogo mostrerebbe
+    solo l'azione piu' recente; quella sulla propria posizione, piu' vecchia,
+    resta e porta il segno."""
+    import time
+    from datetime import date, timedelta
+    from decimal import Decimal
+
+    from app.models import Position
+    from app.services import stock_fundamentals_service
+    from app.services.stock_fundamentals_service import AnalystAction, Fundamentals
+
+    oggi = date.today()
+    stocks = {}
+    for t in ("POS", "NESSUNO"):
+        stocks[t] = Stock(ticker=t, exchange="X", name=t)
+        db.add(stocks[t])
+    db.flush()
+    db.add(Position(stock_id=stocks["POS"].id, entry_price=Decimal("10")))
+    db.commit()
+
+    def azione(giorni: int, firm: str) -> AnalystAction:
+        return AnalystAction(date=(oggi - timedelta(days=giorni)).isoformat(), firm=firm,
+                             to_grade="Buy", from_grade="Hold", action="up")
+
+    stock_fundamentals_service._CACHE.clear()
+    try:
+        stock_fundamentals_service._CACHE["NESSUNO"] = Fundamentals(
+            ticker="NESSUNO", analyst_actions=[azione(1, "A"), azione(2, "B")], fetched_at=time.time())
+        stock_fundamentals_service._CACHE["POS"] = Fundamentals(
+            ticker="POS", analyst_actions=[azione(10, "C")], fetched_at=time.time())
+        rows = client.get("/api/dashboard/analyst-actions?limit=1").json()
+    finally:
+        stock_fundamentals_service._CACHE.clear()
+    assert [(r["ticker"], r["firm"], r["rilevanza"]) for r in rows] == [
+        ("NESSUNO", "A", None), ("POS", "C", "posizione"),
+    ]
