@@ -197,3 +197,77 @@ def test_un_errore_nelle_novita_non_toglie_il_digest(db: Session, seguiti, teleg
     monkeypatch.setattr(nt, "da_mandare", rotto)
     assert notifier_service.send_daily_digest(db).sent
     assert "Novità" not in telegram[0]
+
+
+# ─── i depositi 13F ──────────────────────────────────────────────────────
+
+
+def _fondo(db: Session, nome: str, periodi: list[date]) -> list:
+    """Un fondo con un deposito per periodo; l'ultimo ricevuto oggi, gli altri
+    tre mesi fa."""
+    from app.models import Institutional, InstitutionalFiling
+
+    fondo = Institutional(slug=nome.lower().replace(" ", "-"), name=nome, type="superinvestor",
+                          source="dataroma")
+    db.add(fondo)
+    db.flush()
+    depositi = []
+    for i, p in enumerate(periodi):
+        ultimo = i == len(periodi) - 1
+        f = InstitutionalFiling(institutional_id=fondo.id, period_end_date=p,
+                                created_at=datetime(2026, 9, 28, 9, tzinfo=UTC) if ultimo
+                                else datetime(2026, 6, 1, tzinfo=UTC))
+        db.add(f)
+        db.flush()
+        depositi.append(f)
+    return depositi
+
+
+def _posizione(db: Session, deposito, ticker: str, mossa: str | None, var=None, peso=None) -> None:
+    from app.models import InstitutionalHolding
+
+    db.add(InstitutionalHolding(filing_id=deposito.id, ticker=ticker, action=mossa,
+                                qoq_change_pct=var, portfolio_pct=peso))
+    db.commit()
+
+
+def test_le_mosse_dei_fondi_sui_titoli_seguiti(db: Session, seguiti) -> None:
+    *_, ultimo = _fondo(db, "Pershing Square", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, ultimo, "POS", "add", 25.4, 12.3)
+    _posizione(db, ultimo, "PREF", "sold_out", -100.0, 0.0)
+    _posizione(db, ultimo, "NESSUNO", "new", None, 5.0)      # non seguito
+    novita = nt.da_mandare(db, OGGI, rinfresca=False)
+    assert [(n.ticker, n.tipo, n.data, n.testo) for n in novita] == [
+        ("POS", "superinvestor", date(2026, 9, 28),
+         "Pershing Square aumenta la posizione (+25% di azioni), 12.3% del portafoglio — 13F al 30/06/2026"),
+        ("PREF", "superinvestor", date(2026, 9, 28), "Pershing Square esce dal titolo — 13F al 30/06/2026"),
+    ]
+
+
+def test_un_nuovo_senza_deposito_precedente_non_e_una_notizia(db: Session, seguiti) -> None:
+    """Un fondo con un deposito solo: «nuovo» vuol dire «non so»."""
+    [unico] = _fondo(db, "BlackRock", [date(2026, 6, 30)])
+    _posizione(db, unico, "POS", "new", None, 0.02)
+    *_, ultimo = _fondo(db, "Akre", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, ultimo, "POS", "new", None, 4.0)
+    assert [n.testo for n in nt.da_mandare(db, OGGI, rinfresca=False)] == [
+        "Akre apre una posizione, 4.0% del portafoglio — 13F al 30/06/2026",
+    ]
+
+
+def test_conferme_e_depositi_vecchi_non_sono_novita(db: Session, seguiti) -> None:
+    vecchio, ultimo = _fondo(db, "Baupost", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, ultimo, "POS", "hold", 0.0, 3.0)
+    _posizione(db, vecchio, "PREF", "add", 10.0, 3.0)        # ricevuto a giugno
+    assert nt.da_mandare(db, OGGI, rinfresca=False) == []
+
+
+def test_il_ticker_col_trattino_trova_il_deposito_col_punto(db: Session) -> None:
+    s = Stock(ticker="BRK-B", exchange="NYSE", name="Berkshire")
+    db.add(s)
+    db.flush()
+    db.add(Preferito(stock_id=s.id))
+    *_, ultimo = _fondo(db, "Markel", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, ultimo, "BRK.B", "reduce", -10.0, 2.0)
+    [n] = nt.da_mandare(db, OGGI, rinfresca=False)
+    assert (n.ticker, n.testo.split(" (")[0]) == ("BRK-B", "Markel riduce la posizione")

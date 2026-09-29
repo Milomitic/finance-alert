@@ -9,7 +9,12 @@ aprendo il titolo:
 - **insider**: gli ACQUISTI. Le vendite no, e non per dimenticanza: su un
   titolo grande sono quotidiane (piani automatici, tasse sulle azioni
   assegnate) e seppellirebbero il resto;
-- **trimestrali pubblicate**: utile per azione contro atteso, con la sorpresa.
+- **trimestrali pubblicate**: utile per azione contro atteso, con la sorpresa;
+- **superinvestor**: un fondo che nel suo ultimo 13F apre, aumenta, riduce o
+  chiude la posizione. Viene dai depositi (`institutional_*`), non dalla cache,
+  e la data e' il giorno in cui l'app ha ricevuto il deposito: i 13F escono
+  45 giorni dopo la fine del trimestre, quindi la data del trimestre direbbe
+  «sei settimane fa» proprio del fatto appena saputo.
 
 Sono fatti, non previsioni: nessuno di questi numeri entra in un punteggio.
 
@@ -28,7 +33,7 @@ import hashlib
 import re
 import time
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from loguru import logger
@@ -37,9 +42,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.models import NovitaNotificata, Stock
+from app.models import (
+    Institutional,
+    InstitutionalFiling,
+    InstitutionalHolding,
+    NovitaNotificata,
+    Stock,
+)
 from app.services import rilevanza_service, stock_fundamentals_service
 from app.services.analyst_actions_feed import CHANGE_ACTIONS
+from app.services.institutional_service import _substantiated_new
 
 #: I fatti piu' vecchi di cosi' non sono piu' «novita'», anche se mai mandati.
 GIORNI = 14
@@ -49,6 +61,15 @@ MAX_ETA_ORE = 20
 ANALISTA = "analista"
 INSIDER = "insider"
 TRIMESTRALE = "trimestrale"
+SUPERINVESTOR = "superinvestor"
+
+#: Le mosse di un fondo che fanno notizia; «hold» e le righe senza azione no.
+_MOSSE_13F = {
+    "new": "apre una posizione",
+    "add": "aumenta la posizione",
+    "reduce": "riduce la posizione",
+    "sold_out": "esce dal titolo",
+}
 
 _ACQUISTO = re.compile(r"\b(purchase|buy)\b", re.I)
 _TARGET_MOSSO = {"Raises", "Lowers"}
@@ -149,6 +170,53 @@ def dai_fondamentali(fund: Any, *, ticker: str, nome: str | None, rilevanza: str
     return out
 
 
+def _forme(ticker: str) -> set[str]:
+    """Il catalogo scrive `BRK-B`, i depositi `BRK.B`: si cercano entrambe."""
+    return {ticker, ticker.replace("-", ".")}
+
+
+def dai_depositi_13f(db: Session, titoli: list[tuple[Stock, str]], dal: date) -> list[Novita]:
+    """Le mosse dei fondi sui titoli dati, nei depositi ricevuti dal giorno
+    `dal`. Un «apre una posizione» di un fondo con un deposito solo non si
+    dice: senza un deposito precedente non e' un'apertura osservata, e'
+    «non so» (`_substantiated_new`, la stessa regola del dettaglio titolo)."""
+    per_forma = {f: (s, ril) for s, ril in titoli for f in _forme(s.ticker)}
+    if not per_forma:
+        return []
+    righe = db.execute(
+        select(
+            Institutional.id, Institutional.name, InstitutionalFiling.period_end_date,
+            InstitutionalFiling.created_at, InstitutionalHolding.ticker,
+            InstitutionalHolding.action, InstitutionalHolding.qoq_change_pct,
+            InstitutionalHolding.portfolio_pct,
+        )
+        .join(InstitutionalFiling, InstitutionalFiling.id == InstitutionalHolding.filing_id)
+        .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
+        .where(
+            InstitutionalHolding.ticker.in_(per_forma),
+            InstitutionalHolding.action.in_(_MOSSE_13F),
+            InstitutionalFiling.created_at >= datetime.combine(dal, datetime.min.time()),
+        )
+    ).all()
+    fidati = _substantiated_new(db, ((r[0], r[2]) for r in righe if r[5] == "new"))
+    out: list[Novita] = []
+    for fondo_id, fondo, periodo, ricevuto, forma, mossa, variazione, peso in righe:
+        if mossa == "new" and fondo_id not in fidati:
+            continue
+        s, ril = per_forma[forma]
+        testo = f"{fondo} {_MOSSE_13F[mossa]}"
+        if mossa in ("add", "reduce") and isinstance(variazione, (int, float)):
+            testo += f" ({variazione:+.0f}% di azioni)"
+        if mossa != "sold_out" and isinstance(peso, (int, float)) and peso >= 0.1:
+            testo += f", {peso:.1f}% del portafoglio"
+        testo += f" — 13F al {periodo:%d/%m/%Y}"
+        out.append(Novita(
+            _chiave(SUPERINVESTOR, s.ticker, fondo_id, periodo, mossa),
+            s.ticker, s.name, ril, ricevuto.date(), SUPERINVESTOR, testo,
+        ))
+    return out
+
+
 def _rinfresca_se_vecchie(tickers: set[str]) -> None:
     adesso = time.time()
     for t in sorted(tickers):
@@ -178,6 +246,7 @@ def da_mandare(db: Session, oggi: date, *, rinfresca: bool = True) -> list[Novit
             continue
         tutte += dai_fondamentali(fund, ticker=s.ticker, nome=s.name,
                                   rilevanza=rilevanti[s.id], dal=dal)
+    tutte += dai_depositi_13f(db, [(s, rilevanti[s.id]) for s in titoli], dal)
     if not tutte:
         return []
     gia = set(db.execute(
