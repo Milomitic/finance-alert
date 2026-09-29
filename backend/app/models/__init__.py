@@ -33,6 +33,7 @@ from app.models.stock_setup import StockSetup
 from app.models.technical_score import TechnicalScore
 from app.models.user import User
 from app.models.uso_pagina import UsoPagina
+from app.models.visita_cruscotto import VisitaCruscotto
 
 __all__ = [
     "User",
@@ -68,6 +69,7 @@ __all__ = [
     "InstitutionalHolding",
     "CusipTickerMap",
     "UsoPagina",
+    "VisitaCruscotto",
     "NovitaNotificata",
     "Preferito",
 ]

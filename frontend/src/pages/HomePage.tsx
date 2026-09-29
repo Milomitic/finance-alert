@@ -4,6 +4,7 @@ import { Suspense, lazy } from "react";
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
+import { DallUltimaVisitaStrip } from "@/components/dashboard/DallUltimaVisitaStrip";
 import { PreferitiStrip } from "@/components/dashboard/PreferitiStrip";
 import { SettimanaCard } from "@/components/dashboard/SettimanaCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
@@ -230,6 +231,9 @@ function HomePageContent() {
         computedAt={m?.computed_at}
         movers={m?.movers}
       />
+      {/* Che cosa e' cambiato dall'ultima visita: il cruscotto si apre ~17
+          volte al giorno, e lo stato e' quasi tutto gia' visto. Altezza fissa. */}
+      <DallUltimaVisitaStrip />
       {/* Preferiti e recenti (FA-112): il gesto piu' frequente dell'app e'
           aprire un titolo, e da qui e' un clic. Una riga di altezza fissa:
           non sposta niente quando la lista arriva. */}

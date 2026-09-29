@@ -222,6 +222,15 @@ export interface CountBucket {
   count: number;
 }
 
+export interface DallUltimaVisitaOut {
+  dal: string | null;
+  segnali: number;
+  segnali_miei: number;
+  target_raggiunti: number;
+  posizioni_chiuse: number;
+  novita: NovitaTitoloOut[];
+}
+
 export interface DashboardSummaryOut {
   kpis: KpiSummaryOut;
   alerts_by_day: AlertsByDayPointOut[];
@@ -955,6 +964,14 @@ export interface MoversBlockOut {
 export interface MultiTfKpisOut {
   ticker: string;
   items: TimeframeKpisOut[];
+}
+
+export interface NovitaTitoloOut {
+  ticker: string;
+  rilevanza: string;
+  data: string;
+  tipo: string;
+  testo: string;
 }
 
 export interface OhlcvFreshnessOut {

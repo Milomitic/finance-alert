@@ -17,6 +17,7 @@ from app.api import alerts as alerts_router
 from app.api import auth as auth_router
 from app.api import calendar as calendar_router
 from app.api import catalog as catalog_router
+from app.api import cruscotto as cruscotto_router
 from app.api import dashboard as dashboard_router
 from app.api import institutionals as institutionals_router
 from app.api import kpi as kpi_router
@@ -706,6 +707,7 @@ app.include_router(institutionals_router.router)
 app.include_router(platform_health_router.router)
 app.include_router(rum_router.router)
 app.include_router(uso_router.router)
+app.include_router(cruscotto_router.router)
 app.include_router(preferiti_router.router)
 app.include_router(kpi_router.router)
 

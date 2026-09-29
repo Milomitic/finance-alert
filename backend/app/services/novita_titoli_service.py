@@ -229,16 +229,18 @@ def _rinfresca_se_vecchie(tickers: set[str]) -> None:
             logger.warning(f"[novita] {t}: fondamentali non disponibili: {exc}")
 
 
-def da_mandare(db: Session, oggi: date, *, rinfresca: bool = True) -> list[Novita]:
-    """Le novita' degli ultimi `GIORNI` sui titoli che contano, non ancora
-    mandate; posizioni prima, poi per data dal piu' recente."""
+def raccogli(db: Session, dal: date, *, rinfresca: bool) -> list[Novita]:
+    """Tutte le novita' dal giorno `dal` sui titoli che contano, mandate o no;
+    posizioni prima, poi per data dal piu' recente.
+
+    ⚠️ `rinfresca=False` per chi risponde a una pagina: il rinfresco scarica da
+    Yahoo, e un'apertura del cruscotto non deve aspettare la rete."""
     rilevanti = rilevanza_service.titoli_rilevanti(db)
     if not rilevanti:
         return []
     titoli = db.execute(select(Stock).where(Stock.id.in_(rilevanti))).scalars().all()
     if rinfresca:
         _rinfresca_se_vecchie({s.ticker for s in titoli})
-    dal = oggi - timedelta(days=GIORNI)
     tutte: list[Novita] = []
     for s in titoli:
         fund = stock_fundamentals_service._CACHE.get(s.ticker)
@@ -247,21 +249,22 @@ def da_mandare(db: Session, oggi: date, *, rinfresca: bool = True) -> list[Novit
         tutte += dai_fondamentali(fund, ticker=s.ticker, nome=s.name,
                                   rilevanza=rilevanti[s.id], dal=dal)
     tutte += dai_depositi_13f(db, [(s, rilevanti[s.id]) for s in titoli], dal)
+    # Due voci identiche nello stesso titolo (news e tabella) sono un fatto solo.
+    uniche = list({n.chiave: n for n in tutte}.values())
+    uniche.sort(key=lambda n: (-rilevanza_service.PESO[n.rilevanza], n.ticker, -n.data.toordinal()))
+    return uniche
+
+
+def da_mandare(db: Session, oggi: date, *, rinfresca: bool = True) -> list[Novita]:
+    """Le novita' degli ultimi `GIORNI` sui titoli che contano, non ancora
+    mandate."""
+    tutte = raccogli(db, oggi - timedelta(days=GIORNI), rinfresca=rinfresca)
     if not tutte:
         return []
     gia = set(db.execute(
         select(NovitaNotificata.chiave).where(NovitaNotificata.chiave.in_({n.chiave for n in tutte}))
     ).scalars())
-    # Due voci identiche nello stesso titolo (news e tabella) sono un fatto solo.
-    viste: set[str] = set()
-    nuove = []
-    for n in tutte:
-        if n.chiave in gia or n.chiave in viste:
-            continue
-        viste.add(n.chiave)
-        nuove.append(n)
-    nuove.sort(key=lambda n: (-rilevanza_service.PESO[n.rilevanza], n.ticker, -n.data.toordinal()))
-    return nuove
+    return [n for n in tutte if n.chiave not in gia]
 
 
 def segna_mandate(db: Session, novita: list[Novita]) -> None:
