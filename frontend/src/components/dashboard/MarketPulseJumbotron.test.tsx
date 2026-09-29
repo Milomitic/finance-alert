@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -36,6 +36,11 @@ vi.mock("@/hooks/useCalendar", () => ({
 }));
 vi.mock("@/hooks/useLiveQuote", () => ({
   useLiveQuotes: () => ({ data: { quotes: quotazioni } }),
+}));
+/** I tuoi titoli: preferiti e posizioni aperte (`useTitoliSeguiti`). */
+let seguiti = new Map<string, string>();
+vi.mock("@/hooks/useTitoliSeguiti", () => ({
+  useTitoliSeguiti: () => ({ titoli: seguiti, pronto: true }),
 }));
 
 const { MarketPulseJumbotron } = await import("./MarketPulseJumbotron");
@@ -119,6 +124,8 @@ beforeEach(() => {
   liveMovers = undefined;
   eventi = [];
   quotazioni = [];
+  seguiti = new Map();
+  localStorage.clear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -738,5 +745,39 @@ describe("MarketPulseJumbotron — la forma c'e' prima dei dati (FA-106)", () =>
     } finally {
       quotazioniInArrivo = false;
     }
+  });
+});
+
+describe("«I miei titoli» sul riquadro dei movers", () => {
+  function quota(ticker: string, change_pct: number) {
+    return { ticker, price: 10, change_pct, prev_close: null, change_abs: null, day_open: null,
+      day_high: null, day_low: null, volume: null, market_state: "OPEN", currency: "USD",
+      fetched_at: 1, error: null };
+  }
+
+  it("spento, restano i Top movers dell'universo", () => {
+    montaA(SEDUTA, undefined, undefined, SEDUTA_MOVERS);
+    expect(screen.getByRole("button", { name: /I miei titoli/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("SALE")).toBeInTheDocument();
+  });
+
+  it("acceso, mostra i TUOI titoli divisi fra chi sale e chi scende, e se lo ricorda", () => {
+    seguiti = new Map([["MB.MI", "posizione"], ["AAPL", "preferito"], ["FERMO", "preferito"]]);
+    quotazioni = [quota("MB.MI", 1.8), quota("AAPL", -0.7), quota("FERMO", 0)];
+    const { unmount } = montaA(SEDUTA, undefined, undefined, SEDUTA_MOVERS);
+    fireEvent.click(screen.getByRole("button", { name: /I miei titoli/ }));
+    expect(screen.queryByText("SALE")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "In rialzo" })).getByText("MB.MI")).toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "In ribasso" })).getByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("1 fermi o senza quotazione")).toBeInTheDocument();
+    unmount();
+    montaA(SEDUTA, undefined, undefined, SEDUTA_MOVERS);
+    expect(screen.getByRole("button", { name: /I miei titoli/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("senza titoli seguiti dice come aggiungerli, non un riquadro vuoto", () => {
+    montaA(SEDUTA, undefined, undefined, SEDUTA_MOVERS);
+    fireEvent.click(screen.getByRole("button", { name: /I miei titoli/ }));
+    expect(screen.getByText(/aggiungili con la stella/)).toBeInTheDocument();
   });
 });

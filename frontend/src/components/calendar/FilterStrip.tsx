@@ -1,4 +1,4 @@
-import { Building, Landmark, LayoutGrid } from "lucide-react";
+import { Building, Landmark, LayoutGrid, Star } from "lucide-react";
 
 import type { MacroImportance } from "@/api/types";
 import { IMPORTANCE_LABEL } from "@/lib/calendarMeta";
@@ -33,6 +33,11 @@ interface FilterStripProps {
    *  importance filters are visually dimmed and disabled — they have no
    *  effect because no macros are visible. */
   importanceDisabled: boolean;
+  /** Solo le trimestrali dei tuoi titoli (preferiti e posizioni aperte). */
+  soloMiei: boolean;
+  onSoloMieiChange: (v: boolean) => void;
+  /** Con «Solo macro» non c'e' nessuna trimestrale da restringere. */
+  soloMieiDisabled: boolean;
 }
 
 const KIND_OPTIONS: Array<{
@@ -88,6 +93,9 @@ export function FilterStrip({
   importance,
   onImportanceToggle,
   importanceDisabled,
+  soloMiei,
+  onSoloMieiChange,
+  soloMieiDisabled,
 }: FilterStripProps) {
   return (
     // ⚠️ `max-w-full` con `inline-flex`: senza, l'elemento si dimensiona sulla
@@ -191,6 +199,34 @@ export function FilterStrip({
           );
         })}
       </div>
+
+      <span aria-hidden className="mx-0.5 my-1 w-px bg-border" />
+
+      {/* I tuoi titoli: un interruttore, non una terza scelta fra i tipi —
+          si combina con «Tutti» e con «Solo earnings». */}
+      <button
+        type="button"
+        onClick={() => onSoloMieiChange(!soloMiei)}
+        disabled={soloMieiDisabled}
+        aria-pressed={soloMiei}
+        title="Solo le trimestrali dei preferiti e delle posizioni aperte; i macro restano"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.8235rem] font-semibold uppercase tracking-wider transition-all",
+          soloMiei
+            ? "bg-amber-100/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border-amber-300/70 dark:border-amber-800/60 ring-1 ring-amber-300/50 shadow-sm"
+            : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/40",
+          soloMieiDisabled && "cursor-not-allowed opacity-50",
+        )}
+      >
+        <Star
+          className={cn(
+            "h-3 w-3",
+            soloMiei ? "fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300" : "",
+          )}
+          aria-hidden
+        />
+        <span>I miei titoli</span>
+      </button>
     </div>
   );
 }

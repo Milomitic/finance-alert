@@ -6,9 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useCalendar } from "@/hooks/useCalendar";
 import { useNowTick } from "@/hooks/useNowTick";
-import { usePositions } from "@/hooks/usePositions";
-import { usePreferiti } from "@/hooks/usePreferiti";
-import { etichettaGiorno, settimana, type Rilevanza } from "@/lib/settimana";
+import { useTitoliSeguiti } from "@/hooks/useTitoliSeguiti";
+import { etichettaGiorno, settimana } from "@/lib/settimana";
 import { etToday } from "@/lib/usSession";
 import { cn } from "@/lib/utils";
 
@@ -32,16 +31,7 @@ export function SettimanaCard() {
   }, [oggi]);
 
   const calendarioQ = useCalendar({ from: oggi, to: a, kinds: ["macro", "earnings"] });
-  const preferitiQ = usePreferiti();
-  const posizioniQ = usePositions();
-
-  const titoli = useMemo(() => {
-    const m = new Map<string, Rilevanza>();
-    for (const p of preferitiQ.data ?? []) m.set(p.ticker, "preferito");
-    // Una posizione vince su un preferito dello stesso titolo, come nel server.
-    for (const p of posizioniQ.data ?? []) if (!p.closed_at) m.set(p.ticker, "posizione");
-    return m;
-  }, [preferitiQ.data, posizioniQ.data]);
+  const { titoli } = useTitoliSeguiti();
 
   const giorni = useMemo(
     () => settimana(calendarioQ.data?.events, oggi, titoli),

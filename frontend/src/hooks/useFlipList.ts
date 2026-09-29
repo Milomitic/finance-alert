@@ -23,7 +23,9 @@ export function useFlipList() {
     next.forEach((top, key) => {
       const was = prevTops.current.get(key);
       const el = els.current.get(key);
-      if (el == null) return;
+      // Senza Web Animations API (browser vecchi, jsdom) le righe si spostano
+      // senza animazione invece di far fallire il commit.
+      if (el == null || typeof el.animate !== "function") return;
       if (was == null) {
         // Entering row (climbed into the visible top-N): gentle fade-in.
         // Skipped on the very first commit (prev map empty = initial mount).

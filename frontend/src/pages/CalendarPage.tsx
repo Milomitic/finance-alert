@@ -18,6 +18,8 @@ import {
   WeekGrid,
 } from "@/components/calendar";
 import { useCalendar } from "@/hooks/useCalendar";
+import { useTitoliSeguiti } from "@/hooks/useTitoliSeguiti";
+import { soloDeiMieiTitoli } from "@/lib/calendarioMiei";
 import {
   buildMonthGrid,
   buildWeekDays,
@@ -117,6 +119,9 @@ export default function CalendarPage() {
   const [importance, setImportance] = useState<Set<MacroImportance>>(
     () => new Set(initialImportance?.length ? initialImportance : ["high", "medium", "low"]),
   );
+  // Solo le trimestrali dei tuoi titoli (preferiti e posizioni aperte). Nel
+  // link, come gli altri filtri, cosi' la vista si ricarica uguale.
+  const [soloMiei, setSoloMiei] = useState<boolean>(searchParams.get("miei") === "1");
 
   const today = useMemo(() => new Date(), []);
 
@@ -132,8 +137,9 @@ export default function CalendarPage() {
     if (importance.size === 3) next.delete("importance");
     else next.set("importance", Array.from(importance).sort().join(","));
     if (selectedDate) next.set("selected", selectedDate); else next.delete("selected");
+    if (soloMiei) next.set("miei", "1"); else next.delete("miei");
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [cursor, view, kind, importance, selectedDate, searchParams, setSearchParams]);
+  }, [cursor, view, kind, importance, selectedDate, soloMiei, searchParams, setSearchParams]);
 
   // Fetch range + nav metadata, adapted to the active view. Month view
   // spans the full 6-week grid (so adjacent-month edges still render);
@@ -176,6 +182,10 @@ export default function CalendarPage() {
   }, [fromISO, toISO, kind, importance]);
 
   const q = useCalendar(queryParams);
+  const { titoli, pronto: titoliPronti } = useTitoliSeguiti();
+  // ⚠️ Col filtro acceso e la lista dei tuoi titoli non ancora arrivata, la
+  // pagina ASPETTA: filtrare su una lista vuota direbbe «nessun evento».
+  const inAttesa = q.isLoading || (soloMiei && !titoliPronti);
 
   // Prev/Next step by one month (month view) or one week (week view) —
   // both scroll the cursor; the range memo above re-derives everything.
@@ -233,7 +243,10 @@ export default function CalendarPage() {
     });
   }, []);
 
-  const events: CalendarEvent[] = useMemo(() => q.data?.events ?? [], [q.data?.events]);
+  const events: CalendarEvent[] = useMemo(() => {
+    const tutti = q.data?.events ?? [];
+    return soloMiei ? soloDeiMieiTitoli(tutti, titoli) : tutti;
+  }, [q.data?.events, soloMiei, titoli]);
   const selectedDayEvents = useMemo(
     () => (selectedDate ? events.filter((e) => e.date === selectedDate) : []),
     [events, selectedDate],
@@ -292,12 +305,15 @@ export default function CalendarPage() {
           importance={importance}
           onImportanceToggle={onImportanceToggle}
           importanceDisabled={kind === "earnings"}
+          soloMiei={soloMiei}
+          onSoloMieiChange={setSoloMiei}
+          soloMieiDisabled={kind === "macro"}
         />
       </div>
 
       {/* ── Status strip — running counts + load/error indicators. ──── */}
       <div className="flex items-center gap-3 px-1 text-[12.5px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
-        {q.isLoading ? (
+        {inAttesa ? (
           <span className="inline-flex items-center gap-1.5">
             <Loader2 className="h-3 w-3 animate-spin" />
             Caricamento eventi…
@@ -359,7 +375,7 @@ export default function CalendarPage() {
               events={events}
               selectedDate={selectedDate}
               onSelectDate={onSelectDate}
-              isLoading={q.isLoading}
+              isLoading={inAttesa}
             />
           ) : (
             <MonthGrid
@@ -367,13 +383,15 @@ export default function CalendarPage() {
               events={events}
               selectedDate={selectedDate}
               onSelectDate={onSelectDate}
-              isLoading={q.isLoading}
+              isLoading={inAttesa}
             />
           )}
 
-          {!q.isLoading && !q.isError && events.length === 0 && (
+          {!inAttesa && !q.isError && events.length === 0 && (
             <div className="rounded-xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
-              Nessun evento {view === "week" ? "questa settimana" : "questo mese"}.
+              {soloMiei
+                ? `Nessuna trimestrale dei tuoi titoli ${view === "week" ? "questa settimana" : "questo mese"}.`
+                : `Nessun evento ${view === "week" ? "questa settimana" : "questo mese"}.`}
             </div>
           )}
         </div>

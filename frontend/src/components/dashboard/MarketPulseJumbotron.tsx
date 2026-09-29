@@ -1,7 +1,7 @@
 import {
-  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem,
+  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem, Star,
 } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type {
@@ -20,8 +20,10 @@ import { useLiveQuotes } from "@/hooks/useLiveQuote";
 import { useLiveUniverseMovers } from "@/hooks/useLiveUniverseMovers";
 import { useNowTick } from "@/hooks/useNowTick";
 import { usePremarketMovers } from "@/hooks/usePremarketMovers";
+import { useTitoliSeguiti } from "@/hooks/useTitoliSeguiti";
 import { cumulativeVolumeFraction } from "@/lib/intradayVolume";
 import { formatLivello, formatVariazione, posizioneNelRange } from "@/lib/marketNumber";
+import { moversDeiMiei } from "@/lib/moversMiei";
 import { agendaDelGiorno, agendaVuota } from "@/lib/oggiMercato";
 import { PANIERE_CONTESTO } from "@/lib/paniereLive";
 import { sparklinePoints } from "@/lib/sparkline";
@@ -726,6 +728,41 @@ function Intestazione({ titolo, fonte }: { titolo: string; fonte?: ReactNode }) 
   );
 }
 
+/** «I miei titoli» sul riquadro dei movers. La scelta resta nel browser: e' una
+ *  comodita' di chi guarda, e senza storage usabile riparte spenta. */
+const CHIAVE_MIEI = "jumbotron-movers-miei";
+
+function leggiMiei(): boolean {
+  try {
+    return localStorage.getItem(CHIAVE_MIEI) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function InterruttoreMiei({ attivo, onChange }: { attivo: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={attivo}
+      onClick={() => onChange(!attivo)}
+      title="Come si muovono i tuoi preferiti e le tue posizioni aperte"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[0.6471rem] font-semibold uppercase tracking-wider transition-colors",
+        attivo
+          ? "border-amber-300/70 bg-amber-100/60 text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+          : "border-border/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <Star
+        className={cn("h-3 w-3", attivo && "fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300")}
+        aria-hidden
+      />
+      I miei titoli
+    </button>
+  );
+}
+
 /* ─── La fascia ─────────────────────────────────────────────────────────── */
 export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Props) {
   // Un battito al minuto: il conto alla rovescia si legge in minuti, e un
@@ -753,6 +790,25 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
 
   const preQ = usePremarketMovers();
   const pre = preQ.data;
+
+  /* I tuoi titoli al posto dei Top movers, a richiesta. Le quotazioni si
+   * chiedono solo con l'interruttore acceso. */
+  const [miei, setMiei] = useState(leggiMiei);
+  const cambiaMiei = (v: boolean) => {
+    setMiei(v);
+    try {
+      localStorage.setItem(CHIAVE_MIEI, v ? "1" : "0");
+    } catch {
+      /* storage non disponibile: la scelta vale per questa visita */
+    }
+  };
+  const { titoli: seguiti, pronto: seguitiPronti } = useTitoliSeguiti();
+  const tickerSeguiti = useMemo(() => [...seguiti.keys()], [seguiti]);
+  const quoteMieiQ = useLiveQuotes(tickerSeguiti, miei && tickerSeguiti.length > 0);
+  const moversMiei = useMemo(
+    () => moversDeiMiei(seguiti, quoteMieiQ.data?.quotes ?? [], RIGHE_MOVERS),
+    [seguiti, quoteMieiQ.data],
+  );
   const liveQ = useLiveUniverseMovers(fase === "open");
   const liveMovers = liveQ.data;
 
@@ -1064,6 +1120,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
         {/* Fascia 4: chi si muove adesso, e l'ampiezza in cui leggerlo. */}
         <div className="grid gap-3 border-t pt-2 md:grid-cols-2">
           <div className="min-w-0">
+            <div className="flex items-start justify-between gap-2">
             <Intestazione
               /* ⚠️ Il titolo segue CIO' CHE C'E' SOTTO, e l'ultimo ramo non
                  e' una ripetizione: senza, il riquadro annunciava «Top della
@@ -1094,7 +1151,45 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 ) : null
               }
             />
-            {mostraPre && pre ? (
+            <InterruttoreMiei attivo={miei} onChange={cambiaMiei} />
+            </div>
+            {miei ? (
+              /* I tuoi titoli, non i primi dieci dell'universo: filtrare quella
+                 lista la lascerebbe vuota quasi sempre. */
+              !seguitiPronti || (tickerSeguiti.length > 0 && quoteMieiQ.isLoading) ? (
+                <div className="text-xs text-muted-foreground">Carico i tuoi titoli…</div>
+              ) : tickerSeguiti.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  Nessun preferito né posizione aperta: aggiungili con la stella nella pagina di un titolo.
+                </div>
+              ) : moversMiei.su.length === 0 && moversMiei.giu.length === 0 ? (
+                <div className="text-xs text-muted-foreground">
+                  I tuoi titoli sono fermi o senza quotazione in questo momento.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+                    <Colonna etichetta="In rialzo">
+                      {moversMiei.su.map((m) => (
+                        <RigaMover key={m.ticker} ticker={m.ticker} nome={null} cambio={m.cambio}
+                          prezzoOra={m.prezzo} flipRef={registraFlip(`miei-su:${m.ticker}`)} />
+                      ))}
+                    </Colonna>
+                    <Colonna etichetta="In ribasso" seconda>
+                      {moversMiei.giu.map((m) => (
+                        <RigaMover key={m.ticker} ticker={m.ticker} nome={null} cambio={m.cambio}
+                          prezzoOra={m.prezzo} flipRef={registraFlip(`miei-giu:${m.ticker}`)} />
+                      ))}
+                    </Colonna>
+                  </div>
+                  {moversMiei.fuori > 0 && (
+                    <div className="mt-1 text-[0.6471rem] text-muted-foreground">
+                      {moversMiei.fuori} fermi o senza quotazione
+                    </div>
+                  )}
+                </>
+              )
+            ) : mostraPre && pre ? (
               <>
                 {/* Gli ETF in movimento non stanno qui: sono nella riga ETF
                     della fascia sopra, accanto al paniere a leva. */}
