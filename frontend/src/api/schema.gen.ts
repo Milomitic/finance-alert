@@ -1152,6 +1152,7 @@ export interface PositionOut {
   unrealized_usd?: number | null;
   realized_usd?: number | null;
   cost_usd?: number | null;
+  next_earnings_date?: string | null;
 }
 
 export interface PositionUpdate {

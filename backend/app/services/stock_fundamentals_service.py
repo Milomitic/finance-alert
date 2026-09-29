@@ -337,16 +337,27 @@ def next_earnings_dates_cached(tickers: set[str]) -> dict[str, date]:
     finche `hydrate_l1_from_db()` non gira (lo fa il `lifespan`). Un risultato
     vuoto qui non e un errore, e le liste si popolano al passaggio successivo.
     """
-    out: dict[str, date] = {}
+    return {t: data for t, (data, _ora) in next_earnings_cached(tickers).items()}
+
+
+def next_earnings_cached(tickers: set[str]) -> dict[str, tuple[date, str | None]]:
+    """{ticker: (data, orario UTC «HH:MM» o None)}, con le stesse regole di
+    `next_earnings_dates_cached` — che e' questa lettura senza l'orario, cosi'
+    il taglio della data resta in un posto solo. Il promemoria delle
+    trimestrali (`promemoria_trimestrali_service`) e' il consumatore che ha
+    bisogno anche dell'ora."""
+    out: dict[str, tuple[date, str | None]] = {}
     for t in tickers:
         cached = _CACHE.get(t)
         raw = cached.next_earnings_date if cached is not None else None
         if not raw:
             continue
         try:
-            out[t] = date.fromisoformat(str(raw)[:10])
+            data = date.fromisoformat(str(raw)[:10])
         except (ValueError, TypeError):
             continue
+        ora = getattr(cached, "next_earnings_time_utc", None)
+        out[t] = (data, ora if isinstance(ora, str) and ora else None)
     return out
 
 

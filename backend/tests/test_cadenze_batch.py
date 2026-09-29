@@ -231,3 +231,16 @@ def test_ogni_job_ha_un_nome_leggibile_nella_scheda_salute(scheduler) -> None:
                 / "frontend/src/components/health/SchedulerCard.tsx").read_text(encoding="utf-8")
     mancanti = [j.id for j in scheduler.get_jobs() if f"  {j.id}:" not in sorgente]
     assert not mancanti, f"job senza etichetta in SchedulerCard: {mancanti}"
+
+
+def test_il_promemoria_delle_trimestrali_parte_ogni_sera_alle_18_di_roma(scheduler) -> None:
+    """Tutti i giorni, domenica compresa: la domenica sera ricorda il lunedi'.
+    E alle 18 di ROMA, in ora legale e solare, su una macchina UTC."""
+    from app.scheduler.jobs.promemoria_trimestrali import ROMA as ROMA_JOB
+
+    assert ROMA_JOB == ROMA
+    for inizio in (_SETTIMANA, datetime(2026, 12, 7, 0, 0, tzinfo=ROMA)):
+        scatti = _scatti(scheduler.get_job("promemoria_trimestrali"), inizio, 7)
+        assert len(scatti) == 7
+        assert {t.weekday() for t in scatti} == set(range(7))
+        assert all(t.astimezone(ROMA).hour == 18 for t in scatti)

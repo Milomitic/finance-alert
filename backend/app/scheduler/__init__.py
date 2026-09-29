@@ -19,6 +19,7 @@ from app.scheduler.jobs.health_probes_job import (
 from app.scheduler.jobs.kpi_rollup import run_kpi_rollup
 from app.scheduler.jobs.live_movers_sweep import run_live_universe_sweep
 from app.scheduler.jobs.modelli_ombra import run_addestra_modelli_ombra
+from app.scheduler.jobs.promemoria_trimestrali import run_promemoria_trimestrali
 from app.scheduler.jobs.refresh_catalog import run_refresh_all
 from app.scheduler.jobs.refresh_fred import run_refresh_fred
 from app.scheduler.jobs.refresh_imminent_earnings import run_refresh_imminent_earnings
@@ -214,6 +215,16 @@ def get_scheduler() -> BackgroundScheduler:
                 day_of_week="*", hour=settings.digest_hour, minute=settings.digest_minute
             ),
             id="send_digest",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Le trimestrali di domani su posizioni e preferiti, la sera prima.
+        # Tutti i giorni: la domenica ricorda quelle del lunedi'.
+        _scheduler.add_job(
+            run_promemoria_trimestrali,
+            trigger=_cron(hour=18, minute=0),
+            id="promemoria_trimestrali",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # vedi health_rollup.maybe_notify_transition). Richiede comunque
     # telegram_bot_token + telegram_chat_id configurati.
     telegram_notify_health: bool = True
+    # Ogni sera alle 18:00 di Roma, le trimestrali di DOMANI sulle posizioni
+    # aperte e sui preferiti (promemoria_trimestrali_service). ON di default,
+    # come le notifiche di prezzo e di posizione: i titoli li ha scelti
+    # l'utente. Nessun messaggio se domani non c'e' niente.
+    telegram_promemoria_trimestrali: bool = True
     digest_hour: int = 8
     digest_minute: int = 0
     scan_hour: int = 23

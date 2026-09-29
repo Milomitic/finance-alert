@@ -7,6 +7,7 @@ import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { PositionGeometry } from "@/components/positions/PositionGeometry";
+import { TrimestraleVicina } from "@/components/positions/TrimestraleVicina";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
@@ -281,6 +282,7 @@ export default function PositionsPage() {
                           </TableCell>
                           <TableCell>
                             <PositionGeometry p={p} />
+                            <TrimestraleVicina data={p.next_earnings_date} />
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
                             {formatMoney(p.last_price, p.currency)}

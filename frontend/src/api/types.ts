@@ -806,6 +806,9 @@ export interface Position {
   unrealized_usd: number | null;
   realized_usd: number | null;
   cost_usd: number | null;
+  /** Prossima trimestrale, solo per le aperte e solo dalla cache del server;
+   *  null se sconosciuta. */
+  next_earnings_date?: string | null;
 }
 
 export interface PositionCreate {

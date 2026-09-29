@@ -18,6 +18,7 @@ const JOB_LABEL: Record<string, string> = {
   scan_alerts: "Scan giornaliero alert",
   scan_alerts_eu_close: "Scan serale post-chiusura EU",
   send_digest: "Digest Telegram",
+  promemoria_trimestrali: "Promemoria trimestrali (Telegram)",
   refresh_catalog: "Refresh catalogo Wikipedia",
   refresh_fred: "FRED macro series",
   refresh_imminent_earnings: "Earnings imminenti (Finnhub)",

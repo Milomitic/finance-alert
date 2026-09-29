@@ -1,5 +1,5 @@
 """Pydantic schemas for /api/positions (tracked trades, B3-6)."""
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,8 @@ class PositionOut(BaseModel):
     unrealized_usd: float | None = None
     realized_usd: float | None = None
     cost_usd: float | None = None
+    # Solo per le aperte, dalla cache dei fondamentali; None se sconosciuta.
+    next_earnings_date: date | None = None
 
 
 class PositionCreate(BaseModel):

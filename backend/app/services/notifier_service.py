@@ -1,6 +1,8 @@
 """Telegram notifiers — daily digest + optional instant pushes.
 
-Six send surfaces, all sharing the same bot/chat config + scrubbed logging:
+Seven send surfaces, all sharing the same bot/chat config + scrubbed logging
+(the seventh, `notify_trimestrali`, is the evening earnings reminder on
+positions and preferiti — see `promemoria_trimestrali_service`):
 
 1. `send_daily_digest`   — the 24h summary (cron `send_digest`, manual API).
 2. `notify_signal_alerts` — OPTIONAL per-scan push of the NEW signals on the
@@ -32,6 +34,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models import Alert, Stock
 from app.services import rilevanza_service
+from app.services.promemoria_trimestrali_service import etichetta_data, ora_italiana
 
 # Maximum alerts to enumerate in the digest message body
 DIGEST_TOP_N = 10
@@ -524,3 +527,40 @@ def notify_position_closed(closed: list[tuple[Any, Stock]]) -> PushResult:
 
     logger.info(f"[notifier] position push sent: {len(closed)} position(s)")
     return PushResult(sent=True, alerts_count=len(closed), reason="ok")
+
+
+def notify_trimestrali(trimestrali: list[Any], domani: Any) -> PushResult:
+    """La sera prima: le trimestrali di domani su posizioni e preferiti.
+
+    `trimestrali` sono le `Trimestrale` di `promemoria_trimestrali_service`,
+    gia' filtrate e ordinate (posizioni prima). Acceso di default come le
+    notifiche di prezzo e di posizione: i titoli li ha scelti l'utente, e un
+    evento che puo' far saltare una posizione e' esattamente cio' che serve
+    sapere. Si spegne con `TELEGRAM_PROMEMORIA_TRIMESTRALI=false`."""
+    if not settings.telegram_promemoria_trimestrali:
+        return PushResult(sent=False, reason="push_disabled")
+    if not trimestrali:
+        return PushResult(sent=False, reason="no_alerts")
+    if not _telegram_enabled():
+        logger.info("[notifier] earnings reminder skipped: Telegram disabled")
+        return PushResult(sent=False, reason="telegram_disabled")
+
+    n = len(trimestrali)
+    titolo = "Trimestrale domani" if n == 1 else "Trimestrali domani"
+    lines = [f"📅 <b>{titolo} sui tuoi titoli — {etichetta_data(domani)}</b>", ""]
+    for t in trimestrali[:PUSH_TOP_N]:
+        segno = _SEGNO_RILEVANZA.get(t.rilevanza, "•")
+        nome = f" {t.nome}" if t.nome else ""
+        ora = ora_italiana(t.data, t.ora_utc)
+        quando = f" — ore {ora} italiane" if ora else " — orario non comunicato"
+        lines.append(f"{segno} <b>{t.ticker}</b>{nome}{quando}")
+    if n > PUSH_TOP_N:
+        lines.append(f"... e altre {n - PUSH_TOP_N}.")
+    lines.append("")
+    lines.append(f"🔗 {settings.public_base_url}/calendar")
+
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="earnings reminder"):
+        return PushResult(sent=False, alerts_count=n, reason="http_error")
+    logger.info(f"[notifier] earnings reminder sent: {n} trimestrale/i")
+    return PushResult(sent=True, alerts_count=n, reason="ok")

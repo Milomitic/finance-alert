@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OhlcvDaily, Position, Stock
-from app.services import fx_service
+from app.services import fx_service, stock_fundamentals_service
 from app.services.currency_units import is_minor_unit
 
 VALID_SIDES = ("long", "short")
@@ -291,6 +291,7 @@ def _enrich(
         "unrealized_usd": None,
         "realized_usd": None,
         "cost_usd": None,
+        "next_earnings_date": None,
     }
     # Currency for FX: prices are stored in MAJOR units (live_quote already
     # scaled GBp→GBP), and Stock.currency is mostly-but-not-always normalized,
@@ -319,6 +320,11 @@ def _enrich(
         else:
             out["realized_usd"] = fx_service.to_usd(out["realized_abs"], fx_cur)
         return out
+    # La prossima trimestrale, solo per le aperte e solo dalla cache: la riga
+    # la mostra quando e' vicina, e il promemoria della sera la ricorda.
+    out["next_earnings_date"] = stock_fundamentals_service.next_earnings_dates_cached(
+        {stock.ticker}
+    ).get(stock.ticker)
     price = price_fn(stock.ticker) if price_fn is not None else _live_price(stock.ticker)
     source = "live" if price is not None else None
     if price is None:
