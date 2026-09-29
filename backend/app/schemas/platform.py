@@ -222,6 +222,28 @@ class UsoPagineOut(BaseModel):
     rotte: list[UsoRottaOut] = []
 
 
+class TitoloFermoOut(BaseModel):
+    ticker: str
+    nome: str | None = None
+    borsa: str | None = None
+    ultima_barra: str | None = None
+    tentativi: int
+    ultimo_tentativo: str | None = None
+    indici: list[str] = []
+    in_posizione: bool = False
+    preferito: bool = False
+
+
+class CatalogoOut(BaseModel):
+    """I titoli fermi del catalogo e i dati che mancano
+    (`catalogo_fermi_service`)."""
+
+    totale: int
+    senza_settore: int
+    senza_capitalizzazione: int
+    fermi: list[TitoloFermoOut] = []
+
+
 class PlatformHealthOut(BaseModel):
     data_sources: list[DataSourceMetricOut]
     yfinance_breaker: dict   # the existing yfinance_health.status() shape
@@ -241,6 +263,7 @@ class PlatformHealthOut(BaseModel):
     # in CI: un arretrato che nessuno vede non cala mai.
     verification: VerificationOut | None = None
     uso_pagine: UsoPagineOut | None = None
+    catalogo: CatalogoOut | None = None
 
 
 

@@ -1,16 +1,34 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { expect, it } from "vitest";
 
-import { SegnoRilevanza } from "./AnalystActionsCard";
+import type { AnalystAction } from "@/api/dashboard";
+
+import { ActionRow, SegnoRilevanza } from "./AnalystActionsCard";
+
+const AZIONE: AnalystAction = {
+  ticker: "ADBE", name: "Adobe", date: "2026-09-28", firm: "Stifel", to_grade: "Buy",
+  from_grade: "Hold", action: "up", current_price_target: null, from_news: false,
+};
 
 it.each([
-  ["posizione", "in posizione"],
-  ["preferito", "preferito"],
-] as const)("%s: il segno ha un nome per gli assistivi", (rilevanza, nome) => {
-  const { container } = render(<SegnoRilevanza rilevanza={rilevanza} />);
-  expect(container.querySelector(".sr-only")?.textContent).toBe(nome);
-  // Sull'angolo del logo: non prende larghezza nella riga.
-  expect(container.firstElementChild?.className).toContain("absolute");
+  ["posizione", "ADBE, in posizione"],
+  ["preferito", "ADBE, preferito"],
+] as const)("%s: il nome della riga dice il titolo e poi il segno", (rilevanza, inizio) => {
+  render(
+    <MemoryRouter>
+      <ul><ActionRow a={{ ...AZIONE, rilevanza }} /></ul>
+    </MemoryRouter>,
+  );
+  // ⚠️ Prima il testo stava prima del ticker e il nome usciva «in posizioneADBE».
+  expect(screen.getByRole("link").textContent?.includes(inizio)).toBe(true);
+});
+
+it("il segno sul logo e' solo visivo e non prende larghezza", () => {
+  const { container } = render(<SegnoRilevanza rilevanza="posizione" />);
+  const segno = container.firstElementChild;
+  expect(segno?.getAttribute("aria-hidden")).toBe("true");
+  expect(segno?.className).toContain("absolute");
 });
 
 it("un titolo non seguito non porta nessun segno", () => {
@@ -19,4 +37,6 @@ it("un titolo non seguito non porta nessun segno", () => {
     expect(container.innerHTML).toBe("");
     unmount();
   }
+  render(<MemoryRouter><ul><ActionRow a={AZIONE} /></ul></MemoryRouter>);
+  expect(screen.getByRole("link").textContent).not.toMatch(/posizione|preferito/);
 });

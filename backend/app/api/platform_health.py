@@ -21,6 +21,7 @@ from app.core.log_buffer import _INSTANCE as log_buffer
 from app.models import Alert, ScanRun, User
 from app.schemas.platform import (
     ArretratoOut,
+    CatalogoOut,
     DataHealthOut,
     DegradedSourceOut,
     DeployHealthOut,
@@ -34,12 +35,14 @@ from app.schemas.platform import (
     RecentScanOut,
     SchedulerJobStatOut,
     SignalDriftOut,
+    TitoloFermoOut,
     UsoPagineOut,
     UsoRottaOut,
     VerificationOut,
 )
 from app.services import (
     cache_metrics,
+    catalogo_fermi_service,
     data_source_metrics,
     detector_performance_service,
     health_rollup,
@@ -178,6 +181,32 @@ def health_snapshot(
         deploy=_deploy_health(),
         verification=_verification(),
         uso_pagine=_uso_pagine(db),
+        catalogo=_catalogo(db),
+    )
+
+
+def _catalogo(db: Session) -> CatalogoOut | None:
+    """I titoli fermi e i dati mancanti del catalogo. Come l'uso delle pagine:
+    una lettura che fallisce dice NON SO e non toglie lo snapshot."""
+    try:
+        c = catalogo_fermi_service.catalogo(db)
+    except Exception as exc:  # noqa: BLE001 — la salute non dipende da questo
+        logger.warning(f"[platform] catalogo non leggibile: {exc}")
+        return None
+    return CatalogoOut(
+        totale=c.totale,
+        senza_settore=c.senza_settore,
+        senza_capitalizzazione=c.senza_capitalizzazione,
+        fermi=[
+            TitoloFermoOut(
+                ticker=f.ticker, nome=f.nome, borsa=f.borsa,
+                ultima_barra=f.ultima_barra.isoformat() if f.ultima_barra else None,
+                tentativi=f.tentativi,
+                ultimo_tentativo=f.ultimo_tentativo.isoformat() if f.ultimo_tentativo else None,
+                indici=f.indici, in_posizione=f.in_posizione, preferito=f.preferito,
+            )
+            for f in c.fermi
+        ],
     )
 
 

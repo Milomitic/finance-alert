@@ -71,6 +71,7 @@ def test_health_endpoint_returns_expected_keys(client: TestClient):
         # Il contatore d'uso delle pagine (FA-114): nello snapshot e non con
         # una chiamata sua, perche' la scheda arrivi insieme alle altre.
         "uso_pagine",
+        "catalogo",
     }
     assert isinstance(body["data_sources"], list)
     assert isinstance(body["scheduler"], list)

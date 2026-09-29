@@ -185,6 +185,29 @@ export type PlatformHealth = {
   verification?: Verification | null;
   /** Quante volte si apre ogni pagina (FA-114). */
   uso_pagine?: UsoPagine | null;
+  /** I titoli fermi del catalogo e i dati mancanti. */
+  catalogo?: Catalogo | null;
+};
+
+/** Un titolo la cui serie prezzi non avanza (lo stesso predicato che lo fa
+ *  saltare alla scansione, FA-071). */
+export type TitoloFermo = {
+  ticker: string;
+  nome: string | null;
+  borsa: string | null;
+  ultima_barra: string | null;
+  tentativi: number;
+  ultimo_tentativo: string | null;
+  indici: string[];
+  in_posizione: boolean;
+  preferito: boolean;
+};
+
+export type Catalogo = {
+  totale: number;
+  senza_settore: number;
+  senza_capitalizzazione: number;
+  fermi: TitoloFermo[];
 };
 
 export type LogRecord = {

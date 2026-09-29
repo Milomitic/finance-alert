@@ -15,6 +15,7 @@ import CacheCard from "@/components/health/CacheCard";
 import DataHealthCard from "@/components/health/DataHealthCard";
 import InfraCard from "@/components/health/InfraCard";
 import VerificationCard from "@/components/health/VerificationCard";
+import CatalogoFermiCard from "@/components/health/CatalogoFermiCard";
 import UsoPagineCard from "@/components/health/UsoPagineCard";
 import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
@@ -372,6 +373,8 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
           {/* Nello snapshot e non con una chiamata sua: arriva insieme alle
               altre schede e non sposta il log sotto quando risponde (FA-106). */}
           <UsoPagineCard uso={health.uso_pagine} />
+          {/* Anche questa nello snapshot: i titoli che la scansione salta. */}
+          <CatalogoFermiCard catalogo={health.catalogo} />
         </div>
       )}
 

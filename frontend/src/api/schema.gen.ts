@@ -177,8 +177,22 @@ export interface CalibrationOut {
   backtest_seed?: Record<string, unknown> | null;
 }
 
+export interface CandidatoOut {
+  simbolo: string;
+  borsa?: string | null;
+  tipo?: string | null;
+  nome?: string | null;
+}
+
 export interface CatalogStatusOut {
   indices: IndexStatusOut[];
+}
+
+export interface CatalogoOut {
+  totale: number;
+  senza_settore: number;
+  senza_capitalizzazione: number;
+  fermi?: TitoloFermoOut[];
 }
 
 export interface CompanyProfileOut {
@@ -1130,6 +1144,7 @@ export interface PlatformHealthOut {
   deploy?: DeployHealthOut | null;
   verification?: VerificationOut | null;
   uso_pagine?: UsoPagineOut | null;
+  catalogo?: CatalogoOut | null;
 }
 
 export interface PositionCreate {
@@ -1747,6 +1762,18 @@ export interface TimeframeKpisOut {
   composite_label: string;
 }
 
+export interface TitoloFermoOut {
+  ticker: string;
+  nome?: string | null;
+  borsa?: string | null;
+  ultima_barra?: string | null;
+  tentativi: number;
+  ultimo_tentativo?: string | null;
+  indici?: string[];
+  in_posizione?: boolean;
+  preferito?: boolean;
+}
+
 export interface TopPickItemOut {
   stock_id: number;
   ticker: string;
@@ -1830,6 +1857,14 @@ export interface ValidationError {
   type: string;
   input?: unknown;
   ctx?: Record<string, unknown>;
+}
+
+export interface VerificaFonteOut {
+  ticker: string;
+  barre_recenti: number | null;
+  ultima_barra_fonte: string | null;
+  candidati: CandidatoOut[];
+  errore?: string | null;
 }
 
 export interface VerificationOut {
