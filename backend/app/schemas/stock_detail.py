@@ -92,6 +92,11 @@ class EtfHoldingsOut(BaseModel):
     # For a leveraged/inverse ETF: the physical ETF whose basket we show
     # in place of the swaps (e.g. SOXL → "SOXX"). None for plain ETFs.
     underlying: str | None = None
+    # Its own last day variation, from the same quote batch as the
+    # components, and whether it has a page to link to: 8 of the mapped
+    # underlyings (DIA, XLV, ...) are not in the catalogue.
+    underlying_change_pct: float | None = None
+    underlying_in_catalog: bool = False
 
 
 class FundamentalsAnnualOut(BaseModel):

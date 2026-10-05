@@ -850,13 +850,21 @@ def get_etf_holdings(
     underlying = etf_holdings_service.underlying_of(ticker)
 
     symbols = [h.symbol for h in holdings]
-    quotes = live_quote_service.get_quotes_batch(symbols)
+    # The underlying rides the same batch: one round trip for the header too.
+    quotes = live_quote_service.get_quotes_batch(
+        symbols + ([underlying] if underlying and underlying not in symbols else [])
+    )
 
     # Map symbols → catalog stock_id (tolerate duplicate ticker rows), then
     # pull each matched symbol's last ~30 closes for the sparkline.
     catalog_rows = db.execute(
         select(Stock.id, Stock.ticker).where(Stock.ticker.in_(symbols))
     ).all()
+    underlying_in_catalog = bool(underlying) and db.execute(
+        select(Stock.id).where(Stock.ticker == underlying).limit(1)
+    ).first() is not None
+    uq = quotes.get(underlying) if underlying else None
+    underlying_change = uq.change_pct if uq is not None and uq.error is None else None
     stock_id_by_ticker: dict[str, int] = {}
     for sid, tk in catalog_rows:
         stock_id_by_ticker.setdefault(tk, sid)
@@ -899,4 +907,6 @@ def get_etf_holdings(
     weighted = (w_change_sum / w_total) if w_total > 0 else None
     return EtfHoldingsOut(
         is_etf=True, holdings=out, weighted_change_pct=weighted, underlying=underlying,
+        underlying_change_pct=underlying_change,
+        underlying_in_catalog=underlying_in_catalog,
     )

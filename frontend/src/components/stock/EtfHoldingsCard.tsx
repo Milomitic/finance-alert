@@ -21,7 +21,30 @@ interface Props {
  * nothing for regular equities (`is_etf=false`) — the hook is cheap there
  * (backend caches the non-ETF result). A header chip shows the weighted-
  * average variation of the components as a proxy for the ETF's move.
+ *
+ * Una riga per componente, su una sola linea, e le righe in colonne che
+ * crescono con lo schermo. Le soglie sono fatte sui conti, non a occhio: una
+ * riga completa (logo, ticker, nome di almeno ~90px, peso, andamento, prezzo,
+ * variazione) vuole ~510px; la barra laterale ne prende 255.
+ *   - 1 colonna fino a `xl`;
+ *   - 2 da `xl` (1280px: ~490px a colonna, quindi SENZA andamento fino a
+ *     `dense-3`, 1400px, dove ogni colonna torna sopra i 550px);
+ *   - 3 da 1900px (~525px a colonna).
+ * ⚠️ Le classi restano letterali: il purger di Tailwind non vede le stringhe
+ * composte a runtime.
  */
+const GRIGLIA = "grid grid-cols-1 xl:grid-cols-2 min-[1900px]:grid-cols-3 gap-x-6";
+const ANDAMENTO = "hidden lg:block xl:hidden dense-3:block w-12 shrink-0";
+
+function fmtPct(pct: number): string {
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+function tonoPct(pct: number | null | undefined): string {
+  if (pct == null) return "text-muted-foreground";
+  return pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+}
+
 export function EtfHoldingsCard({ ticker }: Props) {
   const q = useEtfHoldings(ticker);
   const data = q.data;
@@ -42,6 +65,8 @@ export function EtfHoldingsCard({ ticker }: Props) {
 
   const wChange = data.weighted_change_pct;
   const underlying = data.underlying;
+  const uChange = data.underlying_change_pct;
+  const conteggio = `${holdings.length} ${holdings.length === 1 ? "componente principale" : "componenti principali"}`;
 
   return (
     <Card className="overflow-hidden">
@@ -51,15 +76,29 @@ export function EtfHoldingsCard({ ticker }: Props) {
             icon={Layers}
             label="Componenti ETF"
             right={
-              <span className="text-[0.7059rem] text-muted-foreground tabular-nums">
+              <span className="inline-flex flex-wrap items-baseline gap-x-1.5 text-[0.7059rem] text-muted-foreground tabular-nums">
                 {underlying ? (
                   <>
-                    via{" "}
-                    <span className="font-semibold text-foreground/70">{underlying}</span>{" "}
-                    · {holdings.length}
+                    {/* ETF a leva: il paniere e' quello dell'ETF fisico. */}
+                    <span>paniere di</span>
+                    {data.underlying_in_catalog ? (
+                      <Link
+                        to={`/stocks/${encodeURIComponent(underlying)}`}
+                        className="font-semibold text-foreground/80 underline decoration-dotted underline-offset-2 hover:text-foreground"
+                      >
+                        {underlying}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold text-foreground/80">{underlying}</span>
+                    )}
+                    {uChange != null && (
+                      <span className={cn("font-semibold", tonoPct(uChange))}>{fmtPct(uChange)}</span>
+                    )}
+                    <span aria-hidden>·</span>
+                    <span>{conteggio}</span>
                   </>
                 ) : (
-                  <>{holdings.length} posizioni</>
+                  <span>{conteggio}</span>
                 )}
               </span>
             }
@@ -72,27 +111,14 @@ export function EtfHoldingsCard({ ticker }: Props) {
                   ? "bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60"
                   : "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60",
               )}
-              title={
-                underlying
-                  ? `Variazione media pesata del paniere dell'indice sottostante (${underlying})`
-                  : "Variazione media delle componenti, pesata per quota — proxy del movimento dell'ETF"
-              }
+              title="Variazione media delle componenti mostrate, pesata per quota"
             >
-              {underlying ? "indice" : "media pesata"} {wChange >= 0 ? "+" : ""}
-              {wChange.toFixed(2)}%
+              media componenti {fmtPct(wChange)}
             </span>
           )}
         </div>
-        {underlying && (
-          <div className="px-4 py-1.5 text-[0.7059rem] text-muted-foreground border-b bg-muted/10 leading-snug">
-            ETF a leva: esposizione tramite swap sull'indice. Mostriamo il
-            paniere reale dell'indice sottostante (
-            <span className="font-semibold text-foreground/70">{underlying}</span>
-            ) — stesse componenti, leva/direzione a parte.
-          </div>
-        )}
 
-        <ul className="divide-y divide-border/40 max-h-[460px] overflow-y-auto">
+        <ul className={cn(GRIGLIA, "px-1 max-h-[460px] overflow-y-auto")}>
           {holdings.map((h) => (
             <HoldingRow key={h.symbol} h={h} maxWeight={maxWeight} />
           ))}
@@ -104,79 +130,69 @@ export function EtfHoldingsCard({ ticker }: Props) {
 
 function HoldingRow({ h, maxWeight }: { h: EtfHolding; maxWeight: number }) {
   const up = h.change_pct != null ? h.change_pct >= 0 : sparkUp(h.sparkline);
-  const changeColor =
-    h.change_pct == null
-      ? "text-muted-foreground"
-      : h.change_pct >= 0
-        ? "text-emerald-800 dark:text-emerald-400"
-        : "text-rose-600 dark:text-rose-400";
   const barPct = maxWeight > 0 ? Math.max(3, (h.weight / maxWeight) * 100) : 0;
+  const peso = `${(h.weight * 100).toFixed(1)}%`;
+  const variazione = h.change_pct != null ? fmtPct(h.change_pct) : "—";
 
   const inner = (
     <>
-      {/* Identity */}
-      <div className="flex items-center gap-2 min-w-0">
+      {/* Identita': il ticker non cede mai, il nome si tronca per primo. */}
+      <div className="flex flex-1 items-center gap-2 min-w-0">
         <StockLogo ticker={h.symbol} size="xs" />
-        <div className="min-w-0">
-          <div className="text-sm font-bold tabular-nums leading-tight truncate">
-            {h.symbol}
-          </div>
-          {h.name && (
-            <div
-              className="text-[0.7059rem] text-muted-foreground truncate leading-tight"
-              title={h.name}
-            >
-              {h.name}
-            </div>
-          )}
-        </div>
+        <span className="shrink-0 text-sm font-bold tabular-nums">{h.symbol}</span>
+        {h.name && (
+          <span className="min-w-0 truncate text-[0.7059rem] text-muted-foreground" title={h.name}>
+            {h.name}
+          </span>
+        )}
       </div>
 
       {/* Weight bar */}
-      <div className="hidden sm:flex items-center gap-2 w-32">
-        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+        <div className="w-10 h-1.5 rounded-full bg-muted overflow-hidden">
           <div
             className="h-full bg-sky-500 dark:bg-sky-400 rounded-full"
             style={{ width: `${barPct}%` }}
           />
         </div>
-        <span className="w-11 text-right text-[0.7059rem] tabular-nums text-muted-foreground">
-          {(h.weight * 100).toFixed(1)}%
+        <span className="w-9 text-right text-[0.7059rem] tabular-nums text-muted-foreground">
+          {peso}
         </span>
       </div>
 
       {/* Trend sparkline */}
-      <div className="hidden md:block w-16 shrink-0">
+      <div className={ANDAMENTO}>
         <MiniSpark closes={h.sparkline} up={up} />
       </div>
 
-      {/* Price + day variation */}
-      <div className="text-right tabular-nums shrink-0 w-[72px]">
-        <div className="text-sm font-semibold leading-tight">
-          {formatMoney(h.price, h.currency)}
-        </div>
-        <div className={cn("text-[0.7059rem] font-semibold leading-tight", changeColor)}>
-          {h.change_pct != null
-            ? `${h.change_pct >= 0 ? "+" : ""}${h.change_pct.toFixed(2)}%`
-            : "—"}
-        </div>
+      {/* Prezzo e variazione sulla stessa linea */}
+      <div className="flex shrink-0 items-baseline justify-end gap-1.5 tabular-nums">
+        <span className="text-sm font-semibold">{formatMoney(h.price, h.currency)}</span>
+        <span className={cn("w-14 text-right text-[0.7059rem] font-semibold", tonoPct(h.change_pct))}>
+          {variazione}
+        </span>
       </div>
     </>
   );
 
-  const grid =
-    "grid grid-cols-[minmax(0,1fr)_auto_auto] sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-4 py-2";
+  const riga = "flex items-center gap-3 px-3 py-1.5 border-b border-border/40";
 
   // Catalog holdings deep-link to their stock page; off-catalog ones are
   // static rows (no detail page exists for them).
+  // ⚠️ Nome esplicito sul link: i pezzi della riga sono elementi in linea in
+  // un flex, e il nome calcolato li incollerebbe senza spazi («FROGJFrog…»).
   return (
-    <li>
+    <li className="min-w-0">
       {h.in_catalog ? (
-        <Link to={`/stocks/${encodeURIComponent(h.symbol)}`} className={cn(grid, "hover:bg-accent/30 transition-colors")}>
+        <Link
+          to={`/stocks/${encodeURIComponent(h.symbol)}`}
+          aria-label={`${h.symbol}${h.name ? `, ${h.name}` : ""}, peso ${peso}, ${formatMoney(h.price, h.currency)}, ${variazione}`}
+          className={cn(riga, "hover:bg-accent/30 transition-colors")}
+        >
           {inner}
         </Link>
       ) : (
-        <div className={grid}>{inner}</div>
+        <div className={riga}>{inner}</div>
       )}
     </li>
   );
@@ -195,8 +211,8 @@ function MiniSpark({ closes, up }: { closes: number[]; up: boolean }) {
   const min = Math.min(...closes);
   const max = Math.max(...closes);
   const range = max - min || 1;
-  const W = 64;
-  const H = 22;
+  const W = 48;
+  const H = 18;
   const points = closes
     .map((v, i) => {
       const x = (i / (closes.length - 1)) * W;

@@ -1091,6 +1091,10 @@ export interface EtfHoldings {
   /** For a leveraged/inverse ETF: the physical ETF whose basket is shown
    *  in place of the swaps (e.g. SOXL → "SOXX"). Null for plain ETFs. */
   underlying?: string | null;
+  /** Variazione del giorno di `underlying`, dallo stesso lotto delle componenti. */
+  underlying_change_pct?: number | null;
+  /** `underlying` ha una pagina nel catalogo (8 sottostanti non ce l'hanno). */
+  underlying_in_catalog?: boolean;
 }
 
 export interface LiveQuote {

@@ -442,6 +442,8 @@ export interface EtfHoldingsOut {
   holdings?: EtfHoldingOut[];
   weighted_change_pct?: number | null;
   underlying?: string | null;
+  underlying_change_pct?: number | null;
+  underlying_in_catalog?: boolean;
 }
 
 export interface FilterOptionsOut {
