@@ -384,6 +384,15 @@ jobs:
           path: frontend/test-results/
           retention-days: 7
 
+      # ⚠️ Il backend va FERMATO prima della fine del job (2026-10-05). Gira con
+      # `uv run`, quindi tiene la cache di uv; quando `uv.lock` cambia la cache
+      # manca, e la pulizia finale di setup-uv la pota prima di salvarla. Col
+      # backend ancora vivo la potatura esce con 2 e il job diventa rosso con
+      # tutti i test verdi — alla prima corsa dopo OGNI modifica del lock.
+      - name: ferma il backend
+        if: always()
+        run: pkill -f "uvicorn app.main:app" || true
+
   audit:
     name: dependency audit (fails on a known CVE)
     runs-on: ubuntu-latest
