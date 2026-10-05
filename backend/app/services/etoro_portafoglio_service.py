@@ -65,6 +65,8 @@ _TOLLERANZA_LIVELLO = 0.005
 #: Lo storico accetta al massimo un anno meno un giorno.
 _STORICO_MAX = timedelta(days=364)
 _PAGINE_STORICO = 10
+#: Per i 12 mesi interi: il conto vero ne ha ~690 in un anno, cioe' ~8 pagine.
+PAGINE_ANNO = 30
 _RIGHE_PAGINA = 100
 #: Ogni quanto si rilegge l'anagrafica di uno strumento gia' noto.
 _ANAGRAFICA_VECCHIA = timedelta(days=7)
@@ -264,11 +266,17 @@ def motivo_chiusura(prezzo: float | None, stop: float | None, target: float | No
     return CHIUSA
 
 
-def _storico(dal: date) -> dict[int, dict]:
-    """Le operazioni chiuse da `dal`, per positionId. Al massimo
-    `_PAGINE_STORICO` pagine: il giro dopo riprende da dove serve."""
+def leggi_storico(dal: date, *, pagine: int = _PAGINE_STORICO) -> dict[int, dict]:
+    """Le operazioni chiuse da `dal`, per positionId, dalla piu' recente.
+
+    ⚠️ Si scorre finche' una pagina torna VUOTA, non finche' ne torna una
+    corta: eToro rende pagine piu' corte di `pageSize` anche quando dopo ce ne
+    sono altre (misurato il 2026-10-06: 87, 98, 88, 93... righe su 100, otto
+    pagine per un anno). La regola «corta = ultima» si fermava alla prima e
+    leggeva tre mesi su dodici. Una pagina senza nessuna posizione nuova ferma
+    lo stesso, perche' un'API che ignorasse `page` non giri a vuoto."""
     out: dict[int, dict] = {}
-    for pagina in range(1, _PAGINE_STORICO + 1):
+    for pagina in range(1, pagine + 1):
         dati = etoro_client.get(
             _STORICO, op="storico",
             params={"minDate": dal.isoformat(), "page": pagina, "pageSize": _RIGHE_PAGINA},
@@ -281,11 +289,13 @@ def _storico(dal: date) -> dict[int, dict]:
             righe = dati.get("trades") or dati.get("items") or []
         else:
             righe = []
+        prima = len(out)
         for r in righe:
             if isinstance(r, dict) and isinstance(r.get("positionId"), int):
                 out[r["positionId"]] = r
-        if len(righe) < _RIGHE_PAGINA:
-            break
+        if len(out) == prima:
+            return out
+    logger.warning(f"[etoro] storico delle chiuse fermato a {pagine} pagine dal {dal}: puo' mancarne una parte")
     return out
 
 
@@ -316,7 +326,7 @@ def _registra_chiusure(db: Session, viste: set[int], adesso: datetime) -> list[i
         min(_aware(r.aperta_il) for r in scomparse).astimezone(UTC).date(),
         (adesso - _STORICO_MAX).date(),
     )
-    storico = _storico(dal)
+    storico = leggi_storico(dal)
     chiuse: list[int] = []
     from app.services.etoro_patrimonio_service import salva_operazione
 

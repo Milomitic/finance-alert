@@ -45,6 +45,9 @@ class FintoEtoro:
         self.mirrors: list[dict] = []
         self.anagrafica: dict[int, dict] = {}
         self.storico: list[dict] = []
+        #: Se impostato, lo storico risponde per PAGINA come eToro: pagine
+        #: piu' corte di `pageSize` anche quando dopo ce ne sono altre.
+        self.pagine_storico: list[list[dict]] | None = None
         self.totali: dict | None = {
             "accountTotalValue": 5230.5, "accountCurrentPnl": 25.0,
             "dailyGainAccountCurrency": 12.5, "dailyGainAccountCurrencyPercent": 0.24,
@@ -71,6 +74,9 @@ class FintoEtoro:
             return {"results": [self.anagrafica[i] for i in ids if i in self.anagrafica],
                     "pagination": {"hasNext": False}}
         if percorso == svc._STORICO:
+            if self.pagine_storico is not None:
+                n = int((params or {}).get("page", 1))
+                return list(self.pagine_storico[n - 1]) if n <= len(self.pagine_storico) else []
             return [r for r in self.storico]
         if percorso == svc._AGGREGATO:
             if self.aggregato_rotto:

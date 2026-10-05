@@ -137,7 +137,75 @@ def test_il_generato_non_conta_un_versamento(db: Session) -> None:
     assert s1.variazione == pytest.approx(5500.0)
     # 100 realizzati + (500 - 100) di P/L aperto = 500 generati; 5.000 di flussi.
     assert (s1.realizzato, s1.generato, s1.flussi) == (100.0, 500.0, 5000.0)
-    assert s1.generato_pct == pytest.approx(25.0)
+    # In % del capitale MEDIO (Modified Dietz), non dei 2.000 di partenza: il
+    # 2 ottobre entrano 4.900 (5.300 di variazione, 100 realizzati, 300 di P/L
+    # aperto) e restano nel conto meta' del periodo: 500 / (2.000 + 4.900 / 2).
+    # Sul valore di partenza sarebbe stato il 25%.
+    assert s1.generato_pct == pytest.approx(500 / 4450 * 100)
+
+
+def test_un_conto_quasi_vuoto_alla_partenza_non_gonfia_la_percentuale(db: Session) -> None:
+    """Il caso vero dei tre mesi: 914 USD, poi zero, poi 3.000 versati."""
+    _giorni(db, [("2026-09-29", 914.0, 0.0), ("2026-09-30", 0.0, 0.0), ("2026-10-02", 3000.0, 0.0),
+                 ("2026-10-06", 3300.0, 300.0)])
+    righe = list(db.query(EtoroPatrimonioGiorno).order_by(EtoroPatrimonioGiorno.giorno))
+    [s1] = [p for p in pat.periodi(db, righe, date(2026, 10, 6)) if p.chiave == "1S"]
+    assert s1.generato == pytest.approx(300.0)
+    assert s1.dal == date(2026, 9, 29)
+    # -914 per 6 giorni su 7, +3.000 per 4 su 7: capitale medio 1.844,86.
+    assert s1.generato_pct == pytest.approx(300 / (914 - 914 * 6 / 7 + 3000 * 4 / 7) * 100)
+    # Sul valore di partenza sarebbe stato il +32,8%.
+    assert s1.generato_pct < 20
+
+
+def test_un_capitale_medio_nullo_non_da_percentuale(db: Session) -> None:
+    _giorni(db, [("2026-09-28", 0.0, 0.0), ("2026-10-06", 0.0, 0.0)])
+    righe = list(db.query(EtoroPatrimonioGiorno).order_by(EtoroPatrimonioGiorno.giorno))
+    [s1] = [p for p in pat.periodi(db, righe, date(2026, 10, 6)) if p.chiave == "1S"]
+    assert (s1.generato, s1.generato_pct) == (0.0, None)
+
+
+def _chiusa(pid: int, giorno: str) -> dict:
+    return {"positionId": pid, "closeTimestamp": f"{giorno}T15:00:00Z", "netProfit": 1.0, "isBuy": True,
+            "leverage": 5, "instrumentId": 3226, "openTimestamp": f"{giorno}T10:00:00Z"}
+
+
+def test_lo_storico_si_legge_fino_alla_pagina_vuota_non_alla_corta(db: Session, etoro: FintoEtoro) -> None:
+    """eToro rende 87 righe su 100 a pagina 1 e ne ha altre sette pagine dopo."""
+    etoro.pagine_storico = [
+        [_chiusa(i, "2026-10-01") for i in range(1, 4)],
+        [_chiusa(i, "2026-07-01") for i in range(4, 6)],
+        [_chiusa(6, "2025-11-01")],
+    ]
+    _, operazioni = pat.recupera(db, adesso=ADESSO)
+    assert operazioni == 6
+    pagine = [p["page"] for percorso, p in etoro.chiamate if percorso == svc._STORICO]
+    assert pagine == [1, 2, 3, 4]
+    # Controllo negativo: con la regola vecchia («corta = ultima») ci si
+    # sarebbe fermati alla prima, perche' 3 righe sono meno di 100.
+    assert len(etoro.pagine_storico[0]) < 100
+
+
+def test_una_pagina_senza_posizioni_nuove_ferma_la_lettura(db: Session, etoro: FintoEtoro) -> None:
+    """Un'API che ignorasse `page` renderebbe sempre le stesse righe."""
+    etoro.storico = [_chiusa(1, "2026-10-01"), _chiusa(2, "2026-10-02")]
+    _, operazioni = pat.recupera(db, adesso=ADESSO)
+    assert operazioni == 2
+    assert [p["page"] for percorso, p in etoro.chiamate if percorso == svc._STORICO] == [1, 2]
+
+
+def test_il_tetto_di_pagine_si_dichiara(etoro: FintoEtoro) -> None:
+    from loguru import logger
+
+    etoro.pagine_storico = [[_chiusa(i, "2026-10-01")] for i in range(1, 6)]
+    righe: list[str] = []
+    gancio = logger.add(lambda m: righe.append(str(m)), level="WARNING")
+    try:
+        out = svc.leggi_storico(date(2026, 1, 1), pagine=3)
+    finally:
+        logger.remove(gancio)
+    assert sorted(out) == [1, 2, 3]
+    assert any("fermato a 3 pagine" in r for r in righe)
 
 
 def test_una_chiusa_del_giorno_di_partenza_non_conta(db: Session) -> None:

@@ -39,18 +39,23 @@ from app.models.etoro import (
     EtoroStrumento,
 )
 from app.services import etoro_client
-from app.services.etoro_portafoglio_service import ROMA, _aware, _num, _ts, mezzanotte_di_roma_utc
+from app.services.etoro_portafoglio_service import (
+    PAGINE_ANNO,
+    ROMA,
+    _aware,
+    _num,
+    _ts,
+    leggi_storico,
+    mezzanotte_di_roma_utc,
+)
 
 STORICO = "storico"
 VIVO = "vivo"
 FONTI = (STORICO, VIVO)
 
 _STORICO_SALDI = "/api/v1/balances/history"
-_STORICO_OPERAZIONI = "/api/v1/trading/info/trade/history"
 _AGGREGATO = "/api/v1/trading/info/aggregate-portfolio"
 _GIORNI_STORICO = 364
-_PAGINE_OPERAZIONI = 20
-_RIGHE_PAGINA = 100
 #: Un punto intraday al minuto al massimo, tenuto tre giorni.
 _PASSO_INTRADAY = timedelta(seconds=60)
 _TIENI_INTRADAY = timedelta(days=3)
@@ -111,18 +116,11 @@ def recupera(db: Session, *, adesso: datetime | None = None) -> tuple[int, int]:
         giorni += 1
     operazioni = 0
     strumenti: set[int] = set()
-    for pagina in range(1, _PAGINE_OPERAZIONI + 1):
-        righe = etoro_client.get(_STORICO_OPERAZIONI, op="storico", params={
-            "minDate": dal.isoformat(), "page": pagina, "pageSize": _RIGHE_PAGINA,
-        })
-        righe = righe if isinstance(righe, list) else []
-        for r in righe:
-            if salva_operazione(db, r):
-                operazioni += 1
-                if isinstance(r.get("instrumentId"), int):
-                    strumenti.add(r["instrumentId"])
-        if len(righe) < _RIGHE_PAGINA:
-            break
+    for r in leggi_storico(dal, pagine=PAGINE_ANNO).values():
+        if salva_operazione(db, r):
+            operazioni += 1
+            if isinstance(r.get("instrumentId"), int):
+                strumenti.add(r["instrumentId"])
     if strumenti:
         # L'anagrafica degli strumenti chiusi, per legarli al catalogo e ai
         # segnali nel diario (FA-128): molti non sono piu' in portafoglio.
@@ -357,22 +355,52 @@ def periodi(db: Session, giorni: list[EtoroPatrimonioGiorno], oggi: date) -> lis
         if inizio is None or inizio.giorno >= fine.giorno:
             continue
         # Le chiuse DOPO la fine della giornata di partenza, in ora di Roma.
-        dal_istante = datetime.combine(inizio.giorno + timedelta(days=1), datetime.min.time(), ROMA)
-        realizzato = db.execute(
-            select(func.coalesce(func.sum(EtoroOperazione.profitto_netto_usd), 0.0))
-            .where(EtoroOperazione.chiusa_il >= dal_istante.astimezone(UTC))
-        ).scalar_one()
+        chiuse = [(_aware(c), float(v or 0.0)) for c, v in db.execute(
+            select(EtoroOperazione.chiusa_il, EtoroOperazione.profitto_netto_usd)
+            .where(EtoroOperazione.chiusa_il >= _fine_giornata(inizio.giorno))
+        ).all()]
+        realizzato = sum(v for _, v in chiuse)
         variazione = fine.valore - inizio.valore
         generato = None
         if fine.pnl_aperto is not None and inizio.pnl_aperto is not None:
-            generato = float(realizzato) + (fine.pnl_aperto - inizio.pnl_aperto)
+            generato = realizzato + (fine.pnl_aperto - inizio.pnl_aperto)
+        tratto = [g for g in giorni if inizio.giorno <= g.giorno <= fine.giorno]
         out.append(Periodo(
             chiave=chiave, dal=inizio.giorno, valore_iniziale=inizio.valore, valore_finale=fine.valore,
-            variazione=variazione, generato=generato, realizzato=float(realizzato),
+            variazione=variazione, generato=generato, realizzato=realizzato,
             flussi=None if generato is None else variazione - generato,
-            generato_pct=(generato / inizio.valore * 100.0) if generato is not None and inizio.valore else None,
+            generato_pct=None if generato is None else _pct_dietz(generato, tratto, chiuse),
         ))
     return out
+
+
+def _fine_giornata(g: date) -> datetime:
+    """La mezzanotte di Roma che chiude il giorno `g`, in UTC."""
+    return datetime.combine(g + timedelta(days=1), datetime.min.time(), ROMA).astimezone(UTC)
+
+
+def _pct_dietz(generato: float, tratto: list[EtoroPatrimonioGiorno], chiuse: list[tuple[datetime, float]]) -> float | None:
+    """Il generato in % del capitale MEDIAMENTE impegnato (Modified Dietz).
+
+    ⚠️ Non sul valore di partenza: il conto vero valeva 914 USD l'8 luglio, zero
+    dal 15 luglio al 3 agosto, poi 3.000 versati. Sul valore di partenza i tre
+    mesi rendevano +355%. Qui ogni versamento o prelievo pesa per la frazione
+    del periodo in cui e' rimasto nel conto. Il flusso di un giorno esce dalla
+    stessa identita' del periodo — variazione meno realizzato meno variazione
+    del P/L aperto — e si conta a fine giornata, perche' l'ora non si sa."""
+    inizio, fine = tratto[0], tratto[-1]
+    durata = (fine.giorno - inizio.giorno).days
+    if durata <= 0:
+        return None
+    capitale = inizio.valore
+    for a, b in zip(tratto, tratto[1:], strict=False):
+        if a.pnl_aperto is None or b.pnl_aperto is None:
+            return None
+        da, a_ = _fine_giornata(a.giorno), _fine_giornata(b.giorno)
+        realizzato = sum(v for c, v in chiuse if da <= c < a_)
+        flusso = (b.valore - a.valore) - realizzato - (b.pnl_aperto - a.pnl_aperto)
+        capitale += flusso * (fine.giorno - b.giorno).days / durata
+    return generato / capitale * 100.0 if capitale > 0 else None
 
 
 def andamento(db: Session, *, adesso: datetime | None = None) -> tuple[

@@ -39,7 +39,9 @@ import { cn } from "@/lib/utils";
  *
  * ⚠️ La curva del VALORE comprende versamenti e prelievi: misurato, il conto
  * va da 17.800 a 2.250 USD e risale a 8.660 con l'investito che triplica. Per
- * questo il numero sotto la curva e' il P/L generato, e la curva lo dice.
+ * questo il numero sotto la curva e' il P/L generato, e la curva lo dice. La
+ * sua % e' sul capitale MEDIO (Modified Dietz, lato server): sul valore di
+ * partenza i tre mesi del conto vero rendevano +355% su 914 USD.
  */
 
 const ALTEZZA = "h-[700px] lg:h-[300px]";
@@ -142,7 +144,7 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
           Andamento
           <InfoHint
             label="Che cosa mostra la curva"
-            text="Il valore del conto Trading a fine giornata, e oggi minuto per minuto. Comprende versamenti e prelievi: il rendimento vero del periodo è il P/L generato qui sotto, cioè i profitti chiusi più la variazione del P/L aperto."
+            text="Il valore del conto Trading a fine giornata, e oggi minuto per minuto. Comprende versamenti e prelievi: il rendimento vero del periodo è il P/L generato qui sotto, cioè i profitti chiusi più la variazione del P/L aperto. La percentuale è sul capitale mediamente impegnato nel periodo: un versamento conta per i giorni in cui è rimasto nel conto, non come se ci fosse stato dall'inizio."
           />
         </span>
         <div role="group" aria-label="Intervallo della curva" className="flex rounded-md border border-border/60 p-0.5">
