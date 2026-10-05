@@ -50,6 +50,7 @@ class FintoEtoro:
             "dailyGainAccountCurrency": 12.5, "dailyGainAccountCurrencyPercent": 0.24,
         }
         self.watchlist: dict | None = {"watchlists": []}
+        self.saldi: dict | None = {"snapshots": []}
         self.pnl_rotto = False
         self.aggregato_rotto = False
         self.chiamate: list[tuple[str, dict | None]] = []
@@ -73,6 +74,8 @@ class FintoEtoro:
             return {"accountCurrency": "USD", "accountTotals": self.totali}
         if percorso == "/api/v1/watchlists":
             return self.watchlist
+        if percorso == "/api/v1/balances/history":
+            return self.saldi
         raise AssertionError(percorso)
 
     def percorsi(self) -> list[str]:

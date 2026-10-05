@@ -10,7 +10,12 @@ from loguru import logger
 
 from app.core import db as db_module
 from app.core.errors import UpstreamError
-from app.services import etoro_client, etoro_watchlist_service, notifier_service
+from app.services import (
+    etoro_client,
+    etoro_patrimonio_service,
+    etoro_watchlist_service,
+    notifier_service,
+)
 from app.services import etoro_portafoglio_service as svc
 
 _detto_spento = False
@@ -30,12 +35,32 @@ def run_sincronizza_etoro() -> None:
         except UpstreamError as e:
             logger.warning(f"[etoro] sincronizzazione fallita: {e}")
             return
+        if not etoro_patrimonio_service.ha_storico(db):
+            # Il primo giro di sempre: i 12 mesi che eToro conserva (FA-127).
+            _recupera(db)
         chiuse = svc.da_notificare(db)
         if chiuse:
             r = notifier_service.notify_etoro_chiuse(chiuse)
             if r.sent or r.reason == "telegram_disabled":
                 svc.segna_notificate(db, [p.position_id for p, _, _ in chiuse])
     _riepilogo(esito)
+
+
+def _recupera(db) -> None:
+    try:
+        giorni, operazioni = etoro_patrimonio_service.recupera(db)
+    except UpstreamError as e:
+        logger.warning(f"[etoro] storico del patrimonio non recuperato: {e}")
+        return
+    logger.info(f"[etoro] storico: {giorni} giorni, {operazioni} operazioni chiuse")
+
+
+def run_recupera_storico_etoro() -> None:
+    """Ogni notte: la fotografia di fine giornata di ieri e le chiuse nuove (FA-127)."""
+    if not etoro_client.configurato():
+        return
+    with db_module.SessionLocal() as db:
+        _recupera(db)
 
 
 def run_sincronizza_watchlist_etoro() -> None:

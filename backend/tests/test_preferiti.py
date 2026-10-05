@@ -86,3 +86,22 @@ def test_l_api_aggiunge_elenca_e_toglie(client, titoli) -> None:
 def test_l_api_rifiuta_un_ticker_sconosciuto(client, titoli) -> None:
     r = client.put("/api/preferiti/NONESISTE")
     assert r.status_code == 404
+
+
+def test_due_stelle_nello_stesso_istante_restano_in_ordine(db: Session, titoli, monkeypatch) -> None:
+    """L'orologio di Windows avanza a scatti: lo si simula fermo."""
+    from datetime import UTC, datetime
+
+    import app.services.preferiti_service as modulo
+
+    fermo = datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
+
+    class Orologio(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fermo
+
+    monkeypatch.setattr(modulo, "datetime", Orologio)
+    pref.aggiungi(db, "ENI.MI")
+    pref.aggiungi(db, "0700.HK")
+    assert [s.ticker for s, _, _ in pref.elenco(db)] == ["ENI.MI", "0700.HK"]

@@ -6,7 +6,7 @@ subito invece di aspettare il job dei 10 minuti.
 """
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -19,6 +19,7 @@ from app.models import Position, Stock, User
 from app.models.etoro import EtoroConto, EtoroPosizione, EtoroStrumento
 from app.models.preferito import Preferito
 from app.services import etoro_client, etoro_watchlist_service, preferiti_service
+from app.services import etoro_patrimonio_service as patrimonio
 from app.services import etoro_portafoglio_service as svc
 
 router = APIRouter(prefix="/api/etoro", tags=["etoro"])
@@ -238,4 +239,114 @@ def sincronizza(
         strumenti_nuovi=e.strumenti_nuovi, da_confermare=e.da_confermare,
         conto_aggiornato=e.conto_aggiornato,
         preferiti_aggiunti=w.aggiunti, preferiti_tolti=w.tolti,
+    )
+
+
+# ─── Patrimonio e andamento (FA-127) ────────────────────────────────────────
+
+
+class EtoroStrumentoOggiOut(BaseModel):
+    instrument_id: int
+    ticker: str | None
+    simbolo: str | None
+    nome: str | None
+    #: Il guadagno di OGGI su questo strumento, calcolato da eToro.
+    guadagno_giorno: float | None
+    pnl: float | None
+    esposizione: float | None
+    margine: float | None
+
+
+class EtoroVivoOut(BaseModel):
+    configurato: bool
+    aggiornato_il: datetime | None
+    #: True quando eToro non ha risposto: i numeri sono dell'ultima sincronizzazione.
+    in_ritardo: bool
+    valuta: str | None
+    valore: float | None
+    valore_ieri: float | None
+    guadagno_giorno: float | None
+    guadagno_giorno_pct: float | None
+    pnl_aperto: float | None
+    margine_usato: float | None
+    cassa: float | None
+    esposizione: float | None
+    #: esposizione / valore del conto: quanto il conto e' a leva, in tutto.
+    leva_effettiva: float | None
+    posizioni: int
+    strumenti: list[EtoroStrumentoOggiOut]
+
+
+class EtoroGiornoOut(BaseModel):
+    giorno: date
+    valore: float
+    pnl_aperto: float | None
+    fonte: str
+
+
+class EtoroPuntoOut(BaseModel):
+    istante: datetime
+    valore: float
+
+
+class EtoroPeriodoOut(BaseModel):
+    chiave: str
+    dal: date
+    valore_iniziale: float
+    valore_finale: float
+    variazione: float
+    generato: float | None
+    realizzato: float
+    flussi: float | None
+    generato_pct: float | None
+
+
+class EtoroAndamentoOut(BaseModel):
+    configurato: bool
+    giorni: list[EtoroGiornoOut]
+    oggi: list[EtoroPuntoOut]
+    periodi: list[EtoroPeriodoOut]
+
+
+_VIVO_VUOTO = dict(
+    aggiornato_il=None, in_ritardo=False, valuta=None, valore=None, valore_ieri=None,
+    guadagno_giorno=None, guadagno_giorno_pct=None, pnl_aperto=None, margine_usato=None,
+    cassa=None, esposizione=None, leva_effettiva=None, posizioni=0, strumenti=[],
+)
+
+
+@router.get("/vivo", response_model=EtoroVivoOut)
+def vivo(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroVivoOut:
+    """Il conto adesso (cache di 30 s sul server). Non solleva: se eToro non
+    risponde rende l'ultima sincronizzazione con `in_ritardo`."""
+    if not etoro_client.configurato():
+        return EtoroVivoOut(configurato=False, **_VIVO_VUOTO)
+    v = patrimonio.vivo(db)
+    if v is None:
+        return EtoroVivoOut(configurato=True, **_VIVO_VUOTO)
+    return EtoroVivoOut(
+        configurato=True, aggiornato_il=_aware(v.aggiornato_il), in_ritardo=v.in_ritardo, valuta=v.valuta,
+        valore=v.valore, valore_ieri=v.valore_ieri, guadagno_giorno=v.guadagno_giorno,
+        guadagno_giorno_pct=v.guadagno_giorno_pct, pnl_aperto=v.pnl_aperto,
+        margine_usato=v.margine_usato, cassa=v.cassa, esposizione=v.esposizione,
+        leva_effettiva=(v.esposizione / v.valore) if v.esposizione and v.valore else None,
+        posizioni=v.posizioni,
+        strumenti=[EtoroStrumentoOggiOut(**s.__dict__) for s in v.strumenti],
+    )
+
+
+@router.get("/andamento", response_model=EtoroAndamentoOut)
+def andamento(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroAndamentoOut:
+    giorni, punti, per = patrimonio.andamento(db)
+    return EtoroAndamentoOut(
+        configurato=etoro_client.configurato(),
+        giorni=[EtoroGiornoOut(giorno=g.giorno, valore=g.valore, pnl_aperto=g.pnl_aperto, fonte=g.fonte) for g in giorni],
+        oggi=[EtoroPuntoOut(istante=_aware(p.istante), valore=p.valore) for p in punti],
+        periodi=[EtoroPeriodoOut(**p.__dict__) for p in per],
     )

@@ -318,11 +318,17 @@ def _registra_chiusure(db: Session, viste: set[int], adesso: datetime) -> list[i
     )
     storico = _storico(dal)
     chiuse: list[int] = []
+    from app.services.etoro_patrimonio_service import salva_operazione
+
     for row in scomparse:
         r = storico.get(row.position_id)
         if r is None and adesso - _aware(row.vista_il) < ATTESA_STORICO:
             continue  # lo storico di eToro puo' arrivare in ritardo: si riprova
         _chiudi(row, r, adesso)
+        if r is not None:
+            # Il profitto realizzato entra subito nel rendimento (FA-127),
+            # senza aspettare il recupero notturno dello storico.
+            salva_operazione(db, r)
         chiuse.append(row.position_id)
     return chiuse
 
@@ -360,6 +366,9 @@ def _aggiorna_conto(db: Session, credito: float | None, adesso: datetime) -> boo
     conto.pnl_aperto = _num(tot.get("accountCurrentPnl"))
     conto.guadagno_giorno = _num(tot.get("dailyGainAccountCurrency"))
     conto.guadagno_giorno_pct = _num(tot.get("dailyGainAccountCurrencyPercent"))
+    from app.services.etoro_patrimonio_service import fotografa
+
+    fotografa(db, conto.valore_totale, conto.credito_usd, conto.pnl_aperto, conto.guadagno_giorno, adesso)
     return True
 
 

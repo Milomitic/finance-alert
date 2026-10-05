@@ -189,3 +189,47 @@ def test_la_notifica_di_uno_strumento_fuori_catalogo_usa_il_simbolo(monkeypatch)
     assert notifier_service.notify_etoro_chiuse([(pos, strum, None)]).sent is True
     assert "BTC" in mandati[0] and "Short ×2" in mandati[0] and "non trovata" in mandati[0]
     assert notifier_service.notify_etoro_chiuse([]).reason == "no_alerts"
+
+
+# ─── I job delle watchlist e dello storico (FA-125, FA-127) ─────────────────
+
+
+def test_i_job_senza_chiavi_non_chiamano_niente(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "etoro_api_key", "")
+    monkeypatch.setattr(etoro_client, "get", lambda *a, **k: pytest.fail("chiamata"))
+    job.run_sincronizza_watchlist_etoro()
+    job.run_recupera_storico_etoro()
+
+
+def test_il_job_delle_watchlist_crea_i_preferiti(db: Session, etoro: FintoEtoro, portafoglio) -> None:
+    from app.models.preferito import Preferito
+
+    etoro.watchlist = {"watchlists": [{"name": "Tech", "watchlistType": "Static", "totalItems": 1,
+                                       "items": [{"itemId": 1001, "itemType": "Instrument"}]}]}
+    job.run_sincronizza_watchlist_etoro()
+    db.expire_all()
+    assert db.get(Preferito, portafoglio.id).origine == "etoro"
+
+
+def test_il_job_delle_watchlist_sopravvive_a_un_errore(db: Session, etoro: FintoEtoro) -> None:
+    etoro.watchlist = {"senza": "watchlists"}
+    job.run_sincronizza_watchlist_etoro()
+
+
+def test_il_job_dello_storico_salva_i_giorni(db: Session, etoro: FintoEtoro) -> None:
+    from app.models.etoro import EtoroPatrimonioGiorno
+
+    ieri = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
+    etoro.saldi = {"snapshots": [{"date": ieri, "accountSnapshots": [
+        {"accountType": "Trading", "displayTotal": 100.0, "displayCash": 1.0, "displayPnl": 2.0}]}]}
+    job.run_recupera_storico_etoro()
+    db.expire_all()
+    assert len(db.query(EtoroPatrimonioGiorno).all()) == 1
+
+
+def test_il_job_dello_storico_sopravvive_a_un_errore(db: Session, etoro: FintoEtoro, monkeypatch) -> None:
+    def giu(*a, **k):
+        raise UpstreamUnavailable("giu'", source="etoro", op="patrimonio")
+
+    monkeypatch.setattr(etoro_client, "get", giu)
+    job.run_recupera_storico_etoro()

@@ -1,9 +1,9 @@
 """La lista dei titoli preferiti (FA-112): leggerla, aggiungere, togliere."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models import Stock
@@ -37,6 +37,19 @@ def stock_ids(db: Session) -> set[int]:
     return set(db.execute(select(Preferito.stock_id)).scalars())
 
 
+def _dopo_l_ultimo(db: Session) -> datetime:
+    """Adesso, ma strettamente dopo l'ultimo aggiunto. L'orologio di Windows
+    avanza a scatti: due stelle nello stesso scatto avevano lo stesso istante,
+    e l'ordine d'aggiunta lo decideva il ticker (test che sfarfallava)."""
+    adesso = datetime.now(UTC)
+    ultimo = db.execute(select(func.max(Preferito.aggiunto_il))).scalar()
+    if ultimo is not None:
+        ultimo = ultimo if ultimo.tzinfo else ultimo.replace(tzinfo=UTC)
+        if adesso <= ultimo:
+            adesso = ultimo + timedelta(microseconds=1)
+    return adesso
+
+
 def aggiungi(db: Session, ticker: str) -> tuple[Stock, datetime, str] | None:
     """Idempotente. None se il ticker non e' nel catalogo. Una stella messa a
     mano rende il preferito manuale anche se era arrivato da eToro: la
@@ -46,7 +59,7 @@ def aggiungi(db: Session, ticker: str) -> tuple[Stock, datetime, str] | None:
         return None
     riga = db.get(Preferito, stock.id)
     if riga is None:
-        riga = Preferito(stock_id=stock.id, aggiunto_il=datetime.now(UTC), origine=MANUALE)
+        riga = Preferito(stock_id=stock.id, aggiunto_il=_dopo_l_ultimo(db), origine=MANUALE)
         db.add(riga)
     riga.origine = MANUALE
     db.execute(delete(PreferitoEscluso).where(PreferitoEscluso.stock_id == stock.id))

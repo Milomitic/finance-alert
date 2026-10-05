@@ -31,6 +31,7 @@ from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.scheduler.jobs.sincronizza_etoro import (
+    run_recupera_storico_etoro,
     run_sincronizza_etoro,
     run_sincronizza_watchlist_etoro,
 )
@@ -241,6 +242,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_sincronizza_watchlist_etoro,
             trigger=IntervalTrigger(hours=1),
             id="sincronizza_watchlist_etoro",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # La fine giornata di ieri e le chiuse nuove (FA-127): eToro conserva
+        # solo 12 mesi di fotografie, la copia di qui e' quella che resta.
+        _scheduler.add_job(
+            run_recupera_storico_etoro,
+            trigger=_cron(hour=0, minute=50),
+            id="recupera_storico_etoro",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

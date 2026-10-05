@@ -21,6 +21,7 @@ const JOB_LABEL: Record<string, string> = {
   promemoria_trimestrali: "Promemoria trimestrali (Telegram)",
   sincronizza_etoro: "Portafoglio eToro",
   sincronizza_watchlist_etoro: "Watchlist eToro → preferiti",
+  recupera_storico_etoro: "Storico del conto eToro",
   refresh_catalog: "Refresh catalogo Wikipedia",
   refresh_fred: "FRED macro series",
   refresh_imminent_earnings: "Earnings imminenti (Finnhub)",

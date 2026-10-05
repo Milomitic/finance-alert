@@ -18,9 +18,9 @@ utente solo, e la chiave eToro e' la sua.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -108,3 +108,58 @@ class EtoroConto(Base):
     pnl_aperto: Mapped[float | None] = mapped_column(Float, nullable=True)
     guadagno_giorno: Mapped[float | None] = mapped_column(Float, nullable=True)
     guadagno_giorno_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class EtoroPatrimonioGiorno(Base):
+    """Il valore del conto a fine giornata (FA-127): una riga per giorno di Roma.
+
+    «storico» = la fotografia di fine giornata di eToro (`/balances/history`,
+    conto Trading), che eToro conserva per 12 mesi: per questo si salva, e
+    dopo un anno questa tabella e' l'unica copia. «vivo» = la riga di oggi,
+    riscritta a ogni sincronizzazione finche' il giorno non si chiude.
+    """
+
+    __tablename__ = "etoro_patrimonio"
+
+    giorno: Mapped[date] = mapped_column(Date, primary_key=True)
+    valore: Mapped[float] = mapped_column(Float, nullable=False)
+    cassa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    investito: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pnl_aperto: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: "storico" | "vivo"
+    fonte: Mapped[str] = mapped_column(String(8), nullable=False)
+    aggiornato_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EtoroPuntoIntraday(Base):
+    """Il valore del conto durante il giorno, per la curva di «oggi» (FA-127).
+    Un punto al minuto al massimo; si tengono tre giorni."""
+
+    __tablename__ = "etoro_patrimonio_intraday"
+
+    istante: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    valore: Mapped[float] = mapped_column(Float, nullable=False)
+    guadagno_giorno: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class EtoroOperazione(Base):
+    """Un'operazione chiusa, dallo storico di eToro (FA-127, base di FA-128).
+
+    Serve al rendimento senza versamenti: il P/L generato in un periodo e' la
+    somma dei profitti chiusi piu' la variazione del P/L aperto, e non dipende
+    da quanto si e' versato o prelevato."""
+
+    __tablename__ = "etoro_operazioni"
+
+    position_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    #: Senza FK: lo storico porta strumenti che il portafoglio non ha mai letto.
+    instrument_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    aperta_il: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    chiusa_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    lato: Mapped[str] = mapped_column(String(5), nullable=False)
+    leva: Mapped[int] = mapped_column(Integer, nullable=False)
+    prezzo_apertura: Mapped[float | None] = mapped_column(Float, nullable=True)
+    prezzo_chiusura: Mapped[float | None] = mapped_column(Float, nullable=True)
+    investimento_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profitto_netto_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    commissioni_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
