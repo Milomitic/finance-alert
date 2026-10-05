@@ -12,6 +12,7 @@ stock isn't re-probed against yfinance on every visit.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 
 from loguru import logger
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session
 _KIND = "etf_holdings"
 _TTL_SECONDS = 7 * 24 * 3600  # 7 days — holdings move slowly
 _MAX_HOLDINGS = 25
-_CACHE_V = 2  # bump to invalidate pre-underlying-mapping cached rows
+_CACHE_V = 3  # 3: simboli di Hong Kong normalizzati e fondi di liquidita' esclusi
 
 # Leveraged/inverse ETF → physical ETF that replicates the SAME index.
 # A leveraged ETF holds SWAPS on an index, so yfinance exposes only a few
@@ -54,6 +55,29 @@ _LEVERAGED_UNDERLYING: dict[str, str] = {
     "MIDU": "MDY",
     "PILL": "XPH",
 }
+
+
+def simbolo_yahoo(symbol: str) -> str:
+    """Il simbolo Yahoo di un componente come lo scrive `top_holdings`.
+
+    ⚠️ Per Hong Kong `top_holdings` usa il codice di borsa a CINQUE cifre con
+    lo zero in testa («00939»), mentre Yahoo e il catalogo scrivono quattro
+    cifre e il suffisso («0939.HK»). Senza questa traduzione i componenti di
+    FXI e YINN non erano mai link, non avevano prezzo, e ogni visita chiedeva
+    a yfinance una quota per un simbolo inesistente (misurato il 2026-10-06:
+    quattro su cinque sono nel catalogo).
+    """
+    if re.fullmatch(r"0\d{4}", symbol):
+        return f"{symbol[1:]}.HK"
+    return symbol
+
+
+def e_liquidita(name: str) -> bool:
+    """Un fondo monetario dentro un ETF non e' un componente: IWM tiene lo 0,3%
+    in «BlackRock Cash Funds Treasury SL Agency» (simbolo XTSLA), che nella
+    scheda compariva come un titolo senza prezzo."""
+    n = name.upper()
+    return "CASH FUND" in n or "MONEY MARKET" in n
 
 
 def underlying_of(ticker: str) -> str | None:
@@ -177,10 +201,12 @@ def _fetch_from_yf(ticker: str) -> list[EtfHolding]:
             return []
         out: list[EtfHolding] = []
         for sym, row in th.head(_MAX_HOLDINGS).iterrows():
-            symbol = str(sym).strip().upper()
+            symbol = simbolo_yahoo(str(sym).strip().upper())
             if not symbol or symbol in {"NAN", "NONE"}:
                 continue
             name = str(row.get("Name") or "").strip()
+            if e_liquidita(name):
+                continue
             try:
                 weight = float(row.get("Holding Percent") or 0.0)
             except (TypeError, ValueError):

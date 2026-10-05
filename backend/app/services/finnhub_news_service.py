@@ -286,6 +286,19 @@ def status() -> dict:
 # ─── /company-news ───────────────────────────────────────────────────
 
 
+def copre_le_notizie(ticker: str) -> bool:
+    """Se il piano gratuito di Finnhub da' `/company-news` per questo titolo.
+
+    Solo i listini USA: per ogni altro risponde HTTP 403, e nei log di
+    produzione erano centinaia di 403 in tre giorni (.HK, .T, .L, .DE, .MI...).
+    Chiederli non costava solo una chiamata del budget di 60 al minuto, che
+    il ramo analisti deve poter usare: ogni 403 finiva in `record_failure`, e
+    la salute della fonte leggeva come guasto un limite del PIANO. Nel catalogo
+    i titoli USA non portano mai un punto (le classi sono `BRK-B`, `BF-B`),
+    gli esteri sempre il suffisso del listino."""
+    return "." not in ticker
+
+
 def fetch_company_news(
     ticker: str,
     *,
@@ -302,6 +315,8 @@ def fetch_company_news(
     """
     if not is_enabled():
         _warn_disabled_once(_NEWS_SCOPE)
+        return []
+    if not copre_le_notizie(ticker):
         return []
     blocked, why = _is_blocked(_NEWS_SCOPE)
     if blocked:

@@ -30,7 +30,7 @@ from app.core import app_metrics  # noqa: I001
 from app.core import db as core_db
 from app.models import ScanRun, Stock
 from app.services import yfinance_health
-from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_dates_bulk
+from app.services.ohlcv_service import fetch_and_upsert, latest_ohlcv_dates_bulk, split_quarantined
 
 # A stock is "behind" only when its newest bar trails the universe's newest by
 # more than this many CALENDAR days. Exchanges keep different holiday
@@ -96,6 +96,15 @@ def run_repair_ohlcv_gaps() -> None:
             s for s in stocks
             if latest.get(s.id) is not None and latest[s.id] < cutoff
         ]
+        # ⚠️ E quelli CON storia ma morti: la quarantena vale anche qui. Senza,
+        # un titolo delistato con dieci anni di barre restava «indietro» per
+        # sempre e si riscaricava a ogni passaggio — misurato il 2026-10-06,
+        # sette titoli (BK, CTRA, APLS, TERN, SATS, VSCO, CPRX) dodici volte al
+        # giorno, BK con 410 tentativi a vuoto di fila. Il ri-sondaggio
+        # settimanale della regola resta: un ticker tornato vivo rientra.
+        behind, in_quarantena = split_quarantined(behind)
+        if in_quarantena:
+            logger.info(f"[ohlcv-repair] {len(in_quarantena)} in quarantena, riprovati a settimana")
         if not behind:
             logger.info(f"[ohlcv-repair] all caught up (reference bar {reference})")
             return
