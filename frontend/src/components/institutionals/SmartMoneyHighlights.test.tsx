@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ActionAggregate, AggregateStats, InstitutionalSummary } from "@/api/types";
 
@@ -33,6 +33,17 @@ const AGG: AggregateStats = {
   recent_sells: [mossa("TSLA", "sold_out", 8e8), mossa("META", "reduce", 2e8)],
   sector_tilt: { "Information Technology": 600, Energy: 400 },
 };
+
+/* ⚠️ L'orologio si FISSA. «Fermo» vuol dire oltre 183 giorni da OGGI, quindi
+ * con l'orologio vero il fondo del 31 marzo e' passato fra i fermi il 30
+ * settembre 2026 e il test e' diventato rosso su codice intatto. */
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-15T12:00:00Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const FONDI = [
   fondo("a", "2026-06-30", 1e9),
