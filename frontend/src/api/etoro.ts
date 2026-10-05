@@ -66,6 +66,11 @@ export interface EtoroPortafoglio {
   chiuse: EtoroPosizione[];
   /** Gli abbinamenti che aspettano l'utente, gia' filtrati dal server. */
   da_decidere: EtoroStrumento[];
+  // ── Le watchlist (FA-125) ──
+  preferiti_da_etoro: number;
+  /** Strumenti delle watchlist senza un titolo nel catalogo: si contano. */
+  watchlist_fuori_catalogo: number;
+  watchlist_da_confermare: EtoroStrumento[];
 }
 
 export interface EtoroSincronizzazione {
@@ -76,6 +81,8 @@ export interface EtoroSincronizzazione {
   strumenti_nuovi: number;
   da_confermare: number;
   conto_aggiornato: boolean;
+  preferiti_aggiunti: number;
+  preferiti_tolti: number;
 }
 
 export function fetchEtoroPortafoglio(signal?: AbortSignal): Promise<EtoroPortafoglio> {

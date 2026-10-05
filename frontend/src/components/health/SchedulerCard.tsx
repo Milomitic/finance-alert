@@ -20,6 +20,7 @@ const JOB_LABEL: Record<string, string> = {
   send_digest: "Digest Telegram",
   promemoria_trimestrali: "Promemoria trimestrali (Telegram)",
   sincronizza_etoro: "Portafoglio eToro",
+  sincronizza_watchlist_etoro: "Watchlist eToro → preferiti",
   refresh_catalog: "Refresh catalogo Wikipedia",
   refresh_fred: "FRED macro series",
   refresh_imminent_earnings: "Earnings imminenti (Finnhub)",

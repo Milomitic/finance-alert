@@ -266,6 +266,20 @@ export function EtoroPortafoglioCard({ d, errore }: { d: EtoroPortafoglio | unde
           </ul>
         )}
         <Chiuse chiuse={d.chiuse} />
+        {(d.preferiti_da_etoro > 0 || d.watchlist_fuori_catalogo > 0) && (
+          <p className="text-xs text-muted-foreground">
+            Dalle tue watchlist eToro: <span className="font-semibold text-foreground">{d.preferiti_da_etoro}</span>{" "}
+            {d.preferiti_da_etoro === 1 ? "preferito" : "preferiti"}
+            {d.watchlist_fuori_catalogo > 0 &&
+              ` · ${d.watchlist_fuori_catalogo} strumenti non sono nel catalogo (crypto, materie prime o titoli non coperti)`}
+            . «Recently Invested» resta fuori.
+          </p>
+        )}
+        <EtoroDaAbbinare
+          lista={d.watchlist_da_confermare}
+          titolo="Dalle watchlist, da confermare"
+          spiegazione="Il simbolo c'è nel catalogo ma il nome è diverso: confermalo e diventa un preferito."
+        />
       </CardContent>
     </Card>
   );

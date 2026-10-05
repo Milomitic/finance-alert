@@ -33,7 +33,7 @@ export function useStellaPreferito(ticker: string) {
         aggiungi
           ? [...vecchia, {
               stock_id: -1, ticker, name: ticker, exchange: "", currency: null,
-              instrument_type: null, aggiunto_il: new Date().toISOString(),
+              instrument_type: null, aggiunto_il: new Date().toISOString(), origine: "manuale",
             }]
           : vecchia.filter((p) => p.ticker !== ticker),
       );

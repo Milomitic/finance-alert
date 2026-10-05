@@ -10,7 +10,7 @@ from loguru import logger
 
 from app.core import db as db_module
 from app.core.errors import UpstreamError
-from app.services import etoro_client, notifier_service
+from app.services import etoro_client, etoro_watchlist_service, notifier_service
 from app.services import etoro_portafoglio_service as svc
 
 _detto_spento = False
@@ -35,6 +35,26 @@ def run_sincronizza_etoro() -> None:
             r = notifier_service.notify_etoro_chiuse(chiuse)
             if r.sent or r.reason == "telegram_disabled":
                 svc.segna_notificate(db, [p.position_id for p, _, _ in chiuse])
+    _riepilogo(esito)
+
+
+def run_sincronizza_watchlist_etoro() -> None:
+    """Ogni ora, le watchlist eToro -> preferiti (FA-125)."""
+    if not etoro_client.configurato():
+        return
+    with db_module.SessionLocal() as db:
+        try:
+            e = etoro_watchlist_service.sincronizza_watchlist(db)
+        except UpstreamError as err:
+            logger.warning(f"[etoro] watchlist non lette: {err}")
+            return
+    logger.info(
+        f"[etoro] watchlist: {e.watchlist} lette, {e.strumenti} strumenti, {e.abbinati} nel catalogo, "
+        f"+{e.aggiunti} -{e.tolti} preferiti, completa={'si' if e.completa else 'no'}"
+    )
+
+
+def _riepilogo(esito) -> None:
     logger.info(
         f"[etoro] {esito.aperte} aperte ({esito.nuove} nuove), {len(esito.chiuse)} chiuse, "
         f"{esito.da_confermare} strumenti da confermare, conto={'si' if esito.conto_aggiornato else 'no'}"

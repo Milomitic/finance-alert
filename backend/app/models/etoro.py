@@ -45,6 +45,8 @@ class EtoroStrumento(Base):
     )
     #: "automatico" | "manuale" | "da_confermare" | "assente"
     abbinamento: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: In almeno una watchlist eToro inclusa, all'ultima lettura (FA-125).
+    in_watchlist: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0", default=False)
     aggiornato_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

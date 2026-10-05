@@ -78,17 +78,22 @@ function Riga({ s }: { s: EtoroStrumento }) {
 
 /** `lista` arriva gia' filtrata dal server (`da_decidere`), nella stessa
  *  risposta del portafoglio. */
-export function EtoroDaAbbinare({ lista }: { lista: readonly EtoroStrumento[] }) {
+export function EtoroDaAbbinare({
+  lista,
+  titolo = "Da abbinare al catalogo",
+  spiegazione = "Non si sono abbinati da soli: il simbolo non c'è nel catalogo, oppure c'è ma il nome non coincide. Finché non decidi, la posizione non conta fra i tuoi titoli.",
+}: {
+  lista: readonly EtoroStrumento[];
+  titolo?: string;
+  spiegazione?: string;
+}) {
   if (lista.length === 0) return null;
   return (
     <div className="rounded-md border border-amber-300/60 bg-amber-50/40 px-3 py-2 dark:border-amber-800/50 dark:bg-amber-950/20">
       <div className="text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        Da abbinare al catalogo
+        {titolo}
       </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Non si sono abbinati da soli: il simbolo non c'è nel catalogo, oppure c'è ma il nome non coincide.
-        Finché non decidi, la posizione non conta fra i tuoi titoli.
-      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{spiegazione}</p>
       <ul className="divide-y divide-border/40">
         {lista.map((s) => <Riga key={s.instrument_id} s={s} />)}
       </ul>

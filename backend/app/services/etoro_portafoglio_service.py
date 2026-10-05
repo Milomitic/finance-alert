@@ -179,8 +179,13 @@ def abbina(db: Session, simbolo: str | None, nome: str | None) -> tuple[int | No
     return None, (compatibili or [righe[0][0]])[0], DA_CONFERMARE
 
 
-def _aggiorna_strumenti(db: Session, ids: set[int], adesso: datetime) -> tuple[int, int]:
-    """Anagrafica e abbinamento degli strumenti in portafoglio. Rende (nuovi, da_confermare)."""
+#: L'endpoint degli strumenti rende al massimo 100 risultati per pagina: si
+#: chiede a lotti di 100 id, e le watchlist ne portano centinaia (FA-125).
+_LOTTO_STRUMENTI = 100
+
+
+def aggiorna_strumenti(db: Session, ids: set[int], adesso: datetime) -> int:
+    """Anagrafica e abbinamento degli strumenti dati. Rende quanti sono nuovi."""
     noti = {s.instrument_id: s for s in db.execute(
         select(EtoroStrumento).where(EtoroStrumento.instrument_id.in_(ids))
     ).scalars()}
@@ -188,10 +193,11 @@ def _aggiorna_strumenti(db: Session, ids: set[int], adesso: datetime) -> tuple[i
         i for i in ids if i not in noti or adesso - _aware(noti[i].aggiornato_il) > _ANAGRAFICA_VECCHIA
     )
     anagrafica: dict[int, dict] = {}
-    if da_leggere:
+    for i in range(0, len(da_leggere), _LOTTO_STRUMENTI):
+        lotto = da_leggere[i:i + _LOTTO_STRUMENTI]
         dati = etoro_client.get(
             _STRUMENTI, op="strumenti",
-            params={"instrumentsIds": ",".join(str(i) for i in da_leggere), "pageSize": 100},
+            params={"instrumentsIds": ",".join(str(x) for x in lotto), "pageSize": _LOTTO_STRUMENTI},
         )
         for r in (dati.get("results") if isinstance(dati, dict) else None) or []:
             if isinstance(r, dict) and isinstance(r.get("instrumentId"), int):
@@ -213,10 +219,7 @@ def _aggiorna_strumenti(db: Session, ids: set[int], adesso: datetime) -> tuple[i
         if s.abbinamento != MANUALE:
             s.stock_id, s.candidato_stock_id, s.abbinamento = abbina(db, s.simbolo, s.nome)
     db.flush()
-    da_confermare = db.execute(
-        select(func.count()).select_from(EtoroStrumento).where(EtoroStrumento.abbinamento == DA_CONFERMARE)
-    ).scalar_one()
-    return nuovi, da_confermare
+    return nuovi
 
 
 def _aware(d: datetime) -> datetime:
@@ -372,7 +375,7 @@ def sincronizza(db: Session, *, adesso: datetime | None = None) -> Esito:
     esito = Esito()
     ids = {int(p["instrumentID"]) for p in posizioni if isinstance(p.get("instrumentID"), int)}
     if ids:
-        esito.strumenti_nuovi, esito.da_confermare = _aggiorna_strumenti(db, ids, adesso)
+        esito.strumenti_nuovi = aggiorna_strumenti(db, ids, adesso)
 
     viste: set[int] = set()
     for p in posizioni:
@@ -391,6 +394,7 @@ def sincronizza(db: Session, *, adesso: datetime | None = None) -> Esito:
     esito.chiuse = _registra_chiusure(db, viste, adesso)
     cp = dati.get("clientPortfolio") or {}
     esito.conto_aggiornato = _aggiorna_conto(db, _num(cp.get("credit")), adesso)
+    esito.da_confermare = len(da_decidere(db))
     db.commit()
     return esito
 
@@ -452,17 +456,37 @@ def segna_notificate(db: Session, position_ids: list[int]) -> None:
 AZIONARI = frozenset({"Stocks", "ETF"})
 
 
+def _in_posizione():
+    return select(EtoroPosizione.instrument_id).where(EtoroPosizione.chiusa_il.is_(None))
+
+
 def da_decidere(db: Session) -> list[EtoroStrumento]:
-    """Gli strumenti che aspettano l'utente: prima i candidati incerti, poi gli
-    azionari senza corrispondenza. Proprietario unico della regola: il client
-    la riceve gia' applicata, nella stessa risposta del portafoglio."""
+    """Gli strumenti IN POSIZIONE che aspettano l'utente: prima i candidati
+    incerti, poi gli azionari senza corrispondenza. Proprietario unico della
+    regola: il client la riceve gia' applicata, nella stessa risposta del
+    portafoglio. Solo le posizioni aperte: le watchlist portano 173 titoli
+    fuori catalogo (2026-10-06), che qui sarebbero una lista illeggibile."""
     righe = db.execute(
         select(EtoroStrumento).where(
+            EtoroStrumento.instrument_id.in_(_in_posizione()),
             (EtoroStrumento.abbinamento == DA_CONFERMARE)
-            | ((EtoroStrumento.abbinamento == ASSENTE) & EtoroStrumento.tipo.in_(AZIONARI))
+            | ((EtoroStrumento.abbinamento == ASSENTE) & EtoroStrumento.tipo.in_(AZIONARI)),
         )
     ).scalars().all()
     return sorted(righe, key=lambda s: (s.abbinamento != DA_CONFERMARE, s.simbolo or ""))
+
+
+def watchlist_da_confermare(db: Session) -> list[EtoroStrumento]:
+    """Dalle watchlist, i candidati incerti (simbolo nel catalogo, nome
+    diverso): pochi e decidibili a colpo d'occhio, a differenza degli assenti."""
+    righe = db.execute(
+        select(EtoroStrumento).where(
+            EtoroStrumento.in_watchlist.is_(True),
+            EtoroStrumento.abbinamento == DA_CONFERMARE,
+            EtoroStrumento.instrument_id.notin_(_in_posizione()),
+        )
+    ).scalars().all()
+    return sorted(righe, key=lambda s: s.simbolo or "")
 
 
 def conferma_abbinamento(db: Session, instrument_id: int, ticker: str | None) -> EtoroStrumento:

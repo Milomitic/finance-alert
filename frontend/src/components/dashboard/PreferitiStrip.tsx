@@ -21,6 +21,10 @@ import { cn } from "@/lib/utils";
  */
 
 const RECENTI_IN_STRISCIA = 5;
+/** Con le watchlist eToro i preferiti sono centinaia (FA-125): la striscia ne
+ *  mostra i primi, e solo per questi chiede le quotazioni. Il server li
+ *  ordina con le stelle manuali prima. */
+const PREFERITI_IN_STRISCIA = 20;
 
 function Variazione({ pct }: { pct: number | null | undefined }) {
   if (pct == null || !Number.isFinite(pct)) return null;
@@ -47,7 +51,9 @@ export function PreferitiStrip() {
   // Letti al montaggio: la pagina titolo li aggiorna, e tornando qui la home
   // si rimonta.
   const [recenti] = useState(leggiRecenti);
-  const preferiti = lista.data ?? [];
+  const tutti = lista.data ?? [];
+  const preferiti = tutti.slice(0, PREFERITI_IN_STRISCIA);
+  const altri = tutti.length - preferiti.length;
   const tickers = preferiti.map((p) => p.ticker);
   const quotes = useLiveQuotes(tickers, tickers.length > 0);
   const perTicker = new Map<string, LiveQuote>(
@@ -58,7 +64,7 @@ export function PreferitiStrip() {
   // preferiti. Trovato dal test, non a occhio.
   const listaArrivata = lista.data !== undefined || lista.isError;
   const altriRecenti = listaArrivata
-    ? recenti.filter((t) => !tickers.includes(t)).slice(0, RECENTI_IN_STRISCIA)
+    ? recenti.filter((t) => !tutti.some((p) => p.ticker === t)).slice(0, RECENTI_IN_STRISCIA)
     : [];
 
   return (
@@ -91,6 +97,9 @@ export function PreferitiStrip() {
             </Link>
           );
         })
+      )}
+      {altri > 0 && (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">e altri {altri}</span>
       )}
       {altriRecenti.length > 0 && (
         <>

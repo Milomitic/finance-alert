@@ -17,7 +17,8 @@ from app.api.deps import get_current_user, get_db, require_json
 from app.core.errors import UpstreamError
 from app.models import Position, Stock, User
 from app.models.etoro import EtoroConto, EtoroPosizione, EtoroStrumento
-from app.services import etoro_client
+from app.models.preferito import Preferito
+from app.services import etoro_client, etoro_watchlist_service, preferiti_service
 from app.services import etoro_portafoglio_service as svc
 
 router = APIRouter(prefix="/api/etoro", tags=["etoro"])
@@ -89,6 +90,12 @@ class EtoroPortafoglioOut(BaseModel):
     #: Gli abbinamenti che aspettano l'utente, NELLA STESSA risposta: una
     #: seconda chiamata comparirebbe dopo e sposterebbe la pagina (FA-106).
     da_decidere: list[EtoroStrumentoOut]
+    # ── Le watchlist (FA-125) ──
+    preferiti_da_etoro: int
+    #: Strumenti delle watchlist senza un titolo nel catalogo (crypto, materie
+    #: prime, titoli non coperti): si contano, non si elencano.
+    watchlist_fuori_catalogo: int
+    watchlist_da_confermare: list[EtoroStrumentoOut]
 
 
 class EtoroAbbinamentoIn(BaseModel):
@@ -104,6 +111,8 @@ class EtoroSincronizzazioneOut(BaseModel):
     strumenti_nuovi: int
     da_confermare: int
     conto_aggiornato: bool
+    preferiti_aggiunti: int
+    preferiti_tolti: int
 
 
 def _aware(d: datetime | None) -> datetime | None:
@@ -168,6 +177,15 @@ def portafoglio(
             guadagno_giorno=conto.guadagno_giorno, guadagno_giorno_pct=conto.guadagno_giorno_pct,
         ) if conto else None,
         aperte=aperte, chiuse=chiuse, da_decidere=[_strumento(db, s) for s in svc.da_decidere(db)],
+        preferiti_da_etoro=len(db.execute(
+            select(Preferito.stock_id).where(Preferito.origine == preferiti_service.ETORO)
+        ).all()),
+        watchlist_fuori_catalogo=len(db.execute(
+            select(EtoroStrumento.instrument_id).where(
+                EtoroStrumento.in_watchlist.is_(True), EtoroStrumento.abbinamento == svc.ASSENTE
+            )
+        ).all()),
+        watchlist_da_confermare=[_strumento(db, s) for s in svc.watchlist_da_confermare(db)],
     )
 
 
@@ -198,6 +216,7 @@ def abbina(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    etoro_watchlist_service.preferito_da_conferma(db, s)
     return _strumento(db, s)
 
 
@@ -207,13 +226,16 @@ def sincronizza(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> EtoroSincronizzazioneOut:
-    """Una sincronizzazione subito. Un errore di eToro diventa 502 col motivo."""
+    """Una sincronizzazione subito, portafoglio e watchlist. Un errore di
+    eToro diventa 502 col motivo."""
     try:
         e = svc.sincronizza(db)
+        w = etoro_watchlist_service.sincronizza_watchlist(db)
     except UpstreamError as err:
         raise HTTPException(status_code=502, detail=f"eToro: {err}") from err
     return EtoroSincronizzazioneOut(
         saltata=e.saltata, aperte=e.aperte, nuove=e.nuove, chiuse=len(e.chiuse),
         strumenti_nuovi=e.strumenti_nuovi, da_confermare=e.da_confermare,
         conto_aggiornato=e.conto_aggiornato,
+        preferiti_aggiunti=w.aggiunti, preferiti_tolti=w.tolti,
     )

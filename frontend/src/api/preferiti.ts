@@ -9,6 +9,8 @@ export type Preferito = {
   currency: string | null;
   instrument_type: string | null;
   aggiunto_il: string;
+  /** "etoro" se e' arrivato da una watchlist eToro (FA-125). */
+  origine: "manuale" | "etoro";
 };
 
 export const preferitiApi = {

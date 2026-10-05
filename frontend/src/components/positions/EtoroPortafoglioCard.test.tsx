@@ -50,6 +50,7 @@ beforeEach(() => {
   sincronizza.mockReset();
   portafoglio = {
     configurato: true, conto: CONTO, da_decidere: [], chiuse: [],
+    preferiti_da_etoro: 0, watchlist_fuori_catalogo: 0, watchlist_da_confermare: [],
     aperte: [
       pos({ position_id: 1, instrument_id: 3226, margine_usd: 270, esposizione_usd: 1450, pnl_usd: 100 }),
       pos({ position_id: 2, instrument_id: 3226, margine_usd: 354, esposizione_usd: 2054, pnl_usd: 284, stop: null, stop_pct_margine: null }),
@@ -60,7 +61,10 @@ beforeEach(() => {
 
 describe("EtoroPortafoglioCard", () => {
   it("senza chiavi dice dove generarle, senza mostrare numeri", () => {
-    portafoglio = { configurato: false, conto: null, aperte: [], chiuse: [], da_decidere: [] };
+    portafoglio = {
+      configurato: false, conto: null, aperte: [], chiuse: [], da_decidere: [],
+      preferiti_da_etoro: 0, watchlist_fuori_catalogo: 0, watchlist_da_confermare: [],
+    };
     monta();
     expect(screen.getByText(/API Key Management/)).toBeTruthy();
     expect(screen.queryByText("Valore del conto")).toBeNull();
@@ -127,6 +131,23 @@ describe("EtoroPortafoglioCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mostra le posizioni su SOXL" }));
     const v = await axeViolations(container);
     expect(v, describeViolations(v)).toHaveLength(0);
+  });
+});
+
+describe("le watchlist (FA-125)", () => {
+  it("dice quanti preferiti vengono dalle watchlist e quanti strumenti sono fuori catalogo", () => {
+    portafoglio.preferiti_da_etoro = 225;
+    portafoglio.watchlist_fuori_catalogo = 173;
+    monta();
+    expect(screen.getByText(/Dalle tue watchlist eToro/).textContent).toMatch(/225 preferiti · 173 strumenti non sono nel catalogo/);
+  });
+
+  it("gli incerti delle watchlist hanno il loro riquadro", () => {
+    portafoglio.watchlist_da_confermare = [{ ...RR, instrument_id: 1600, simbolo: "GE", candidato_ticker: "GE", candidato_nome: "GE Aerospace" }];
+    monta();
+    expect(screen.getByText("Dalle watchlist, da confermare")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /È GE/ }));
+    expect(abbina).toHaveBeenLastCalledWith({ instrumentId: 1600, ticker: "GE" });
   });
 });
 

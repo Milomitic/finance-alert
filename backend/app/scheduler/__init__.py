@@ -30,7 +30,10 @@ from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
-from app.scheduler.jobs.sincronizza_etoro import run_sincronizza_etoro
+from app.scheduler.jobs.sincronizza_etoro import (
+    run_sincronizza_etoro,
+    run_sincronizza_watchlist_etoro,
+)
 from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
 
 _scheduler: BackgroundScheduler | None = None
@@ -228,6 +231,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_sincronizza_etoro,
             trigger=IntervalTrigger(minutes=10),
             id="sincronizza_etoro",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Le watchlist eToro -> preferiti (FA-125), ogni ora: cambiano di rado,
+        # e una lettura porta tutte le watchlist in una chiamata.
+        _scheduler.add_job(
+            run_sincronizza_watchlist_etoro,
+            trigger=IntervalTrigger(hours=1),
+            id="sincronizza_watchlist_etoro",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

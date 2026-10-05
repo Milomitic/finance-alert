@@ -52,7 +52,7 @@ def test_la_lista_resta_nell_ordine_d_aggiunta(db: Session, titoli) -> None:
     for i, t in enumerate(["ENI.MI", "AAPL", "0700.HK"]):
         db.add(Preferito(stock_id=titoli[t].id, aggiunto_il=base + timedelta(hours=i)))
     db.commit()
-    assert [s.ticker for s, _ in pref.elenco(db)] == ["ENI.MI", "AAPL", "0700.HK"]
+    assert [s.ticker for s, _, _ in pref.elenco(db)] == ["ENI.MI", "AAPL", "0700.HK"]
     assert pref.stock_ids(db) == {s.id for s in titoli.values()}
 
 

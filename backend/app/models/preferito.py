@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -31,5 +31,25 @@ class Preferito(Base):
         Integer, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True
     )
     aggiunto_il: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    #: "manuale" (la stella) | "etoro" (una watchlist eToro, FA-125). La
+    #: sincronizzazione aggiunge e toglie SOLO i secondi.
+    origine: Mapped[str] = mapped_column(String(8), nullable=False, server_default="manuale", default="manuale")
+
+
+class PreferitoEscluso(Base):
+    """Un preferito nato da eToro a cui l'utente ha tolto la stella (FA-125).
+
+    Senza, la sincronizzazione successiva lo rimetterebbe: il titolo e' ancora
+    nella watchlist. Rimettere la stella a mano toglie l'esclusione e fa del
+    preferito uno manuale."""
+
+    __tablename__ = "preferiti_esclusi"
+
+    stock_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True
+    )
+    escluso_il: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

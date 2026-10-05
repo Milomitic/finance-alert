@@ -40,7 +40,7 @@ function preferito(ticker: string): Preferito {
   return {
     stock_id: 1, ticker, name: ticker, exchange: "X",
     currency: ticker.endsWith(".MI") ? "EUR" : "USD", instrument_type: "equity",
-    aggiunto_il: "2026-09-28T10:00:00Z",
+    aggiunto_il: "2026-09-28T10:00:00Z", origine: "manuale",
   };
 }
 
@@ -116,5 +116,14 @@ describe("la striscia della home", () => {
     expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual([
       expect.stringContaining("ENI.MI"), "NVDA",
     ]);
+  });
+
+  it("con centinaia di preferiti dalle watchlist ne mostra venti e dice quanti restano", async () => {
+    stato.lista = Array.from({ length: 225 }, (_, i) => preferito(`T${i}`));
+    // Un recente che e' fra i preferiti NON mostrati non si ripete fra i recenti.
+    aggiungiRecente("T200");
+    monta(<PreferitiStrip />);
+    expect(await screen.findByText("e altri 205")).toBeTruthy();
+    expect(screen.getAllByRole("link")).toHaveLength(20);
   });
 });

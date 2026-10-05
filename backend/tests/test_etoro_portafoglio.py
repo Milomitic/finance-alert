@@ -49,6 +49,7 @@ class FintoEtoro:
             "accountTotalValue": 5230.5, "accountCurrentPnl": 25.0,
             "dailyGainAccountCurrency": 12.5, "dailyGainAccountCurrencyPercent": 0.24,
         }
+        self.watchlist: dict | None = {"watchlists": []}
         self.pnl_rotto = False
         self.aggregato_rotto = False
         self.chiamate: list[tuple[str, dict | None]] = []
@@ -70,6 +71,8 @@ class FintoEtoro:
             if self.aggregato_rotto:
                 raise UpstreamUnavailable("giu'", source="etoro", op="portafoglio")
             return {"accountCurrency": "USD", "accountTotals": self.totali}
+        if percorso == "/api/v1/watchlists":
+            return self.watchlist
         raise AssertionError(percorso)
 
     def percorsi(self) -> list[str]:
@@ -319,6 +322,11 @@ def test_da_decidere_solo_cio_che_chiede_una_decisione(db: Session, etoro: Finto
     svc.sincronizza(db, adesso=ADESSO)
     # Prima l'incerto, poi l'azionario assente; crypto e abbinati no.
     assert [s.instrument_id for s in svc.da_decidere(db)] == [2002, 6006]
+    # Una posizione chiusa non chiede piu' niente.
+    etoro.posizioni = [p for p in etoro.posizioni if p["instrumentID"] != 6006]
+    etoro.storico = [{"positionId": 1, "closeRate": 1.0, "closeTimestamp": "2026-10-05T13:00:00Z", "netProfit": 0.0}]
+    svc.sincronizza(db, adesso=ADESSO + timedelta(minutes=10))
+    assert [s.instrument_id for s in svc.da_decidere(db)] == [2002]
 
 
 @pytest.mark.parametrize("a,b,atteso", [

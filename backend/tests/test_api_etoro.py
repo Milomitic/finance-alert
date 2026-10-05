@@ -59,7 +59,10 @@ def portafoglio(db: Session, etoro: FintoEtoro):
 def test_senza_chiavi_il_portafoglio_dice_non_configurato(client: TestClient, monkeypatch) -> None:
     monkeypatch.setattr(settings, "etoro_api_key", "")
     body = client.get("/api/etoro/portafoglio").json()
-    assert body == {"configurato": False, "conto": None, "aperte": [], "chiuse": [], "da_decidere": []}
+    assert body == {
+        "configurato": False, "conto": None, "aperte": [], "chiuse": [], "da_decidere": [],
+        "preferiti_da_etoro": 0, "watchlist_fuori_catalogo": 0, "watchlist_da_confermare": [],
+    }
 
 
 def test_il_portafoglio_porta_i_numeri_a_leva(client: TestClient, portafoglio) -> None:

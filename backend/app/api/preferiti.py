@@ -22,13 +22,15 @@ class PreferitoOut(BaseModel):
     currency: str | None = None
     instrument_type: str | None = None
     aggiunto_il: datetime
+    #: "manuale" | "etoro" (da una watchlist eToro, FA-125).
+    origine: str = "manuale"
 
 
-def _out(stock: Stock, aggiunto_il: datetime) -> PreferitoOut:
+def _out(stock: Stock, aggiunto_il: datetime, origine: str) -> PreferitoOut:
     return PreferitoOut(
         stock_id=stock.id, ticker=stock.ticker, name=stock.name, exchange=stock.exchange,
         currency=stock.currency, instrument_type=stock.instrument_type,
-        aggiunto_il=aggiunto_il,
+        aggiunto_il=aggiunto_il, origine=origine,
     )
 
 
@@ -36,7 +38,7 @@ def _out(stock: Stock, aggiunto_il: datetime) -> PreferitoOut:
 def elenco(
     db: Session = Depends(get_db), _user: User = Depends(get_current_user)
 ) -> list[PreferitoOut]:
-    return [_out(s, a) for s, a in preferiti_service.elenco(db)]
+    return [_out(s, a, o) for s, a, o in preferiti_service.elenco(db)]
 
 
 @router.put("/{ticker}", response_model=PreferitoOut, dependencies=[Depends(require_json)])

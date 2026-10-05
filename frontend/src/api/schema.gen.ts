@@ -466,6 +466,9 @@ export interface EtoroPortafoglioOut {
   aperte: EtoroPosizioneOut[];
   chiuse: EtoroPosizioneOut[];
   da_decidere: EtoroStrumentoOut[];
+  preferiti_da_etoro: number;
+  watchlist_fuori_catalogo: number;
+  watchlist_da_confermare: EtoroStrumentoOut[];
 }
 
 export interface EtoroPosizioneOut {
@@ -508,6 +511,8 @@ export interface EtoroSincronizzazioneOut {
   strumenti_nuovi: number;
   da_confermare: number;
   conto_aggiornato: boolean;
+  preferiti_aggiunti: number;
+  preferiti_tolti: number;
 }
 
 export interface EtoroStrumentoOut {
@@ -1280,6 +1285,7 @@ export interface PreferitoOut {
   currency?: string | null;
   instrument_type?: string | null;
   aggiunto_il: string;
+  origine?: string;
 }
 
 export interface PremarketMoverOut {
