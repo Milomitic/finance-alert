@@ -31,6 +31,7 @@ from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.scheduler.jobs.sincronizza_etoro import (
+    run_aggiorna_catalogo_etoro,
     run_recupera_storico_etoro,
     run_sincronizza_etoro,
     run_sincronizza_watchlist_etoro,
@@ -252,6 +253,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_recupera_storico_etoro,
             trigger=_cron(hour=0, minute=50),
             id="recupera_storico_etoro",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Quali titoli si negoziano su eToro (FA-126): la domenica mattina, a
+        # mercati chiusi; una ventina di chiamate per il catalogo intero.
+        _scheduler.add_job(
+            run_aggiorna_catalogo_etoro,
+            trigger=_cron(day_of_week="sun", hour=6, minute=30),
+            id="aggiorna_catalogo_etoro",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

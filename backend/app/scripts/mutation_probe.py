@@ -273,6 +273,12 @@ BERSAGLI: dict[str, list[str]] = {
 #: all'elenco: il prezzo e' qualche secondo di sonda, quello opposto una
 #: notturna rossa su codice che nessuno ha toccato.
 ESCLUSI_DAI_BERSAGLI: dict[str, dict[str, str]] = {
+    "app/services/fx_service.py": {
+        "tests/test_etoro_catalogo.py":
+            "Importa `fx_service` SOLO come bersaglio di `monkeypatch.setattr`: "
+            "sostituisce `to_usd` per fissare il cambio EUR del preventivo eToro "
+            "(FA-126), quindi non esegue una riga del modulo.",
+    },
     "app/services/setup_service.py": {
         "tests/test_seed_e2e_valutazione.py":
             "Importa `setup_service` SOLO come bersaglio di `monkeypatch.setattr`: "

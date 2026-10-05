@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   abbinaEtoroStrumento,
   fetchEtoroAndamento,
+  fetchEtoroCosti,
+  fetchEtoroDiario,
+  fetchEtoroDisponibile,
   fetchEtoroPortafoglio,
   fetchEtoroVivo,
   sincronizzaEtoro,
@@ -42,6 +45,38 @@ export function useEtoroAndamento(enabled = true) {
     staleTime: 60_000,
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
+    enabled,
+  });
+}
+
+/** Il titolo si negozia su eToro? (FA-126) Cambia una volta a settimana. */
+export function useEtoroDisponibile(ticker: string | undefined) {
+  return useQuery({
+    queryKey: ["etoro", "disponibile", ticker],
+    queryFn: ({ signal }) => fetchEtoroDisponibile(ticker!, signal),
+    enabled: !!ticker,
+    staleTime: 6 * 3_600_000,
+  });
+}
+
+/** Il preventivo dei costi di un piano: il server lo tiene un'ora. */
+export function useEtoroCosti(
+  p: { ticker: string; lato: "long" | "short"; leva: number; importo: number; stop: number } | null,
+) {
+  return useQuery({
+    queryKey: ["etoro", "costi", p],
+    queryFn: ({ signal }) => fetchEtoroCosti(p!, signal),
+    enabled: p != null && p.importo > 0 && p.stop > 0,
+    staleTime: 30 * 60_000,
+  });
+}
+
+/** Il diario delle operazioni chiuse (FA-128): cambia a ogni chiusura. */
+export function useEtoroDiario(enabled = true) {
+  return useQuery({
+    queryKey: ["etoro", "diario"],
+    queryFn: ({ signal }) => fetchEtoroDiario(signal),
+    staleTime: 5 * 60_000,
     enabled,
   });
 }

@@ -49,6 +49,7 @@ from app.schemas.stock_detail import (
 )
 from app.services import (
     etf_holdings_service,
+    etoro_catalogo_service,
     fetch_cache_store,
     live_quote_service,
     news_analyst_extractor,
@@ -439,6 +440,7 @@ def get_stock_detail(
         # resa una.
         stock=_con_appartenenze(db, StockOut.model_validate(detail.stock), detail.stock),
         exchange_tz=live_quote_service.exchange_timezone(ticker),
+        su_etoro=etoro_catalogo_service.del_titolo(db, detail.stock.ticker) is not None,
         ohlcv=[
             OhlcvBarOut(
                 date=b.date, open=float(b.open), high=float(b.high),

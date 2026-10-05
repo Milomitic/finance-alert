@@ -262,7 +262,7 @@ export function AlertFilters({ value, onChange }: Props) {
     (value.nature ? 1 : 0) +
     (value.outcome ? 1 : 0) +
     (value.horizon ? 1 : 0) +
-    (value.solo_rilevanti ? 1 : 0) +
+    (value.solo_rilevanti || value.solo_etoro ? 1 : 0) +
     (value.date_from || value.date_to ? 1 : 0);
 
   // Nine controls in a grid cost an entire phone screen before the first
@@ -332,18 +332,24 @@ export function AlertFilters({ value, onChange }: Props) {
           ))}
         </SelectField>
 
-        {/* Titoli — tutti, o solo quelli in posizione e fra i preferiti
-            (FA-113). */}
+        {/* Titoli — tutti, solo quelli in posizione e fra i preferiti
+            (FA-113), o solo quelli negoziabili su eToro (FA-126). Una scelta
+            sola: i tuoi titoli sono quasi tutti su eToro per costruzione. */}
         <SelectField
           labelClassName={ETICHETTA}
           label="Titoli"
-          value={value.solo_rilevanti ? "miei" : "tutti"}
+          value={value.solo_rilevanti ? "miei" : value.solo_etoro ? "etoro" : "tutti"}
           onValueChange={(v) =>
-            onChange({ ...value, solo_rilevanti: v === "miei" || undefined })
+            onChange({
+              ...value,
+              solo_rilevanti: v === "miei" || undefined,
+              solo_etoro: v === "etoro" || undefined,
+            })
           }
         >
           <SelectItem value="tutti">Tutti</SelectItem>
           <SelectItem value="miei">Posizioni e preferiti</SelectItem>
+          <SelectItem value="etoro">Negoziabili su eToro</SelectItem>
         </SelectField>
 
         {/* Tipo segnale — maps to rule_kind. "tutti" sentinel clears the filter. */}

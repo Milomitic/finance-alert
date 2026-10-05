@@ -27,6 +27,9 @@ interface Props {
    *  con un prezzo in cima. Chi compone la pagina decide, e sotto il Full HD
    *  non passa nulla — a quelle larghezze il profilo ha una riga sua. */
   sotto?: React.ReactNode;
+  /** Negoziabile su eToro (FA-126): arriva col dettaglio, quindi l'etichetta
+   *  c'e' dal primo disegno e non manda a capo la riga dopo. */
+  suEtoro?: boolean;
 }
 
 /**
@@ -88,7 +91,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
   );
 }
 
-export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
+export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
   const flag = getStockFlagCode(stock.country, stock.ticker);
 
   // Live quote — polls every 15s. Falls back to the kpis snapshot (last
@@ -206,6 +209,14 @@ export function StockHeader({ stock, kpis, ohlcv, sotto }: Props) {
                   Le due formulazioni sono vincolate da test separati — sembrano
                   la stessa chip e affermano cose diverse. */}
               <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
+              {suEtoro && (
+                <span
+                  className="inline-flex items-center rounded-md border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                  title="Questo titolo si negozia su eToro"
+                >
+                  Su eToro
+                </span>
+              )}
               {/* I FONDI non stanno piu' qui: hanno una fascia propria sotto,
                   in evidenza. Alla stessa taglia di borsa e settore si
                   leggevano come un'etichetta in piu'. */}

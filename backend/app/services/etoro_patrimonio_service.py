@@ -110,6 +110,7 @@ def recupera(db: Session, *, adesso: datetime | None = None) -> tuple[int, int]:
         db.merge(riga)
         giorni += 1
     operazioni = 0
+    strumenti: set[int] = set()
     for pagina in range(1, _PAGINE_OPERAZIONI + 1):
         righe = etoro_client.get(_STORICO_OPERAZIONI, op="storico", params={
             "minDate": dal.isoformat(), "page": pagina, "pageSize": _RIGHE_PAGINA,
@@ -118,8 +119,16 @@ def recupera(db: Session, *, adesso: datetime | None = None) -> tuple[int, int]:
         for r in righe:
             if salva_operazione(db, r):
                 operazioni += 1
+                if isinstance(r.get("instrumentId"), int):
+                    strumenti.add(r["instrumentId"])
         if len(righe) < _RIGHE_PAGINA:
             break
+    if strumenti:
+        # L'anagrafica degli strumenti chiusi, per legarli al catalogo e ai
+        # segnali nel diario (FA-128): molti non sono piu' in portafoglio.
+        from app.services.etoro_portafoglio_service import aggiorna_strumenti
+
+        aggiorna_strumenti(db, strumenti, adesso)
     db.commit()
     return giorni, operazioni
 

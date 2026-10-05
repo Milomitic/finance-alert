@@ -25,6 +25,7 @@ import { AlertSetupOrigin } from "@/components/alert/AlertSetupOrigin";
 import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { PlanOutcomeBlock } from "@/components/alert/PlanOutcomeBlock";
+import { CostiEtoroPiano } from "@/components/CostiEtoroPiano";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -742,6 +743,12 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
               {pb ? (
                 <>
                   <PlaybookView playbook={pb} currency={alert.currency ?? null} />
+                  {/* Quanto costa davvero su eToro, con la leva del conto (FA-126). */}
+                  {alert.ticker && (
+                    <div className="mt-2">
+                      <CostiEtoroPiano ticker={alert.ticker} playbook={pb} />
+                    </div>
+                  )}
                   {/* B3-6: persiste entry/stop/target del piano come
                       posizione tracciata (P&L live + chiusura automatica
                       su stop/target). Prefill dal playbook + alert_id. */}

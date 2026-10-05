@@ -394,6 +394,7 @@ export default function StockDetailPage() {
         <StockHeader
           stock={d.stock}
           kpis={d.kpis}
+          suEtoro={d.su_etoro}
           ohlcv={mergedOhlcv}
           sotto={
             oltreFhd ? (

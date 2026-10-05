@@ -28,6 +28,7 @@ import {
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { EtoroPortafoglioCard } from "@/components/positions/EtoroPortafoglioCard";
+import { DiarioEtoroCard } from "@/components/positions/DiarioEtoroCard";
 import { useEtoroPortafoglio } from "@/hooks/useEtoro";
 
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
@@ -430,6 +431,10 @@ export default function PositionsPage() {
           </Card>
         </>
       )}
+
+      {/* Il diario delle chiuse (FA-128). In fondo: arriva con una chiamata sua,
+          e da qui non sposta niente quando arriva. */}
+      {!inAttesa && etoroQ.data?.configurato && <DiarioEtoroCard onApriSegnale={setSignalId} />}
 
       {/* Lo stesso dialogo della pagina Segnali, con dentro `TrackTradeForm`:
           il componente da cui questa posizione e nata. */}

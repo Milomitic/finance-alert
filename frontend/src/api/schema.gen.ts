@@ -457,6 +457,14 @@ export interface EtoroAndamentoOut {
   periodi: EtoroPeriodoOut[];
 }
 
+export interface EtoroAnnoOut {
+  anno: number;
+  n: number;
+  profitto_usd: number;
+  profitto_eur: number | null;
+  commissioni_usd: number;
+}
+
 export interface EtoroContoOut {
   aggiornato_il: string;
   valuta: string | null;
@@ -467,11 +475,71 @@ export interface EtoroContoOut {
   guadagno_giorno_pct: number | null;
 }
 
+export interface EtoroCostiOut {
+  configurato: boolean;
+  disponibile: boolean;
+  simbolo: string | null;
+  voci: EtoroVoceCostoOut[];
+  apertura_usd: number | null;
+  notte_usd: number | null;
+  weekend_usd: number | null;
+  aggiornato_il: string | null;
+}
+
+export interface EtoroDiarioOut {
+  operazioni: EtoroOperazioneOut[];
+  tutte: EtoroGruppoOut | null;
+  precedute: EtoroGruppoOut | null;
+  non_precedute: EtoroGruppoOut | null;
+  r_reale_medio: number | null;
+  r_piano_medio: number | null;
+  con_r: number;
+  anni: EtoroAnnoOut[];
+}
+
+export interface EtoroDisponibileOut {
+  disponibile: boolean;
+  simbolo: string | null;
+  tipo: string | null;
+}
+
 export interface EtoroGiornoOut {
   giorno: string;
   valore: number;
   pnl_aperto: number | null;
   fonte: string;
+}
+
+export interface EtoroGruppoOut {
+  n: number;
+  vincenti: number;
+  profitto_usd: number;
+  vincenti_pct: number | null;
+  profitto_medio_usd: number | null;
+}
+
+export interface EtoroOperazioneOut {
+  position_id: number;
+  instrument_id: number;
+  ticker: string | null;
+  simbolo: string | null;
+  aperta_il: string | null;
+  chiusa_il: string;
+  lato: string;
+  leva: number;
+  prezzo_apertura: number | null;
+  prezzo_chiusura: number | null;
+  investimento_usd: number | null;
+  profitto_netto_usd: number;
+  commissioni_usd: number | null;
+  pct_investimento: number | null;
+  giorni: number | null;
+  alert_id: number | null;
+  detector: string | null;
+  segnale_il: string | null;
+  r_reale: number | null;
+  r_piano: number | null;
+  esito_piano: string | null;
 }
 
 export interface EtoroPeriodoOut {
@@ -584,6 +652,13 @@ export interface EtoroVivoOut {
   leva_effettiva: number | null;
   posizioni: number;
   strumenti: EtoroStrumentoOggiOut[];
+}
+
+export interface EtoroVoceCostoOut {
+  tipo: string;
+  importo: number;
+  valuta: string;
+  importo_usd: number | null;
 }
 
 export interface FilterOptionsOut {
@@ -1691,6 +1766,7 @@ export interface StockDetailOut {
   effective_rules: EffectiveRuleOut[];
   alerts_history: AlertOut[];
   exchange_tz?: string;
+  su_etoro?: boolean;
 }
 
 export interface StockDrawingsOut {

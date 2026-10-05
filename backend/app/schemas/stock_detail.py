@@ -377,6 +377,9 @@ class StockDetailOut(BaseModel):
     # IANA timezone of the listing exchange — the chart renders intraday axes
     # in this zone. Defaults to UTC for back-compat with cached payloads.
     exchange_tz: str = "UTC"
+    #: Negoziabile su eToro (FA-126): nella stessa risposta, perche' un'etichetta
+    #: arrivata dopo andrebbe a capo e sposterebbe l'intestazione.
+    su_etoro: bool = False
 
 
 class StockNewsItemOut(BaseModel):

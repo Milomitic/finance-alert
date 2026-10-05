@@ -11,6 +11,7 @@ from loguru import logger
 from app.core import db as db_module
 from app.core.errors import UpstreamError
 from app.services import (
+    etoro_catalogo_service,
     etoro_client,
     etoro_patrimonio_service,
     etoro_watchlist_service,
@@ -38,6 +39,9 @@ def run_sincronizza_etoro() -> None:
         if not etoro_patrimonio_service.ha_storico(db):
             # Il primo giro di sempre: i 12 mesi che eToro conserva (FA-127).
             _recupera(db)
+        if etoro_catalogo_service.vuoto(db):
+            # E quali titoli del catalogo si negoziano su eToro (FA-126).
+            _catalogo(db)
         chiuse = svc.da_notificare(db)
         if chiuse:
             r = notifier_service.notify_etoro_chiuse(chiuse)
@@ -53,6 +57,23 @@ def _recupera(db) -> None:
         logger.warning(f"[etoro] storico del patrimonio non recuperato: {e}")
         return
     logger.info(f"[etoro] storico: {giorni} giorni, {operazioni} operazioni chiuse")
+
+
+def _catalogo(db) -> None:
+    try:
+        trovati, cercati = etoro_catalogo_service.aggiorna(db)
+    except UpstreamError as e:
+        logger.warning(f"[etoro] catalogo negoziabile non aggiornato: {e}")
+        return
+    logger.info(f"[etoro] negoziabili su eToro: {trovati} titoli su {cercati}")
+
+
+def run_aggiorna_catalogo_etoro() -> None:
+    """Ogni settimana: quali titoli del catalogo si negoziano su eToro (FA-126)."""
+    if not etoro_client.configurato():
+        return
+    with db_module.SessionLocal() as db:
+        _catalogo(db)
 
 
 def run_recupera_storico_etoro() -> None:

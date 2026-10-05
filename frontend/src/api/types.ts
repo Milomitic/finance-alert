@@ -725,6 +725,8 @@ export interface StockDetail {
   /** IANA timezone of the listing exchange — the chart renders intraday axes
    *  in this zone. Optional for back-compat with cached payloads (→ "UTC"). */
   exchange_tz?: string;
+  /** Negoziabile su eToro (FA-126). */
+  su_etoro?: boolean;
 }
 
 export interface StockNewsItem {

@@ -76,6 +76,8 @@ export interface AlertListParams {
   include_archived?: boolean;
   /** Solo i titoli in posizione aperta o fra i preferiti (FA-113). */
   solo_rilevanti?: boolean;
+  /** Solo i titoli negoziabili su eToro (FA-126). */
+  solo_etoro?: boolean;
   limit?: number;
   offset?: number;
   sort_by?: string;
@@ -107,6 +109,7 @@ function toQuery(params: AlertListParams): string {
   if (params.archived !== undefined) sp.set("archived", String(params.archived));
   if (params.include_archived) sp.set("include_archived", "true");
   if (params.solo_rilevanti) sp.set("solo_rilevanti", "true");
+  if (params.solo_etoro) sp.set("solo_etoro", "true");
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
   if (params.offset !== undefined) sp.set("offset", String(params.offset));
   if (params.sort_by) sp.set("sort_by", params.sort_by);

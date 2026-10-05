@@ -62,6 +62,10 @@ class FintoEtoro:
                 return {"clientPortfolio": {"credit": 10.0}}
             return {"clientPortfolio": {"positions": self.posizioni, "mirrors": self.mirrors,
                                         "credit": 1234.5, "orders": []}}
+        if percorso == svc._STRUMENTI and "symbols" in (params or {}):
+            voluti = set(params["symbols"].split(","))
+            return {"results": [r for r in self.anagrafica.values() if r["symbol"] in voluti],
+                    "pagination": {"hasNext": False}}
         if percorso == svc._STRUMENTI:
             ids = [int(x) for x in params["instrumentsIds"].split(",")]
             return {"results": [self.anagrafica[i] for i in ids if i in self.anagrafica],

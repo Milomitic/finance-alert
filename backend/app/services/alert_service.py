@@ -276,6 +276,7 @@ def list_alerts(
     sort_by: str = "emissione",
     sort_dir: str = "desc",
     solo_rilevanti: bool = False,
+    solo_etoro: bool = False,
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """List alerts with stock.ticker. Returns (items, total, has_more).
 
@@ -334,6 +335,11 @@ def list_alerts(
     )
     if solo_rilevanti:
         base = base.where(rilevanza_service.filtro_rilevanti(Alert.stock_id))
+    if solo_etoro:
+        # Solo i titoli che si negoziano su eToro (FA-126).
+        from app.services.etoro_catalogo_service import filtro_su_etoro
+
+        base = base.where(filtro_su_etoro(Alert.stock_id))
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
     # Build ORDER BY: requested column (with NULLS LAST) + stable id tiebreaker.

@@ -24,6 +24,7 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     // condivisa.
     include_archived: sp.get("include_archived") === "true" || undefined,
     solo_rilevanti: sp.get("solo_rilevanti") === "true" || undefined,
+    solo_etoro: sp.get("solo_etoro") === "true" || undefined,
     ticker: s("ticker"),
     q: s("q"),
     rule_kind: s("rule_kind"),
@@ -77,7 +78,7 @@ function numParam(sp: URLSearchParams, key: string): number | undefined {
 const CHIAVI_PROPRIE = [
   "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
   "date_from", "date_to", "strength_min", "archived", "include_archived",
-  "solo_rilevanti", "page", "sort_by", "sort_dir",
+  "solo_rilevanti", "solo_etoro", "page", "sort_by", "sort_dir",
 ] as const;
 
 export function searchFromState(
@@ -102,6 +103,7 @@ export function searchFromState(
   if (filters.archived) sp.set("archived", "true");
   if (filters.include_archived) sp.set("include_archived", "true");
   if (filters.solo_rilevanti) sp.set("solo_rilevanti", "true");
+  if (filters.solo_etoro) sp.set("solo_etoro", "true");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
   if (sortBy !== ORDINE_PREDEFINITO) sp.set("sort_by", sortBy);
   if (sortDir !== "desc") sp.set("sort_dir", sortDir);

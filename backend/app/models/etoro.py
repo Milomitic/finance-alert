@@ -163,3 +163,23 @@ class EtoroOperazione(Base):
     investimento_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     profitto_netto_usd: Mapped[float] = mapped_column(Float, nullable=False)
     commissioni_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class EtoroCatalogo(Base):
+    """I titoli del catalogo che si possono negoziare su eToro (FA-126).
+
+    Una riga per titolo trovato, rifatta ogni settimana chiedendo a eToro i
+    simboli del catalogo (non il contrario: eToro ne ha oltre 40.000, misurato
+    il 2026-10-06). Un titolo assente qui non e' negoziabile su eToro, o lo e'
+    con un simbolo che nessuna variante indovina."""
+
+    __tablename__ = "etoro_catalogo"
+
+    stock_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True
+    )
+    instrument_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    simbolo: Mapped[str] = mapped_column(String(32), nullable=False)
+    nome: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    tipo: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    verificato_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

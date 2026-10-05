@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,7 +18,9 @@ from app.core.errors import UpstreamError
 from app.models import Position, Stock, User
 from app.models.etoro import EtoroConto, EtoroPosizione, EtoroStrumento
 from app.models.preferito import Preferito
+from app.services import etoro_catalogo_service as catalogo
 from app.services import etoro_client, etoro_watchlist_service, preferiti_service
+from app.services import etoro_diario_service as diario_svc
 from app.services import etoro_patrimonio_service as patrimonio
 from app.services import etoro_portafoglio_service as svc
 
@@ -349,4 +351,149 @@ def andamento(
         giorni=[EtoroGiornoOut(giorno=g.giorno, valore=g.valore, pnl_aperto=g.pnl_aperto, fonte=g.fonte) for g in giorni],
         oggi=[EtoroPuntoOut(istante=_aware(p.istante), valore=p.valore) for p in punti],
         periodi=[EtoroPeriodoOut(**p.__dict__) for p in per],
+    )
+
+
+# ─── Negoziabilita' e costi (FA-126) ────────────────────────────────────────
+
+
+class EtoroDisponibileOut(BaseModel):
+    disponibile: bool
+    simbolo: str | None
+    tipo: str | None
+
+
+class EtoroVoceCostoOut(BaseModel):
+    tipo: str
+    importo: float
+    valuta: str
+    importo_usd: float | None
+
+
+class EtoroCostiOut(BaseModel):
+    #: False = eToro non collegato: «non disponibile» non vorrebbe dire niente.
+    configurato: bool
+    disponibile: bool
+    simbolo: str | None
+    voci: list[EtoroVoceCostoOut]
+    apertura_usd: float | None
+    notte_usd: float | None
+    weekend_usd: float | None
+    aggiornato_il: str | None
+
+
+@router.get("/disponibile/{ticker}", response_model=EtoroDisponibileOut)
+def disponibile(
+    ticker: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroDisponibileOut:
+    r = catalogo.del_titolo(db, ticker)
+    return EtoroDisponibileOut(disponibile=r is not None, simbolo=r.simbolo if r else None, tipo=r.tipo if r else None)
+
+
+@router.get("/costi", response_model=EtoroCostiOut)
+def costi(
+    ticker: str,
+    lato: str = Query("long", pattern="^(long|short)$"),
+    leva: int = Query(5, ge=1, le=30),
+    importo: float = Query(500.0, gt=0, le=1_000_000),
+    stop: float | None = Query(None, gt=0),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroCostiOut:
+    """Il preventivo eToro di un ingresso CFD: costi d'apertura e overnight a
+    notte, in USD. Cache di un'ora per combinazione."""
+    if not etoro_client.configurato():
+        return EtoroCostiOut(configurato=False, disponibile=False, simbolo=None, voci=[], apertura_usd=None,
+                             notte_usd=None, weekend_usd=None, aggiornato_il=None)
+    try:
+        c = catalogo.costi(db, ticker, lato=lato, leva=leva, importo=importo, stop=stop)
+    except UpstreamError as err:
+        raise HTTPException(status_code=502, detail=f"eToro: {err}") from err
+    if c is None:
+        return EtoroCostiOut(configurato=True, disponibile=False, simbolo=None, voci=[], apertura_usd=None,
+                             notte_usd=None, weekend_usd=None, aggiornato_il=None)
+    return EtoroCostiOut(
+        configurato=True, disponibile=True, simbolo=c.simbolo,
+        voci=[EtoroVoceCostoOut(**v.__dict__) for v in c.voci],
+        apertura_usd=c.apertura_usd, notte_usd=c.notte_usd, weekend_usd=c.weekend_usd,
+        aggiornato_il=c.aggiornato_il,
+    )
+
+
+# ─── Il diario delle operazioni chiuse (FA-128) ─────────────────────────────
+
+
+class EtoroOperazioneOut(BaseModel):
+    position_id: int
+    instrument_id: int
+    ticker: str | None
+    simbolo: str | None
+    aperta_il: datetime | None
+    chiusa_il: datetime
+    lato: str
+    leva: int
+    prezzo_apertura: float | None
+    prezzo_chiusura: float | None
+    investimento_usd: float | None
+    profitto_netto_usd: float
+    commissioni_usd: float | None
+    pct_investimento: float | None
+    giorni: float | None
+    #: Il segnale che l'ha PRECEDUTA (stesso titolo e verso, entro 5 giorni):
+    #: una coincidenza temporale, non la prova che sia stata aperta per quello.
+    alert_id: int | None
+    detector: str | None
+    segnale_il: datetime | None
+    r_reale: float | None
+    r_piano: float | None
+    esito_piano: str | None
+
+
+class EtoroGruppoOut(BaseModel):
+    n: int
+    vincenti: int
+    profitto_usd: float
+    vincenti_pct: float | None
+    profitto_medio_usd: float | None
+
+
+class EtoroAnnoOut(BaseModel):
+    anno: int
+    n: int
+    profitto_usd: float
+    profitto_eur: float | None
+    commissioni_usd: float
+
+
+class EtoroDiarioOut(BaseModel):
+    operazioni: list[EtoroOperazioneOut]
+    tutte: EtoroGruppoOut | None
+    precedute: EtoroGruppoOut | None
+    non_precedute: EtoroGruppoOut | None
+    r_reale_medio: float | None
+    r_piano_medio: float | None
+    con_r: int
+    anni: list[EtoroAnnoOut]
+
+
+@router.get("/diario", response_model=EtoroDiarioOut)
+def diario(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroDiarioOut:
+    d = diario_svc.diario(db)
+
+    def g(x):
+        return EtoroGruppoOut(**x.__dict__) if x is not None else None
+
+    return EtoroDiarioOut(
+        operazioni=[EtoroOperazioneOut(**{
+            **v.__dict__, "aperta_il": _aware(v.aperta_il), "chiusa_il": _aware(v.chiusa_il),
+            "segnale_il": _aware(v.segnale_il),
+        }) for v in d.voci],
+        tutte=g(d.tutte), precedute=g(d.precedute), non_precedute=g(d.non_precedute),
+        r_reale_medio=d.r_reale_medio, r_piano_medio=d.r_piano_medio, con_r=d.con_r,
+        anni=[EtoroAnnoOut(**a.__dict__) for a in d.anni],
     )
