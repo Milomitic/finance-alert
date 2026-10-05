@@ -16,6 +16,7 @@ import { serieVisibile } from "@/lib/chartInitialView";
 import { DEFAULT_RANGE, resolveRange, writeRange } from "@/lib/chartPrefs";
 import { downloadChartPng } from "@/lib/chartExport";
 import { defaultVisibleBars } from "@/lib/timeframeZoom";
+import { schedeDelTitolo } from "@/lib/schedeStrumento";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import {
@@ -352,6 +353,15 @@ export default function StockDetailPage() {
   }
 
   const d = detail.data;
+  // Un ETF non ha bilanci, consenso o insider propri (lib/schedeStrumento).
+  const schede = schedeDelTitolo(ticker, d.stock.instrument_type);
+  // ⚠️ Classi letterali, una per forma: il purger non vede quelle composte.
+  const rigaSchede =
+    schede.fondamentali && schede.analisti
+      ? "lg:grid-cols-[1.5fr_1fr_1fr_1fr]"
+      : schede.news
+        ? "lg:grid-cols-2"
+        : "lg:grid-cols-1";
   // Live-extended indicator series (falls back to the raw backend series).
   const ind = liveIndicators ?? d.indicators;
   const priceAlerts: PriceAlert[] = priceAlertsQuery.data ?? [];
@@ -482,25 +492,31 @@ export default function StockDetailPage() {
           Valuation scrolls its now-much-longer metrics list (~50 rows
           across 2 columns after the yfinance expansion), News scrolls
           its items, Analyst scrolls its recent actions. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr_1fr] gap-3 lg:h-[520px] [&>*]:min-w-0">
+      <div className={cn("grid grid-cols-1 gap-3 lg:h-[520px] [&>*]:min-w-0", rigaSchede)}>
         {/* Fundamentals: no internal scroll — its earnings table sets
             the natural height (CLAUDE.md). Leave it auto on mobile.
             The other three scroll internally so they need an explicit
             mobile height to not collapse. NewsCard is internally
             `relative h-full` + absolute-inset child, so a fixed-height
             wrapper is exactly the containing block it needs. */}
-        <div className="lg:h-full lg:min-h-0">
-          <FundamentalsCard ticker={ticker} />
-        </div>
+        {schede.fondamentali && (
+          <div className="lg:h-full lg:min-h-0">
+            <FundamentalsCard ticker={ticker} />
+          </div>
+        )}
         <div className="lg:h-full lg:min-h-0">
           <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
         </div>
-        <div className="lg:h-full lg:min-h-0">
-          <NewsCard ticker={ticker} />
-        </div>
-        <div className="lg:h-full lg:min-h-0">
-          <AnalystTargetCard ticker={ticker} currency={d.stock.currency} />
-        </div>
+        {schede.news && (
+          <div className="lg:h-full lg:min-h-0">
+            <NewsCard ticker={ticker} />
+          </div>
+        )}
+        {schede.analisti && (
+          <div className="lg:h-full lg:min-h-0">
+            <AnalystTargetCard ticker={ticker} currency={d.stock.currency} />
+          </div>
+        )}
       </div>
 
       {/* The dedicated Alerts + Insiders row that used to live here was
@@ -785,7 +801,7 @@ export default function StockDetailPage() {
               una riga di chip sotto al grafico che non esiste quando non ce ne
               sono. Fino al 2026-09-07 non si gestivano affatto — il percorso di
               modifica ed eliminazione non era mai stato costruito. */}
-          <InsidersAnalystCard ticker={ticker} />
+          {schede.analisti && <InsidersAnalystCard ticker={ticker} />}
         </div>
       </div>
 

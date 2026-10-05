@@ -19,6 +19,7 @@ import { MarketChart } from "@/components/market/MarketChart";
 import { MacdPanel } from "@/components/stock/MacdPanel";
 import { RsiPanel } from "@/components/stock/RsiPanel";
 import { HeaderSparkline } from "@/components/stock/StockHeader";
+import { NewsCard } from "@/components/stock/NewsCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import {
@@ -29,6 +30,7 @@ import {
 import { DEFAULT_INDICATOR_STATE } from "@/lib/indicatorState";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
+import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 
 /* ─── Per-symbol icon overrides ──────────────────────────────────────────
@@ -78,8 +80,9 @@ function EthereumIcon({ className }: { className?: string }) {
  * LiveAssetsPanel. Renders header (icon + name + live price + Δ%) +
  * range selector + candlestick chart + KPI strip (52w high/low, etc.).
  *
- * Doesn't show fundamentals / news / alerts / insiders — those don't
- * make sense for ETH or WTI crude. Just price + range.
+ * Doesn't show fundamentals / alerts / insiders / analysts — those don't
+ * make sense for ETH or WTI crude. News do for crypto and commodities (not
+ * for indices), see `lib/schedeStrumento`.
  */
 export default function MarketDetailPage() {
   const { symbol = "" } = useParams<{ symbol: string }>();
@@ -436,6 +439,15 @@ export default function MarketDetailPage() {
         </Card>
       </div>
       </div>
+
+      {/* News: per crypto e materie prime il prezzo segue un bene, e le
+          notizie su quel bene sono il contesto che il grafico non da'.
+          Altezza fissa: NewsCard riempie il contenitore e scorre dentro. */}
+      {newsDelMercato(d.category) && (
+        <div className="h-[420px]">
+          <NewsCard ticker={d.symbol} />
+        </div>
+      )}
     </div>
   );
 }
