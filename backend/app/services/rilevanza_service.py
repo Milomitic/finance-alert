@@ -27,7 +27,12 @@ PESO: dict[str | None, int] = {POSIZIONE: 2, PREFERITO: 1, None: 0}
 
 
 def _posizioni_aperte():
-    return select(Position.stock_id).where(Position.closed_at.is_(None))
+    """Le posizioni inserite a mano E quelle aperte su eToro (FA-124), queste
+    solo se abbinate al catalogo: un abbinamento da confermare non fa di un
+    titolo un «tuo titolo»."""
+    from app.services.etoro_portafoglio_service import stock_id_aperti
+
+    return select(Position.stock_id).where(Position.closed_at.is_(None)).union(stock_id_aperti())
 
 
 def _preferiti():

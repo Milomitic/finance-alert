@@ -67,8 +67,19 @@ class EtoroAccessoNegato(UpstreamUnavailable):
     """401/403: chiave scaduta, revocata, IP non ammesso o permesso mancante."""
 
 
+#: Il prefisso dei segnaposto scritti in `.env` finche' l'utente non incolla
+#: le chiavi: un segnaposto dimenticato vale «non configurato», non un 401
+#: ogni dieci minuti.
+SEGNAPOSTO = "INCOLLA_QUI"
+
+
+def _chiave(v: str) -> str:
+    v = v.strip()
+    return "" if v.upper().startswith(SEGNAPOSTO) else v
+
+
 def configurato() -> bool:
-    return bool(settings.etoro_api_key.strip() and settings.etoro_user_key.strip())
+    return bool(_chiave(settings.etoro_api_key) and _chiave(settings.etoro_user_key))
 
 
 class _Limitatore:
@@ -102,8 +113,8 @@ _limitatore = _Limitatore(LIMITE_AL_MINUTO, _FINESTRA_S)
 def _intestazioni() -> dict[str, str]:
     return {
         "x-request-id": str(uuid.uuid4()),
-        "x-api-key": settings.etoro_api_key.strip(),
-        "x-user-key": settings.etoro_user_key.strip(),
+        "x-api-key": _chiave(settings.etoro_api_key),
+        "x-user-key": _chiave(settings.etoro_user_key),
         "Accept": "application/json",
         "User-Agent": _USER_AGENT,
     }

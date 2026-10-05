@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Position, PriceAlert, VisitaCruscotto
+from app.models import Alert, EtoroPosizione, Position, PriceAlert, VisitaCruscotto
 from app.services import novita_titoli_service, rilevanza_service
 from app.services.novita_titoli_service import Novita
 
@@ -80,8 +80,11 @@ def riepilogo(db: Session, dal: datetime | None) -> Riepilogo:
         target_raggiunti=db.execute(
             select(func.count()).select_from(PriceAlert).where(PriceAlert.triggered_at > dal)
         ).scalar_one(),
+        # Le manuali e quelle chiuse su eToro (FA-124).
         posizioni_chiuse=db.execute(
             select(func.count()).select_from(Position).where(Position.closed_at > dal)
+        ).scalar_one() + db.execute(
+            select(func.count()).select_from(EtoroPosizione).where(EtoroPosizione.chiusa_il > dal)
         ).scalar_one(),
         # Le novita' hanno una data e non un'ora: si prendono dal giorno del
         # riferimento, e un fatto di quella mattina puo' riapparire la sera.

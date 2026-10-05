@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { useEtoroPortafoglio } from "@/hooks/useEtoro";
 import { usePositions } from "@/hooks/usePositions";
 import { usePreferiti } from "@/hooks/usePreferiti";
 import type { Rilevanza } from "@/lib/settimana";
@@ -17,13 +18,16 @@ import type { Rilevanza } from "@/lib/settimana";
 export function useTitoliSeguiti(): { titoli: ReadonlyMap<string, Rilevanza>; pronto: boolean } {
   const preferitiQ = usePreferiti();
   const posizioniQ = usePositions();
+  const etoroQ = useEtoroPortafoglio();
   const titoli = useMemo(() => {
     const m = new Map<string, Rilevanza>();
     for (const p of preferitiQ.data ?? []) m.set(p.ticker, "preferito");
     // Una posizione vince su un preferito dello stesso titolo, come nel server.
     for (const p of posizioniQ.data ?? []) if (!p.closed_at) m.set(p.ticker, "posizione");
+    // E quelle aperte su eToro (FA-124), solo se abbinate al catalogo.
+    for (const p of etoroQ.data?.aperte ?? []) if (p.ticker) m.set(p.ticker, "posizione");
     return m;
-  }, [preferitiQ.data, posizioniQ.data]);
+  }, [preferitiQ.data, posizioniQ.data, etoroQ.data]);
   const pronto = preferitiQ.data !== undefined || preferitiQ.isError;
   return { titoli, pronto };
 }

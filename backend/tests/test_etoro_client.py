@@ -72,6 +72,12 @@ def test_una_chiave_di_soli_spazi_non_conta(monkeypatch: pytest.MonkeyPatch) -> 
     assert etoro_client.configurato() is False
 
 
+def test_un_segnaposto_dimenticato_vale_non_configurato(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "etoro_api_key", "INCOLLA_QUI_LA_CHIAVE_API")
+    monkeypatch.setattr(settings, "etoro_user_key", CHIAVE_UTENTE)
+    assert etoro_client.configurato() is False
+
+
 def test_le_intestazioni_sono_quelle_della_documentazione(chiamate) -> None:
     chiamate.risposte.append(_Risposta(200, {"ok": True}))
     assert etoro_client.get("/api/v1/me", op="identita") == {"ok": True}

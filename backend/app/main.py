@@ -20,6 +20,7 @@ from app.api import catalog as catalog_router
 from app.api import catalogo as catalogo_router
 from app.api import cruscotto as cruscotto_router
 from app.api import dashboard as dashboard_router
+from app.api import etoro as etoro_router
 from app.api import institutionals as institutionals_router
 from app.api import kpi as kpi_router
 from app.api import market as market_router
@@ -709,6 +710,7 @@ app.include_router(platform_health_router.router)
 app.include_router(rum_router.router)
 app.include_router(uso_router.router)
 app.include_router(cruscotto_router.router)
+app.include_router(etoro_router.router)
 app.include_router(catalogo_router.router)
 app.include_router(preferiti_router.router)
 app.include_router(kpi_router.router)

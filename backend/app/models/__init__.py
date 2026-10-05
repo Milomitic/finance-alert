@@ -2,6 +2,7 @@
 from app.models.alert import Alert
 from app.models.archivio_non_prezzo import ArchivioNonPrezzo
 from app.models.catalog_log import CatalogRefreshLog
+from app.models.etoro import EtoroConto, EtoroPosizione, EtoroStrumento
 from app.models.fetch_cache import FetchCache
 from app.models.index import Index, StockIndex
 from app.models.institutional import (
@@ -49,6 +50,9 @@ __all__ = [
     "MarketSnapshot",
     "Alert",
     "Position",
+    "EtoroStrumento",
+    "EtoroPosizione",
+    "EtoroConto",
     "PriceAlert",
     "ScanRun",
     "StockSetup",

@@ -30,6 +30,7 @@ from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
+from app.scheduler.jobs.sincronizza_etoro import run_sincronizza_etoro
 from app.services.scheduler_metrics import install_listener as _install_scheduler_listener
 
 _scheduler: BackgroundScheduler | None = None
@@ -215,6 +216,18 @@ def get_scheduler() -> BackgroundScheduler:
                 day_of_week="*", hour=settings.digest_hour, minute=settings.digest_minute
             ),
             id="send_digest",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Il portafoglio eToro ogni 10 minuti (FA-124), tutti i giorni e a ogni
+        # ora: le crypto non chiudono, e uno stop scattato di notte va saputo.
+        # Senza chiavi il job c'e' ma non fa niente, cosi' la Diagnostica lo
+        # mostra invece di nasconderlo. ~4 chiamate a giro contro 60 al minuto.
+        _scheduler.add_job(
+            run_sincronizza_etoro,
+            trigger=IntervalTrigger(minutes=10),
+            id="sincronizza_etoro",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

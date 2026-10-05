@@ -567,6 +567,56 @@ def notify_position_closed(closed: list[tuple[Any, Stock]]) -> PushResult:
     return PushResult(sent=True, alerts_count=len(closed), reason="ok")
 
 
+_EMOJI_ETORO: dict[str, str] = {"stop": "🛑", "target": "🎯", "chiusa": "✋", "non_trovata": "❔"}
+_MOTIVO_ETORO: dict[str, str] = {
+    "stop": "a stop", "target": "a target", "chiusa": "chiusa",
+    "non_trovata": "sparita dal portafoglio, non trovata nello storico",
+}
+
+
+def notify_etoro_chiuse(chiuse: list[tuple[Any, Any, Stock | None]]) -> PushResult:
+    """Le posizioni chiuse su eToro (FA-124), coi numeri di eToro.
+
+    `chiuse` = [(EtoroPosizione, EtoroStrumento, Stock | None), ...] da
+    `etoro_portafoglio_service.da_notificare`. Come `notify_position_closed`:
+    nessun interruttore, perche' le posizioni sono dell'utente."""
+    if not chiuse:
+        return PushResult(sent=False, reason="no_alerts")
+    if not _telegram_enabled():
+        logger.info("[notifier] eToro push skipped: Telegram disabled")
+        return PushResult(sent=False, reason="telegram_disabled")
+
+    lines = ["📌 <b>Chiusa su eToro</b>" if len(chiuse) == 1 else "📌 <b>Chiuse su eToro</b>", ""]
+    for pos, strum, stock in chiuse[:PUSH_TOP_N]:
+        nome = stock.ticker if stock else (strum.simbolo or f"strumento {strum.instrument_id}")
+        lato = "Long" if pos.lato == "long" else "Short"
+        motivo = pos.motivo_chiusura or "chiusa"
+        line = (
+            f"{_EMOJI_ETORO.get(motivo, '•')} <b>{nome}</b> — {lato} ×{pos.leva} "
+            f"{pos.regolamento.upper() if pos.regolamento == 'cfd' else pos.regolamento}, "
+            f"{_MOTIVO_ETORO.get(motivo, motivo)}"
+        )
+        if pos.prezzo_chiusura is not None:
+            line += f" — {_fmt_price(pos.prezzo_apertura)} → {_fmt_price(pos.prezzo_chiusura)}"
+        if pos.profitto_netto_usd is not None:
+            margine = pos.margine_usd or pos.importo_usd
+            sul_margine = (
+                f" ({pos.profitto_netto_usd / margine * 100:+.1f}% sul margine)" if margine else ""
+            )
+            line += f" · {pos.profitto_netto_usd:+,.2f} USD{sul_margine}"
+        lines.append(line)
+    if len(chiuse) > PUSH_TOP_N:
+        lines.append(f"... e altre {len(chiuse) - PUSH_TOP_N}.")
+    lines.append("")
+    lines.append(f"🔗 {settings.public_base_url}/positions")
+
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="etoro push"):
+        return PushResult(sent=False, alerts_count=len(chiuse), reason="http_error")
+    logger.info(f"[notifier] eToro push sent: {len(chiuse)} position(s)")
+    return PushResult(sent=True, alerts_count=len(chiuse), reason="ok")
+
+
 def notify_trimestrali(trimestrali: list[Any], domani: Any) -> PushResult:
     """La sera prima: le trimestrali di domani su posizioni e preferiti.
 

@@ -27,6 +27,8 @@ import {
 } from "@/hooks/usePositions";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { EtoroPortafoglioCard } from "@/components/positions/EtoroPortafoglioCard";
+import { useEtoroPortafoglio } from "@/hooks/useEtoro";
 
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
    (see CLAUDE.md), don't refactor to template composition. */
@@ -180,6 +182,10 @@ function SideChip({ side }: { side: Position["side"] }) {
 
 export default function PositionsPage() {
   const q = usePositions();
+  // Il portafoglio eToro si aspetta INSIEME alle posizioni manuali: arrivato
+  // dopo, la sua scheda in cima spingerebbe giu' la pagina (FA-106).
+  const etoroQ = useEtoroPortafoglio();
+  const inAttesa = q.isLoading || etoroQ.isLoading;
   const update = useUpdatePosition();
   const remove = useDeletePosition();
   // Il segnale da mostrare, per id. La lista alert e paginata e non serve a
@@ -222,7 +228,7 @@ export default function PositionsPage() {
         </CardContent>
       </Card>
 
-      {q.isLoading && (
+      {inAttesa && (
         <div className="flex min-h-[20vh] items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -235,7 +241,13 @@ export default function PositionsPage() {
         </Card>
       )}
 
-      {!q.isLoading && !q.isError && (
+      {!inAttesa && (
+        // Il conto eToro vero (FA-124), sopra le posizioni inserite a mano.
+        // Fuori dal ramo d'errore di queste: un guasto dell'una non nasconde l'altra.
+        <EtoroPortafoglioCard d={etoroQ.data} errore={etoroQ.isError} />
+      )}
+
+      {!inAttesa && !q.isError && (
         <>
           <PortfolioSummary open={open} closed={closed} />
           {/* Posizioni aperte — P&L live (poll 15s, quote condivise 10s) */}

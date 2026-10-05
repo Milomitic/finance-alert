@@ -446,6 +446,81 @@ export interface EtfHoldingsOut {
   underlying_in_catalog?: boolean;
 }
 
+export interface EtoroAbbinamentoIn {
+  ticker: string | null;
+}
+
+export interface EtoroContoOut {
+  aggiornato_il: string;
+  valuta: string | null;
+  credito_usd: number | null;
+  valore_totale: number | null;
+  pnl_aperto: number | null;
+  guadagno_giorno: number | null;
+  guadagno_giorno_pct: number | null;
+}
+
+export interface EtoroPortafoglioOut {
+  configurato: boolean;
+  conto: EtoroContoOut | null;
+  aperte: EtoroPosizioneOut[];
+  chiuse: EtoroPosizioneOut[];
+  da_decidere: EtoroStrumentoOut[];
+}
+
+export interface EtoroPosizioneOut {
+  position_id: number;
+  instrument_id: number;
+  simbolo: string | null;
+  nome: string | null;
+  ticker: string | null;
+  valuta: string | null;
+  lato: string;
+  leva: number;
+  regolamento: string;
+  copia: boolean;
+  aperta_il: string;
+  prezzo_apertura: number;
+  prezzo_corrente: number | null;
+  unita: number;
+  importo_usd: number;
+  margine_usd: number | null;
+  esposizione_usd: number | null;
+  pnl_usd: number | null;
+  pnl_pct_margine: number | null;
+  stop: number | null;
+  target: number | null;
+  stop_pct_margine: number | null;
+  commissioni_usd: number | null;
+  pnl_il: string | null;
+  chiusa_il: string | null;
+  prezzo_chiusura: number | null;
+  profitto_netto_usd: number | null;
+  motivo_chiusura: string | null;
+  anche_manuale: boolean;
+}
+
+export interface EtoroSincronizzazioneOut {
+  saltata: string | null;
+  aperte: number;
+  nuove: number;
+  chiuse: number;
+  strumenti_nuovi: number;
+  da_confermare: number;
+  conto_aggiornato: boolean;
+}
+
+export interface EtoroStrumentoOut {
+  instrument_id: number;
+  simbolo: string | null;
+  nome: string | null;
+  tipo: string | null;
+  abbinamento: string;
+  ticker: string | null;
+  candidato_ticker: string | null;
+  candidato_nome: string | null;
+}
+
 export interface FilterOptionsOut {
   exchanges: string[];
   sectors: string[];
