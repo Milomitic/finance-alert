@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   abbinaEtoroStrumento,
+  fetchEtoroAndamento,
   fetchEtoroPortafoglio,
+  fetchEtoroVivo,
   sincronizzaEtoro,
 } from "@/api/etoro";
 
@@ -14,6 +16,31 @@ export function useEtoroPortafoglio(enabled = true) {
     queryFn: ({ signal }) => fetchEtoroPortafoglio(signal),
     staleTime: 30_000,
     refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    enabled,
+  });
+}
+
+/** Il conto adesso (FA-127): il server tiene una cache di 30 s, qui si
+ *  rilegge ogni 30 s a scheda visibile. */
+export function useEtoroVivo(enabled = true) {
+  return useQuery({
+    queryKey: ["etoro", "vivo"],
+    queryFn: ({ signal }) => fetchEtoroVivo(signal),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    enabled,
+  });
+}
+
+/** Giorni, punti di oggi e periodi: cambiano di minuto in minuto al massimo. */
+export function useEtoroAndamento(enabled = true) {
+  return useQuery({
+    queryKey: ["etoro", "andamento"],
+    queryFn: ({ signal }) => fetchEtoroAndamento(signal),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
     refetchIntervalInBackground: false,
     enabled,
   });

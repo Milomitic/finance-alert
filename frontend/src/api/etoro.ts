@@ -100,3 +100,77 @@ export function abbinaEtoroStrumento(instrumentId: number, ticker: string | null
 export function sincronizzaEtoro(): Promise<EtoroSincronizzazione> {
   return api<EtoroSincronizzazione>("/api/etoro/sincronizza", { method: "POST", body: "{}" });
 }
+
+// ─── Patrimonio e andamento (FA-127) ────────────────────────────────────────
+
+/** Uno strumento oggi: il guadagno del giorno e' calcolato da eToro. */
+export interface EtoroStrumentoOggi {
+  instrument_id: number;
+  ticker: string | null;
+  simbolo: string | null;
+  nome: string | null;
+  guadagno_giorno: number | null;
+  pnl: number | null;
+  esposizione: number | null;
+  margine: number | null;
+}
+
+/** Il conto adesso. `in_ritardo` = eToro non ha risposto, numeri dell'ultima
+ *  sincronizzazione. */
+export interface EtoroVivo {
+  configurato: boolean;
+  aggiornato_il: string | null;
+  in_ritardo: boolean;
+  valuta: string | null;
+  valore: number | null;
+  valore_ieri: number | null;
+  guadagno_giorno: number | null;
+  guadagno_giorno_pct: number | null;
+  pnl_aperto: number | null;
+  margine_usato: number | null;
+  cassa: number | null;
+  esposizione: number | null;
+  leva_effettiva: number | null;
+  posizioni: number;
+  strumenti: EtoroStrumentoOggi[];
+}
+
+export interface EtoroGiorno {
+  giorno: string;
+  valore: number;
+  pnl_aperto: number | null;
+  fonte: string;
+}
+
+export interface EtoroPunto {
+  istante: string;
+  valore: number;
+}
+
+/** Un periodo: `variazione` comprende versamenti e prelievi, `generato` no. */
+export interface EtoroPeriodo {
+  chiave: string;
+  dal: string;
+  valore_iniziale: number;
+  valore_finale: number;
+  variazione: number;
+  generato: number | null;
+  realizzato: number;
+  flussi: number | null;
+  generato_pct: number | null;
+}
+
+export interface EtoroAndamento {
+  configurato: boolean;
+  giorni: EtoroGiorno[];
+  oggi: EtoroPunto[];
+  periodi: EtoroPeriodo[];
+}
+
+export function fetchEtoroVivo(signal?: AbortSignal): Promise<EtoroVivo> {
+  return api<EtoroVivo>("/api/etoro/vivo", { signal });
+}
+
+export function fetchEtoroAndamento(signal?: AbortSignal): Promise<EtoroAndamento> {
+  return api<EtoroAndamento>("/api/etoro/andamento", { signal });
+}

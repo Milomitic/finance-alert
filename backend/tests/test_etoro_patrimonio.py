@@ -69,6 +69,14 @@ def test_il_recupero_prende_solo_il_conto_trading_e_lascia_oggi_vivo(db: Session
     assert pat.ha_storico(db) is True
 
 
+def test_le_date_della_richiesta_sono_in_utc(db: Session, etoro: FintoEtoro) -> None:
+    """00:55 del 6 a Roma = 22:55 UTC del 5: per eToro «domani» e' nel futuro."""
+    notte = datetime(2026, 10, 5, 22, 55, tzinfo=UTC)
+    pat.recupera(db, adesso=notte)
+    params = [p for percorso, p in etoro.chiamate if percorso == "/api/v1/balances/history"][0]
+    assert (params["toDate"], params["fromDate"]) == ("2026-10-05", "2025-10-06")
+
+
 def test_la_sincronizzazione_scrive_la_riga_di_oggi_e_un_punto(db: Session, etoro: FintoEtoro) -> None:
     db.add(Stock(ticker="AAPL", exchange="NASDAQ", name="Apple Inc."))
     db.commit()

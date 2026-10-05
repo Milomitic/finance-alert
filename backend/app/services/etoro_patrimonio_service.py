@@ -81,9 +81,14 @@ def recupera(db: Session, *, adesso: datetime | None = None) -> tuple[int, int]:
     La riga di oggi resta quella «viva»: eToro la fotografa solo a giorno chiuso."""
     adesso = adesso or datetime.now(UTC)
     oggi = giorno_di_roma(adesso)
-    dal = oggi - timedelta(days=_GIORNI_STORICO)
+    # ⚠️ Le date della RICHIESTA sono in UTC: fra mezzanotte e le 2 di Roma il
+    # giorno di Roma e' gia' domani per eToro, che risponde 400 «toDate cannot
+    # be in the future» (misurato il 2026-10-06 alle 00:55). Il giorno di Roma
+    # serve solo a riconoscere la riga di oggi, che resta «viva».
+    al = adesso.astimezone(UTC).date()
+    dal = al - timedelta(days=_GIORNI_STORICO)
     dati = etoro_client.get(_STORICO_SALDI, op="patrimonio", params={
-        "fromDate": dal.isoformat(), "toDate": oggi.isoformat(), "displayCurrency": "USD",
+        "fromDate": dal.isoformat(), "toDate": al.isoformat(), "displayCurrency": "USD",
     })
     giorni = 0
     for s in (dati.get("snapshots") if isinstance(dati, dict) else None) or []:

@@ -11,6 +11,7 @@ import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { MarketPulseJumbotron } from "@/components/dashboard/MarketPulseJumbotron";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
+import { ContoEtoroHero } from "@/components/dashboard/ContoEtoroHero";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
@@ -30,6 +31,7 @@ const RsiHistogramCard = lazy(() =>
 );
 import { FirstPaintGate } from "@/components/ui/first-paint-gate";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
+import { useEtoroVivo } from "@/hooks/useEtoro";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
@@ -143,6 +145,11 @@ function MarketError({
 function HomePageContent() {
   const market = useMarketSummary();
   const summary = useDashboardSummary();
+  // Il conto eToro in cima (FA-127). La pagina lo ASPETTA: se si sapesse solo
+  // dopo se il conto c'e', la sezione comparirebbe spingendo giu' tutto il
+  // cruscotto (gate CLS, FA-106). Senza chiavi la risposta e' immediata.
+  const etoro = useEtoroVivo();
+  const conto = etoro.data?.configurato && etoro.data.valore != null ? etoro.data : null;
   // The pre-market query no longer lives here: MarketEventsRail owns it,
   // along with the strict `available` gate (US market closed AND cache fresh
   // AND non-empty) that decides whether the section renders at all. The page
@@ -157,7 +164,7 @@ function HomePageContent() {
   // `isLoading || isLoading` two-stage waterfall that blocked EVERY
   // card (including the self-fetching discovery cards) behind the
   // slower of the two queries.
-  if (market.isLoading && summary.isLoading) {
+  if ((market.isLoading && summary.isLoading) || etoro.isLoading) {
     return <DashboardSkeleton />;
   }
 
@@ -220,6 +227,9 @@ function HomePageContent() {
           Sets the "trading floor" tone for the page — the rest of the
           UI feels static without it. */}
       <MarketTickerTape />
+      {/* Il tuo conto, prima di tutto il resto: quanto vale adesso, come si
+          e' mosso, chi lo muove oggi. Altezza fissa per ogni larghezza. */}
+      {conto && <ContoEtoroHero v={conto} />}
       {/* PROTOTIPO — il battito dei mercati, dedicato al pre-market e alle ore
           di Wall Street. Sta SOPRA l'intestazione perche' e' la risposta alla
           domanda per cui questa pagina viene aperta la mattina: cosa sta

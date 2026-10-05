@@ -207,3 +207,21 @@ export function formatCompactMoney(
   if (abs >= 1e6) return `${sym}${(value / 1e6).toFixed(0)}M`;
   return `${sym}${value.toLocaleString()}`;
 }
+
+/** Come `formatMoney`, ma con le migliaia raggruppate e sempre due decimali:
+ *  «$8,255.93». Per i totali di un conto (FA-127), dove il numero e' grande e
+ *  va letto a colpo d'occhio; il resto dell'app resta senza separatori. Il
+ *  segno sta davanti al simbolo, come in `formatMoneySigned`. */
+export function formatMoneyGrouped(value: number | null | undefined, currency: string | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const cifre = Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const segno = value < 0 && cifre !== "0.00" ? "-" : "";
+  return `${segno}${currencySymbol(currency) ?? ""}${cifre}`;
+}
+
+/** `formatMoneyGrouped` col «+» sui positivi. */
+export function formatMoneyGroupedSigned(value: number | null | undefined, currency: string | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const testo = formatMoneyGrouped(value, currency);
+  return value > 0 && !testo.startsWith("-") && Math.abs(value) >= 0.005 ? `+${testo}` : testo;
+}

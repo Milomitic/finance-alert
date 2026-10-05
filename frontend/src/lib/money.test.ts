@@ -7,6 +7,8 @@ import {
   formatBigMoney,
   formatCompactMoney,
   formatMoney,
+  formatMoneyGrouped,
+  formatMoneyGroupedSigned,
   formatMoneySigned,
 } from "./money";
 
@@ -339,5 +341,26 @@ describe("formatBigMoney", () => {
   it("assenza resta assenza", () => {
     expect(formatBigMoney(null, "USD")).toBe("—");
     expect(formatBigMoney(Number.NaN, "USD")).toBe("—");
+  });
+});
+
+describe("formatMoneyGrouped (FA-127)", () => {
+  it("raggruppa le migliaia con due decimali", () => {
+    expect(formatMoneyGrouped(8255.93, "USD")).toBe("$8,255.93");
+    expect(formatMoneyGrouped(17809.8, "USD")).toBe("$17,809.80");
+    expect(formatMoneyGrouped(-457.96, "USD")).toBe("-$457.96");
+  });
+
+  it("niente «-$0.00» e niente valuta inventata", () => {
+    expect(formatMoneyGrouped(-0.001, "USD")).toBe("$0.00");
+    expect(formatMoneyGrouped(12, null)).toBe("12.00");
+    expect(formatMoneyGrouped(null, "USD")).toBe("—");
+  });
+
+  it("col segno", () => {
+    expect(formatMoneyGroupedSigned(1234.5, "USD")).toBe("+$1,234.50");
+    expect(formatMoneyGroupedSigned(-1234.5, "USD")).toBe("-$1,234.50");
+    expect(formatMoneyGroupedSigned(0, "USD")).toBe("$0.00");
+    expect(formatMoneyGroupedSigned(undefined, "USD")).toBe("—");
   });
 });
