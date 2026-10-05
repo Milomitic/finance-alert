@@ -130,6 +130,21 @@ KNOWN_SOURCES: list[SourceSpec] = [
                       "Cache 24h + breaker su 403/429. Gray-area, fail-closed. "
                       "Probe ogni 30 min (AAPL).")),
 
+    # ── eToro: il conto dell'utente, sola lettura (FA-123) ──
+    # Spenta senza le due chiavi (`etoro_client.configurato()`): in quel caso
+    # le voci restano «idle», che e' la verita'.
+    SourceSpec("etoro", "portafoglio", "eToro — Portafoglio", "scheduled",
+               per_minute=60, per_day=None,
+               notes=("Posizioni aperte con P/L, margine ed esposizione calcolati "
+                      "da eToro. Ogni 10 minuti; limitatore client a 50/min."),
+               expected_cadence_s=1800.0),
+    SourceSpec("etoro", "strumenti", "eToro — Strumenti", "scheduled",
+               per_minute=60, per_day=None,
+               notes="Simbolo e nome degli strumenti in portafoglio, per l'abbinamento al catalogo."),
+    SourceSpec("etoro", "storico", "eToro — Operazioni chiuse", "scheduled",
+               per_minute=60, per_day=None,
+               notes="Prezzo e profitto veri delle posizioni chiuse, finestre di al massimo un anno."),
+
     # ── Scheduled / macro ──
     SourceSpec("fred", "macro", "FRED — Macro series", "scheduled",
                per_minute=120, per_day=None,

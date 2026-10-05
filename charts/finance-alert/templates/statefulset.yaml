@@ -162,6 +162,24 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: TWELVEDATA_API_KEY
                   optional: true
+            # eToro (FA-123): la coppia di chiavi del conto, ambiente Real e
+            # permesso SOLO LETTURA. Cablate qui PRIMA che il Secret le abbia,
+            # per non ripetere la trappola di Finnhub, FRED e Telegram: una
+            # funzione che esiste nell'app con la chiave fuori da questo
+            # elenco e' spenta senza dirlo. Mancanti, l'integrazione resta
+            # spenta e la Diagnostica lo dichiara.
+            - name: ETORO_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: ETORO_API_KEY
+                  optional: true
+            - name: ETORO_USER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: ETORO_USER_KEY
+                  optional: true
             # NOT a secret, and that is why it stayed missing: it is a URL, so
             # it belongs to the chart rather than to the Secret nobody thought
             # to extend. Derived from the ingress host so it cannot drift from

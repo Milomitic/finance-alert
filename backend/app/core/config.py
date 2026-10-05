@@ -228,6 +228,13 @@ class Settings(BaseSettings):
     # free /earnings endpoint is EPS-only (no revenue). Empty string
     # disables this tier; yfinance + Finnhub remain the sources.
     twelvedata_api_key: str = ""
+    # eToro Public API (FA-123): la coppia di chiavi generata dall'utente in
+    # Impostazioni -> Trading -> API Key Management, ambiente Real, permesso
+    # SOLO LETTURA, con l'IP del nodo fra quelli ammessi. Vuote = integrazione
+    # spenta: portafoglio, watchlist e costi eToro semplicemente non compaiono.
+    # Il client (`etoro_client`) rifiuta comunque ogni scrittura.
+    etoro_api_key: str = ""
+    etoro_user_key: str = ""
 
     @field_validator("database_url")
     @classmethod
