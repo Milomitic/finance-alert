@@ -1,0 +1,5 @@
+id,filing_id,ticker,company_name,shares,value_usd,portfolio_pct,qoq_change_pct,qoq_change_shares,action
+121899,7,BK,Bank of New York Mellon Corp.,67654,7854000,0.01,-98.04,,reduce
+122533,24,BK,Bank of New York Mellon Corp.,25811239,2996427000,1.62,-25.92,,reduce
+122738,26,BK,Bank of New York Mellon Corp.,9745637,1131371000,1.99,-5.43,,reduce
+123977,48,BK,Bank of New York Mellon Corp.,5888,684000,0.01,,,

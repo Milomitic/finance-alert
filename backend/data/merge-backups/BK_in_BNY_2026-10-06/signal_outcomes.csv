@@ -1,0 +1,3 @@
+id,alert_id,stock_id,detector,signal_date,tone,horizon_days,entry_close,forward_close,fwd_return,universe_mean_fwd,mkt_neutral_excess,abs_hit,mkt_neutral_hit,regime_at_signal,strength,probability,source,matured_at,method_version
+68,10587,272,candle_reversal,2026-05-22,bear,5,139.15,142.59,0.024721523535752743,0.013831660264999419,-0.010889863270753324,0,0,bull,71,48,live,2026-06-09 18:39:34+00,
+1254,10585,272,squeeze_expansion,2026-05-22,bull,21,139.15,143.56,0.031692418253683075,0.0053906415780704655,0.02630177667561261,1,1,bull,62,48,live,2026-07-01 15:56:39+00,

@@ -35,7 +35,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.db_json import json_text
-from app.core.visibility import visible_country_clause
+from app.core.visibility import negli_elenchi_clause
 from app.models import Alert, Stock, StockScore, TechnicalScore
 from app.signals.detectors.base import clamp01, log_saturate
 
@@ -162,7 +162,7 @@ def _base_rows(db: Session) -> dict[int, tuple[Stock, float | None, float | None
         select(Stock, StockScore.composite, TechnicalScore.composite)
         .outerjoin(StockScore, StockScore.stock_id == Stock.id)
         .outerjoin(TechnicalScore, TechnicalScore.stock_id == Stock.id)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
     )
     return {s.id: (s, q_, t_) for s, q_, t_ in db.execute(q).all()}
 

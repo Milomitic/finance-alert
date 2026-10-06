@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import and_, case, distinct, exists, func, nullslast, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.visibility import visible_country_clause
+from app.core.visibility import negli_elenchi_clause, visible_country_clause
 from app.models import (
     Alert,
     Index,
@@ -291,7 +291,8 @@ def _apply_filter(stmt, f: StockFilter):
     # + Asia market-mood; the screener, search, watchlist-add, and
     # alert generation all need to skip them. See
     # `app/core/visibility.py` for the single source of truth.
-    stmt = stmt.where(visible_country_clause())
+    # E le serie ferme (delistati): fuori dagli elenchi, non dall'app.
+    stmt = stmt.where(negli_elenchi_clause())
     if f.q:
         like = f"{f.q.lower()}%"
         sub = f"%{f.q.lower()}%"

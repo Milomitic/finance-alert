@@ -24,7 +24,7 @@ whole app from one place.
 """
 from __future__ import annotations
 
-from sqlalchemy import or_
+from sqlalchemy import and_, not_, or_
 
 from app.models import Stock
 
@@ -84,6 +84,27 @@ def visible_country_clause():
         # Singoli titoli esposti a mano, borsa breadth-only compresa.
         Stock.ticker.in_(SURFACED_TICKERS),
     )
+
+
+
+def negli_elenchi_clause():
+    """Chi compare negli ELENCHI: screener e ricerca, classifiche, top picks,
+    settori. E' `visible_country_clause()` piu' una serie prezzi che avanza.
+
+    ⚠️ Un titolo delistato (BK prima della fusione, CTRA, APLS, TERN, SATS,
+    VSCO, CPRX) restava in ogni elenco coi prezzi di mesi fa, in mezzo a
+    quelli vivi: un punteggio e una variazione «di oggi» che non erano di
+    oggi. Esce dagli elenchi e NON dall'app (2026-10-06, su richiesta): la
+    pagina del titolo resta raggiungibile dai suoi vecchi alert, e i suoi
+    dati restano nelle statistiche — esiti, magazzino, studi.
+
+    Il predicato della serie ferma ha un proprietario solo
+    (`ohlcv_service.series_stalled_clause`); l'import e' nel corpo perche'
+    `ohlcv_service` sta sopra i modelli e questo modulo sotto.
+    """
+    from app.services.ohlcv_service import series_stalled_clause
+
+    return and_(visible_country_clause(), not_(series_stalled_clause()))
 
 
 def is_visible_country(

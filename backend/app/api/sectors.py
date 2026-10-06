@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.core.db_json import json_text
-from app.core.visibility import visible_country_clause
+from app.core.visibility import negli_elenchi_clause
 from app.models import (
     Alert,
     MarketSnapshot,
@@ -372,7 +372,7 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
             func.avg(StockScore.composite).label("avg_score"),
         )
         .outerjoin(StockScore, StockScore.stock_id == Stock.id)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector)
@@ -385,7 +385,7 @@ def _sector_rollup(db: Session) -> list[SectorSummary]:
     # filter as above so ETF fundamentals never enter the medians.
     ticker_rows = db.execute(
         select(Stock.sector, Stock.ticker)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
     ).all()
@@ -444,7 +444,7 @@ def _technical_rollup(db: Session) -> dict[str, tuple[int, float]]:
             func.avg(TechnicalScore.composite),
         )
         .join(TechnicalScore, TechnicalScore.stock_id == Stock.id)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector)
@@ -507,7 +507,7 @@ def _score_trends(db: Session, *, n_captures: int = 30) -> dict[str, list[Sector
         .join(Stock, Stock.id == ScoreHistory.stock_id)
         .where(ScoreHistory.lens == "qualita")
         .where(ScoreHistory.captured_on.in_(recent_days))
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector, ScoreHistory.captured_on)
@@ -540,7 +540,7 @@ def _signals_7d(db: Session, *, today: date | None = None) -> dict[str, dict[str
         .join(Stock, Stock.id == Alert.stock_id)
         .where(Alert.signal_date >= cutoff)
         .where(Alert.archived_at.is_(None))
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector.is_not(None))
         .group_by(Stock.sector, tone_col)
@@ -599,7 +599,7 @@ def _industry_rollup(db: Session) -> list[IndustryRow]:
             func.avg(StockScore.composite),
         )
         .outerjoin(StockScore, StockScore.stock_id == Stock.id)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.industry.is_not(None))
         .group_by(Stock.industry, Stock.sector)
@@ -705,7 +705,7 @@ def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_cu
     # of the sector cards and the gap reads as missing data.
     total_stocks = db.execute(
         select(func.count(func.distinct(Stock.ticker)))
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
     ).scalar() or 0
     payload = SectorsOverviewOut(
@@ -730,7 +730,7 @@ def get_sector_detail(
     # KPI medians below.
     stocks = db.execute(
         select(Stock)
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector == name)
         .order_by(Stock.ticker.asc())

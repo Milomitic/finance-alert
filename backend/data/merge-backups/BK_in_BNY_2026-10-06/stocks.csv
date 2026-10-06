@@ -1,0 +1,2 @@
+id,ticker,exchange,name,sector,industry,country,currency,market_cap,ohlcv_in_pounds,ohlcv_nodata_streak,ohlcv_last_nodata_at,instrument_type,created_at,updated_at
+272,BK,NASDAQ,BNY Mellon,Financials,Diversified Financials,US,USD,95701818942,f,410,2026-10-05,equity,2026-05-03 00:20:22+00,2026-10-05 22:20:20.46595+00

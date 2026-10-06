@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db, require_json
 from app.core.db import SessionLocal
 from app.core.errors import UpstreamError
-from app.core.visibility import visible_country_clause
+from app.core.visibility import negli_elenchi_clause
 from app.models import (
     OhlcvDaily,
     ScanRun,
@@ -718,7 +718,7 @@ def get_top_picks(
         # Hidden-country stocks (CN/JP/KR) should never surface in
         # top-picks — they're catalog-only for breadth/mood. Single
         # source of truth: `app.core.visibility`.
-        .where(visible_country_clause())
+        .where(negli_elenchi_clause())
     )
     if risk is not None:
         q = q.where(StockScore.risk_tier == risk)
