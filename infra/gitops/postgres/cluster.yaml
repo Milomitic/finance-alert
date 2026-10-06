@@ -79,6 +79,17 @@ spec:
       max_connections: "50"      # app pool + migration + a spare; plenty
       work_mem: "8MB"
       maintenance_work_mem: "64MB"
+      # ⚠️ 30 minuti invece dei 5 che CNPG mette di default (2026-10-06).
+      # Ogni scadenza chiude un segmento WAL da 16 MB anche quasi vuoto: con
+      # le scritture continue dell'app (sincronizzazione eToro ogni 10 minuti,
+      # quote) erano ~288 segmenti al giorno, ~4,5 GB, per un database da
+      # 550 MB. Normalmente si comprimono a niente e partono per il bucket;
+      # ma quando l'archiviazione si ferma (FA-129) restano sul disco del
+      # nodo, che e' quello di tutto il cluster, e lo riempiono in giorni.
+      # Il prezzo: in un disastro si possono perdere fino a 30 minuti di
+      # scritture invece di 5. Qui si accetta, perche' cio' che conta si
+      # ricostruisce dalle fonti (scansioni, storico eToro).
+      archive_timeout: "30min"
 
   # Least-privilege bootstrap: create the app database owned by a NON-superuser
   # role (fa_app). CNPG keeps the postgres superuser password-less/no external
