@@ -66,3 +66,23 @@ describe("AnalystTargetCard — base dell'upside", () => {
     expect(screen.getByText("prezzo")).toBeInTheDocument();
   });
 });
+
+describe("AnalystTargetCard — il target in cima (spostato dalla scheda Stock Score)", () => {
+  it("prezzo target e variazione al target, in cima alla scheda", () => {
+    pt = { current: 55.41, current_as_of: "2026-09-14", low: 50, mean: 67.43, median: 68, high: 80 };
+    monta("EUR");
+    expect(screen.getByText("target medio")).toBeInTheDocument();
+    expect(screen.getByText(/\+21\.7% al target/)).toBeInTheDocument();
+  });
+
+  it("⚠️ senza minimo e massimo il target resta: manca solo la barra", () => {
+    // Prima il target stava DENTRO la barra, e un intervallo mancante lo
+    // faceva sparire insieme a lei. Controllo negativo: il marcatore della
+    // barra («14/09») non c'e', quindi la barra non e' resa davvero.
+    pt = { current: 55.41, current_as_of: "2026-09-14", low: null, mean: 40.4, median: null, high: null };
+    monta("EUR");
+    expect(screen.getByText("target medio")).toBeInTheDocument();
+    expect(screen.getByText(/−?-?27\.1% al target/)).toBeInTheDocument();
+    expect(screen.queryByText("14/09")).toBeNull();
+  });
+});

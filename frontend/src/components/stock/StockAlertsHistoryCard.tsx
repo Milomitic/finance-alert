@@ -15,8 +15,9 @@ import { useScanStock } from "@/hooks/useAlertMutations";
 import { getAlertMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
-/** Righe al massimo nella lista: i recenti si fermano qui, lo storico pagina
- *  di tanti. Una scheda compatta, su richiesta — il resto e' nello storico. */
+/** Righe per pagina, in tutte e due le viste: cinque a vista, le altre fino
+ *  a dieci si scorrono, oltre si cambia pagina (su richiesta, 2026-10-06 —
+ *  prima i recenti si fermavano a dieci e rimandavano allo storico). */
 const PER_PAGINA = 10;
 /** Righe visibili senza scorrere. Le altre fino a PER_PAGINA si scorrono. */
 const RIGHE_VISIBILI = 5;
@@ -119,13 +120,9 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
     [alerts],
   );
   const stats = useMemo(() => computeStats(sorted), [sorted]);
-  const recenti = useMemo(() => sorted.slice(0, PER_PAGINA), [sorted]);
   const completo = scheda === "completo";
+  const recenti = useMemo(() => sorted.slice(offset, offset + PER_PAGINA), [sorted, offset]);
   const righe = completo ? (storico.data?.items ?? []) : recenti;
-  // ⚠️ Il titolo e la striscia contano TUTTI i recenti, la lista ne mostra
-  // al massimo dieci: senza questa riga «Segnali (14)» sopra dieci righe
-  // sembrerebbe un conteggio sbagliato.
-  const nascosti = completo ? 0 : sorted.length - recenti.length;
 
   /* ─── Cinque righe a vista, le altre si scorrono ────────────────────────
    *
@@ -160,6 +157,12 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
   const totale = completo ? (storico.data?.total ?? 0) : stats.total;
   const primaDellaPagina = offset + 1;
   const ultimaDellaPagina = offset + righe.length;
+  const ceNeSonoAltri = completo ? !!storico.data?.has_more : offset + PER_PAGINA < sorted.length;
+  const vaiA = (nuovo: number) => {
+    setOffset(nuovo);
+    // La pagina nuova si legge dalla prima riga, non da dove era la vecchia.
+    if (corpo.current) corpo.current.scrollTop = 0;
+  };
 
   // No-op handlers for the bulk-action props — embedded mode hides
   // the checkbox column, so these are never invoked in practice.
@@ -326,24 +329,7 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
               />
             </div>
           )}
-          {nascosti > 0 && !scan.error && (
-            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pt-2 text-[0.7647rem] text-muted-foreground">
-              <span className="tabular-nums">
-                Ultimi {recenti.length} di {sorted.length}
-              </span>
-              <button
-                type="button"
-                className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
-                onClick={() => {
-                  setScheda("completo");
-                  setOffset(0);
-                }}
-              >
-                Apri lo storico
-              </button>
-            </div>
-          )}
-          {completo && totale > PER_PAGINA && (
+          {totale > PER_PAGINA && !scan.error && (
             <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pt-2 text-[0.7647rem] text-muted-foreground">
               <span className="tabular-nums">
                 {primaDellaPagina}–{ultimaDellaPagina} di {totale}
@@ -352,8 +338,8 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                 <button
                   type="button"
                   className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-                  onClick={() => setOffset((o) => Math.max(0, o - PER_PAGINA))}
-                  disabled={offset === 0 || storico.isFetching}
+                  onClick={() => vaiA(Math.max(0, offset - PER_PAGINA))}
+                  disabled={offset === 0 || (completo && storico.isFetching)}
                 >
                   <ChevronLeft className="h-3 w-3" aria-hidden />
                   Precedenti
@@ -361,8 +347,8 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                 <button
                   type="button"
                   className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
-                  onClick={() => setOffset((o) => o + PER_PAGINA)}
-                  disabled={!storico.data?.has_more || storico.isFetching}
+                  onClick={() => vaiA(offset + PER_PAGINA)}
+                  disabled={!ceNeSonoAltri || (completo && storico.isFetching)}
                 >
                   Successivi
                   <ChevronRight className="h-3 w-3" aria-hidden />

@@ -173,30 +173,36 @@ describe("StockAlertsHistoryCard", () => {
     expect(screen.getByText(/^Segnali \(40\)$/)).toBeInTheDocument();
   });
 
-  it("i recenti si fermano a dieci righe e dicono quante ne restano fuori", async () => {
-    /* Il tetto di dieci e' su richiesta; il conteggio accanto e' la parte che
-     * non si puo' togliere. Il titolo conta TUTTI i recenti, quindi senza la
-     * riga «Ultimi 10 di 12» un «Segnali (12)» sopra dieci righe si legge come
-     * un numero sbagliato. */
-    listMock.mockReturnValue({ items: [_alert(20)], total: 1, has_more: false });
+  it("i recenti oltre dieci si sfogliano a pagine di dieci", async () => {
+    /* Su richiesta (2026-10-06): cinque a vista, fino a dieci si scorrono,
+     * oltre si cambia pagina. Prima i recenti si fermavano a dieci e
+     * rimandavano allo storico. Il titolo conta TUTTI i recenti, e la riga
+     * «1–10 di 12» dice quale fetta si sta guardando. */
     monta(Array.from({ length: 12 }, (_, i) => _alert(i + 1)));
 
     // Pavimento prima del tetto: con zero righe «al massimo dieci» sarebbe
     // vero di niente. Si contano le righe del CORPO, non l'intestazione.
-    const corpo = screen.getAllByRole("rowgroup")[1];
-    expect(within(corpo).getAllByRole("row")).toHaveLength(10);
+    const righe = () => within(screen.getAllByRole("rowgroup")[1]).getAllByRole("row");
+    expect(righe()).toHaveLength(10);
     expect(screen.getByText(/^Segnali \(12\)$/)).toBeInTheDocument();
-    expect(screen.getByText(/Ultimi 10 di 12/)).toBeInTheDocument();
+    expect(screen.getByText(/1–10 di 12/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Precedenti/ })).toBeDisabled();
 
-    // La riga porta dove stanno gli altri.
-    await userEvent.click(screen.getByRole("button", { name: /Apri lo storico/ }));
-    expect(screen.getByRole("button", { name: /^Storico$/ })).toHaveAttribute("aria-pressed", "true");
-    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    await userEvent.click(screen.getByRole("button", { name: /Successivi/ }));
+    expect(righe()).toHaveLength(2);
+    expect(screen.getByText(/11–12 di 12/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Successivi/ })).toBeDisabled();
+    // I recenti si sfogliano in memoria: nessuna chiamata allo storico.
+    expect(listMock).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: /Precedenti/ }));
+    expect(righe()).toHaveLength(10);
   });
 
-  it("con dieci recenti o meno la riga del conteggio non c'e'", () => {
+  it("con dieci recenti o meno la paginazione non c'e'", () => {
     monta(Array.from({ length: 10 }, (_, i) => _alert(i + 1)));
-    expect(screen.queryByText(/Ultimi \d+ di/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+–\d+ di/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Successivi/ })).not.toBeInTheDocument();
   });
 
   it("la paginazione avanza e l'offset torna a zero cambiando scheda", async () => {

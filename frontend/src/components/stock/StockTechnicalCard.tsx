@@ -5,7 +5,10 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockTechnical } from "@/hooks/useStockTechnical";
-import { scoreColor } from "@/lib/scoreMeta";
+import {
+  BARRA_PUNTEGGIO, ETICHETTA_PUNTEGGIO, FONDO_PUNTEGGIO, RIGA_PUNTEGGIO, VALORE_PUNTEGGIO,
+} from "@/lib/rigaPunteggio";
+import { scoreBgColor, scoreColor } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
 const DIMS: { key: "trend" | "momentum" | "structure" | "volume" | "rel_strength"; label: string }[] = [
@@ -67,7 +70,7 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
               <span className={cn("text-3xl font-bold tabular-nums", scoreColor(data.composite))}>
                 {data.composite.toFixed(0)}
               </span>
-              <span className="text-xs text-muted-foreground">/ 100 composito</span>
+              <span className="text-xs text-muted-foreground">/ 100</span>
               {/* Rango di SETTORE. Non c'e' un rango d'universo perche' la
                   "Forza relativa" qui sotto e' gia' misurata su tutto il
                   catalogo: sarebbe il percentile di un percentile. Questo dice
@@ -88,26 +91,35 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                   </span>
                 )}
               {data.signals != null && (
-                <span className="ml-auto self-center text-[0.7059rem] text-muted-foreground">
-                  Segnale recente: confidenza{" "}
+                <span
+                  className="ml-auto self-center text-[0.7059rem] text-muted-foreground"
+                  title="Confidenza dell'ultimo segnale emesso su questo titolo"
+                >
+                  Confidenza{" "}
                   <span className="font-semibold text-foreground/80">
                     {data.signals.toFixed(0)}%
                   </span>
                 </span>
               )}
             </div>
-            <div className="space-y-1">
+            {/* Stessa forma dei pilastri della scheda Stock Score
+                (`lib/rigaPunteggio`): due schede affiancate con la stessa
+                scala 0-100 la devono dire allo stesso modo. */}
+            <div className="space-y-0.5">
               {DIMS.map((d) => {
                 const v = data[d.key];
                 const pct = v != null ? Math.max(0, Math.min(100, v)) : 0;
                 return (
-                  <div key={d.key} className="flex items-center gap-2">
-                    <span className="w-28 text-xs text-foreground/70 shrink-0">{d.label}</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-sky-500/70" style={{ width: `${pct}%` }} />
+                  <div key={d.key} className={RIGA_PUNTEGGIO}>
+                    <span className={ETICHETTA_PUNTEGGIO}>{d.label}</span>
+                    <div className={FONDO_PUNTEGGIO}>
+                      <div
+                        className={cn(BARRA_PUNTEGGIO, v != null ? scoreBgColor(v) : "bg-muted")}
+                        style={{ width: `${pct}%` }}
+                      />
                     </div>
-                    <span className={cn("w-8 text-right text-[0.7059rem] tabular-nums", v != null ? scoreColor(v) : "text-muted-foreground")}>
-                      {v != null ? v.toFixed(0) : "-"}
+                    <span className={cn(VALORE_PUNTEGGIO, v != null ? scoreColor(v) : "text-muted-foreground")}>
+                      {v != null ? v.toFixed(0) : "—"}
                     </span>
                   </div>
                 );

@@ -33,10 +33,54 @@ interface Props {
  * three numbers alone — a current price near low + a wide range = upside,
  * current near high + tight range = limited upside.
  */
-function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: string | null }) {
-  const { low, high, mean, median, current, current_as_of } = pt;
+/** Il target medio e quanto dista dal prezzo, IN CIMA alla scheda (spostato
+ *  qui dalla scheda Stock Score il 2026-10-06, su richiesta). Si rende appena
+ *  c'e' un target medio: la barra qui sotto vuole anche minimo e massimo, e
+ *  legarlo a lei faceva sparire il target proprio dove mancava solo l'intervallo. */
+function TargetInTesta({ pt, currency }: { pt: AnalystPriceTarget; currency: string | null }) {
+  const { mean, current, current_as_of } = pt;
+  if (mean == null) return null;
   // «14/09» dalla data ISO della chiusura; null quando la base e' ancora il
   // prezzo di yfinance (titolo senza barre), che non ha una data nostra.
+  const baseDay = current_as_of ? `${current_as_of.slice(8, 10)}/${current_as_of.slice(5, 7)}` : null;
+  const upside =
+    current != null && current > 0 ? ((mean - current) / current) * 100 : null;
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 tabular-nums">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="text-2xl font-bold">{formatMoney(mean, currency)}</span>
+        <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
+      </div>
+      {upside != null && (
+        <span
+          className={cn(
+            "whitespace-nowrap text-sm font-bold",
+            upside > 0
+              ? "text-emerald-800 dark:text-emerald-300"
+              : "text-rose-700 dark:text-rose-300",
+          )}
+          title={
+            baseDay
+              ? `Variazione al target: ${upside.toFixed(1)}% sulla chiusura ${formatMoney(current, currency)} ` +
+                `del ${baseDay}. NON e il prezzo live dell'intestazione, che si aggiorna ogni 15 secondi.`
+              : `Variazione al target: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
+                "riportato dalla fonte dei target: il titolo non ha ancora chiusure memorizzate."
+          }
+        >
+          {upside >= 0 ? "+" : ""}
+          {upside.toFixed(1)}% al target
+          <span className="ml-1 text-[0.6765rem] font-normal text-muted-foreground">
+            su {formatMoney(current, currency)}
+          </span>
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: string | null }) {
+  const { low, high, mean, median, current, current_as_of } = pt;
+  // «14/09»: la data della chiusura su cui sta il marcatore del prezzo.
   const baseDay = current_as_of ? `${current_as_of.slice(8, 10)}/${current_as_of.slice(5, 7)}` : null;
   if (low == null || high == null || mean == null || high <= low) return null;
 
@@ -50,47 +94,8 @@ function PriceTargetBar({ pt, currency }: { pt: AnalystPriceTarget; currency: st
   const medianPos = pos(median);
   const currentPos = pos(current);
 
-  const upside =
-    current != null && current > 0 ? ((mean - current) / current) * 100 : null;
-
   return (
     <div className="rounded-md bg-muted/40 p-3">
-      {/* Niente sottotitolo «Price target consensus», su richiesta: la riga
-          costava altezza a una card che deve mostrare piu' azioni possibili.
-          L'upside sale sulla riga del target medio, a destra — la lettura
-          resta «target, e quanto dista dal prezzo». `flex-wrap` perche' su una
-          card stretta l'upside vada sotto invece di schiacciare il target. */}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 mb-3 tabular-nums">
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-2xl font-bold">{formatMoney(mean, currency)}</span>
-          <span className="text-[0.7647rem] text-muted-foreground">target medio</span>
-        </div>
-        {upside != null && (
-          <span
-            className={cn(
-              "font-bold text-[0.7647rem] whitespace-nowrap",
-              upside > 0
-                ? "text-emerald-800 dark:text-emerald-300"
-                : "text-rose-700 dark:text-rose-300",
-            )}
-            title={
-              baseDay
-                ? `Upside implicito: ${upside.toFixed(1)}% sulla chiusura ${formatMoney(current, currency)} ` +
-                  `del ${baseDay}, la stessa base della card Stock Score. NON e il prezzo live ` +
-                  "dell'intestazione, che si aggiorna ogni 15 secondi."
-                : `Upside implicito: ${upside.toFixed(1)}% sul prezzo ${formatMoney(current, currency)} ` +
-                  "riportato dalla fonte dei target: il titolo non ha ancora chiusure memorizzate."
-            }
-          >
-            {upside >= 0 ? "+" : ""}
-            {upside.toFixed(1)}%
-            <span className="ml-1 font-normal text-muted-foreground text-[0.6765rem]">
-              su {formatMoney(current, currency)}
-            </span>
-          </span>
-        )}
-      </div>
-
       {/* The bar itself: low → high gradient with markers stacked above. */}
       <div className="relative">
         {/* Marker labels above the bar */}
@@ -554,10 +559,11 @@ export function AnalystTargetCard({ ticker, currency = null }: Props) {
   const ratings = f?.analyst_ratings ?? [];
   const actions = f?.analyst_actions ?? [];
   const hasPT = pt && pt.mean != null && pt.low != null && pt.high != null;
+  const hasTarget = pt != null && pt.mean != null;
   const hasRatings = ratings.length > 0;
   const hasActions = actions.length > 0;
 
-  if (!hasPT && !hasRatings && !hasActions) {
+  if (!hasTarget && !hasRatings && !hasActions) {
     return (
       <Card className="h-full">
         <CardContent className="p-4 h-full flex flex-col">
@@ -580,6 +586,12 @@ export function AnalystTargetCard({ ticker, currency = null }: Props) {
           (shrink-0), only the actions list scrolls when there are many rows. */}
       <CardContent className="p-4 h-full flex flex-col gap-2 min-h-0">
         <SectionTitle icon={Target} label="Analyst" className="shrink-0" right={refreshBtn} />
+
+        {hasTarget && pt && (
+          <div className="shrink-0">
+            <TargetInTesta pt={pt} currency={currency} />
+          </div>
+        )}
 
         {hasPT && pt && (
           <div className="shrink-0">

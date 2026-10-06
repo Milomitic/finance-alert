@@ -362,7 +362,7 @@ function IndiceTile({ asset, nome, ampiezza }: {
             {suFutures ? (
               <span
                 className="shrink-0 rounded bg-amber-100 px-1 text-[0.6471rem] font-bold uppercase tracking-wider text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
-                title="Cash chiuso — il prezzo viene dal contratto futures, che e' quello che si muove prima dell'apertura"
+                title="Cash chiuso — il prezzo viene dal contratto futures, che e' quello che si muove prima dell'apertura. Il tracciato dei 30 giorni resta quello dell'indice cash."
               >
                 FUT
               </span>
@@ -426,11 +426,12 @@ function IndiceTile({ asset, nome, ampiezza }: {
                 className={cambio != null && cambio < 0 ? "stroke-rose-500" : "stroke-emerald-500"}
               />
             </svg>
-            {/* ⚠️ Con FUT acceso il prezzo viene dal future e questa linea no:
-                il backend manda solo la storia del cash, quindi l'ultimo punto
-                NON e' il numero grande sopra. Dirlo costa quattro parole. */}
+            {/* Con FUT acceso il prezzo viene dal future e questa linea dal
+                cash: l'ultimo punto non e' il numero grande sopra. La dicitura
+                che lo diceva e' stata tolta su richiesta (2026-10-06); resta
+                nel suggerimento della pastiglia FUT. */}
             <div className="text-[0.6471rem] leading-none text-muted-foreground xl:mt-0.5 xl:text-right">
-              30 giorni{suFutures ? " · indice cash, non il future" : ""}
+              30 giorni
             </div>
           </div>
         )}

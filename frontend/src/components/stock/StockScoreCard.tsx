@@ -23,6 +23,9 @@ import {
   scoreColor,
   scoreHex,
 } from "@/lib/scoreMeta";
+import {
+  BARRA_PUNTEGGIO, ETICHETTA_PUNTEGGIO, FONDO_PUNTEGGIO, RIGA_PUNTEGGIO, VALORE_PUNTEGGIO,
+} from "@/lib/rigaPunteggio";
 import { cn } from "@/lib/utils";
 
 /* ─── Component label map ───────────────────────────────────────────────── */
@@ -444,22 +447,17 @@ function SubScoreRow({ pillar, score, components }: SubScoreRowProps) {
   const trigger = (
     // Interlinea stretta di proposito (niente `py`, `leading-5` sul valore):
     // cinque righe di pilastro erano la parte piu' alta della scheda.
-    <div className="grid grid-cols-[80px_1fr_38px] items-center gap-2 cursor-help">
-      <span className="text-xs font-medium text-muted-foreground truncate">
+    <div className={cn(RIGA_PUNTEGGIO, "cursor-help")}>
+      <span className={ETICHETTA_PUNTEGGIO}>
         {label}
       </span>
-      <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden">
+      <div className={FONDO_PUNTEGGIO}>
         <div
-          className={cn("h-full rounded-full transition-all", fillCls)}
+          className={cn(BARRA_PUNTEGGIO, fillCls)}
           style={{ width: `${widthPct}%` }}
         />
       </div>
-      <span
-        className={cn(
-          "text-sm leading-5 font-bold tabular-nums text-right",
-          valueCls,
-        )}
-      >
+      <span className={cn(VALORE_PUNTEGGIO, valueCls)}>
         {isMissing ? "—" : Math.round(score!)}
       </span>
     </div>
@@ -664,58 +662,6 @@ function CardShell({
   );
 }
 
-/* Informational governance + analyst row (Engine Quality v1 capstone). NOT part
-   of the composite — surfaces already-loaded signals; weighting them awaits the
-   score-IC backtest. Governance risks are 1 (best) .. 10 (worst). */
-function QualityExtrasRow({ extras }: { extras?: StockScore["quality_extras"] }) {
-  if (!extras) return null;
-  const gov = extras.governance ?? null;
-  const an = extras.analyst ?? null;
-  const govItems = gov
-    ? ([["Audit", gov.audit], ["CdA", gov.board], ["Comp.", gov.compensation], ["Tot.", gov.overall]] as const)
-        .filter(([, v]) => v != null)
-    : [];
-  if (!govItems.length && !an) return null;
-  const govTone = (v: number) => (v <= 3 ? "text-emerald-800 dark:text-emerald-400" : v >= 7 ? "text-rose-600 dark:text-rose-400" : "text-amber-700 dark:text-amber-400");
-  return (
-    <div className="mt-2 border-t border-border/40 pt-2 space-y-1 text-[0.7059rem]"
-      title="Dati informativi (governance + analisti): mostrati come contesto, NON entrano nel punteggio Qualità qui sopra.">
-      {an && (
-        <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
-          <span className="uppercase tracking-wider text-[0.6765rem] font-semibold">Analisti</span>
-          {an.recommendation_mean != null && (
-            <span title="Consenso 1 (strong buy) – 5 (sell)">rec <span className="font-semibold tabular-nums text-foreground/80">{an.recommendation_mean.toFixed(2)}</span></span>
-          )}
-          {an.n_analysts != null && <span className="text-muted-foreground">· {an.n_analysts} analisti</span>}
-          {an.target_upside_pct != null && (
-            // La base («su 55.41 del 14/09») stava a schermo accanto alla
-            // percentuale e mandava la riga a capo: tolta su richiesta per
-            // risparmiare altezza. Resta nel tooltip, che e' il posto dove
-            // cercarla quando questa percentuale e quella del pannello
-            // analisti differiscono sullo stesso target.
-            <span className={cn("font-semibold tabular-nums", an.target_upside_pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}
-              title={
-                an.upside_base_price != null
-                  ? `Target medio ${an.price_target?.toFixed(2)} sulla chiusura ${an.upside_base_price.toFixed(2)}${an.upside_base_as_of ? ` del ${an.upside_base_as_of}` : ""}`
-                  : `Target medio ${an.price_target?.toFixed(2)}`
-              }>
-              {an.target_upside_pct >= 0 ? "+" : ""}{an.target_upside_pct}% al target
-            </span>
-          )}
-        </div>
-      )}
-      {govItems.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
-          <span className="uppercase tracking-wider text-[0.6765rem] font-semibold" title="Rischio governance: 1 (migliore) – 10 (peggiore)">Governance</span>
-          {govItems.map(([label, v]) => (
-            <span key={label}>{label} <span className={cn("font-semibold tabular-nums", govTone(v as number))}>{v}</span></span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ─── Main component ────────────────────────────────────────────────────── */
 
 export function StockScoreCard({ ticker }: Props) {
@@ -873,7 +819,9 @@ export function StockScoreCard({ ticker }: Props) {
         ))}
       </div>
 
-      <QualityExtrasRow extras={data.quality_extras} />
+      {/* Via la riga «Analisti» e la riga «Governance», su richiesta
+          (2026-10-06): il target e la sua variazione stanno ora in cima alla
+          scheda Analyst, la governance non entrava comunque nel punteggio. */}
 
     </CardShell>
   );
