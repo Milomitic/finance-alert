@@ -392,6 +392,8 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
         .all()
     )
     if not rows:
+        forget(db, [stock_id])
+        db.commit()
         return None
     rows = rows[-260:]
     ohlcv = pd.DataFrame(
@@ -406,6 +408,15 @@ def recompute_one(db: Session, stock_id: int) -> TechnicalScore | None:
     )
     p = partial_for(ohlcv)
     if p is None:
+        # ⚠️ Una storia che non regge piu' un punteggio CANCELLA quello vecchio
+        # (2026-10-06). Prima lo lasciava: CTVA, tagliata a 3 barre dopo la
+        # separazione societaria, continuava a dire «10,6 Debole» — un numero
+        # calcolato sulla serie dell'azienda di PRIMA, affermato al presente
+        # per i mesi necessari ad accumulare 30 barre. Stessa regola di
+        # `forget`: per un'affermazione che non si puo' sostenere, il valore
+        # onesto e' l'assenza.
+        forget(db, [stock_id])
+        db.commit()
         return None
 
     existing = db.execute(

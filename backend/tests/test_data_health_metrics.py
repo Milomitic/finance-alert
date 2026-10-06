@@ -89,3 +89,41 @@ class TestBasisBreakGauge:
         db.flush()
         n = app_metrics.refresh_basis_breaks_gauge(db)
         assert n is not None and n >= 1
+
+
+def _rottura(db, ticker: str, giorno_rottura: str) -> None:
+    """Venti sedute a 100 e venti a 5 con volume inverso: una rottura 20:1
+    che il rivelatore vede, con la prima barra nuova a `giorno_rottura`."""
+    from datetime import date, timedelta
+
+    from app.models import Stock
+
+    s = Stock(ticker=ticker, name="T", exchange="TEST", currency="USD")
+    db.add(s)
+    db.flush()
+    rottura = date.fromisoformat(giorno_rottura)
+    for i in range(40):
+        px, vol = (100.0, 1_000) if i < 20 else (5.0, 20_000)
+        db.execute(
+            text("INSERT INTO ohlcv_daily (stock_id, date, open, high, low, close, volume)"
+                 " VALUES (:sid, :d, :c, :c, :c, :c, :v)"),
+            {"sid": s.id, "d": (rottura + timedelta(days=i - 20)).isoformat(), "c": px, "v": vol},
+        )
+    db.flush()
+
+
+class TestRottureVerificate:
+    def test_una_rottura_verificata_non_conta(self, db):
+        _rottura(db, "EYPT", "2026-08-17")
+        assert app_metrics.refresh_basis_breaks_gauge(db) == 0
+
+    def test_una_rottura_nuova_sullo_stesso_titolo_conta(self, db):
+        """Controllo negativo: l'elenco esclude la VERIFICA, non il titolo."""
+        _rottura(db, "EYPT", "2026-11-02")
+        assert app_metrics.refresh_basis_breaks_gauge(db) == 1
+
+    def test_ogni_verifica_porta_la_sua_ragione(self):
+        from app.services.ohlcv_service import ROTTURE_VERIFICATE
+
+        assert ROTTURE_VERIFICATE
+        assert all(len(r) > 30 for r in ROTTURE_VERIFICATE.values())

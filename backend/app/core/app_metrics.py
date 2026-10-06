@@ -332,12 +332,12 @@ def refresh_basis_breaks_gauge(db: Session) -> int | None:
     """
     from sqlalchemy import text
 
-    from app.services.ohlcv_service import find_basis_breaks
+    from app.services.ohlcv_service import find_basis_breaks, rotture_da_guardare
 
     try:
-        stock_ids = [r[0] for r in db.execute(text("SELECT id FROM stocks")).all()]
+        titoli = db.execute(text("SELECT id, ticker FROM stocks")).all()
         hits = 0
-        for sid in stock_ids:
+        for sid, ticker in titoli:
             rows = db.execute(
                 text(
                     "SELECT date, close, volume FROM ohlcv_daily "
@@ -347,11 +347,11 @@ def refresh_basis_breaks_gauge(db: Session) -> int | None:
             ).all()
             if len(rows) < 2:
                 continue
-            if find_basis_breaks(
+            if rotture_da_guardare(ticker, find_basis_breaks(
                 [r[0] for r in rows],
                 [float(r[1]) for r in rows],
                 [int(r[2] or 0) for r in rows],
-            ):
+            )):
                 hits += 1
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"[metrics] basis-break recount failed: {exc}")

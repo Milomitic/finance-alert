@@ -232,6 +232,9 @@ BERSAGLI: dict[str, list[str]] = {
         "tests/test_technical_score_mutanti.py",
         # `forget` (FA-071): i suoi test stanno col resto della correzione.
         "tests/test_serie_ferma_esce_dal_presente.py",
+        # `recompute_one` che toglie il punteggio quando la storia non lo
+        # regge piu' (CTVA, 2026-10-06), passando dallo script di riparazione.
+        "tests/test_riparazione_ricalcola_tecnico.py",
     ],
     # La de-correlazione per famiglia: N segnali correlati devono contare ~1.3,
     # non N. Se smette di funzionare la confluenza si gonfia in silenzio.

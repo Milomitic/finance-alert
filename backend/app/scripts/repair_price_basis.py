@@ -234,6 +234,26 @@ def scan(db, only: set[str] | None = None) -> list[tuple[Stock, list]]:
     return out
 
 
+def _ricalcola_tecnico(db, stocks) -> None:
+    """Il punteggio tecnico dei titoli riparati, sulla serie NUOVA.
+
+    Prima lo script stampava «ricalcola i punteggi tecnici» e lo lasciava a chi
+    lo eseguiva: dimenticarlo teneva in pagina un punteggio calcolato sulla
+    base sbagliata fino alla scansione seguente — e per un titolo tagliato
+    sotto le 30 barre per sempre, perche' la scansione non lo ricalcola.
+    `recompute_one` toglie il punteggio quando la storia non lo regge piu'."""
+    from app.services import technical_score_service
+
+    for stock in stocks:
+        try:
+            r = technical_score_service.recompute_one(db, stock.id)
+            print(f"  tecnico {stock.ticker:<10} "
+                  f"{f'{r.composite:.1f} {r.posture}' if r else 'tolto: storia troppo corta'}")
+        except Exception as exc:  # noqa: BLE001 - il punteggio non deve fermare il resto
+            db.rollback()
+            print(f"  tecnico {stock.ticker:<10} non ricalcolato: {str(exc)[:60]}")
+
+
 def _truncate(db, found) -> None:
     """Delete every bar strictly before the break, keeping the newer basis.
 
@@ -281,7 +301,7 @@ def _truncate(db, found) -> None:
             logger.warning(f"[repair] {stock.ticker} non troncato: {exc}")
             print(f"  FALLITO {stock.ticker:<10} {str(exc)[:70]}")
     print()
-    print("Ricalcola i punteggi tecnici: i vecchi restano sulla base sbagliata.")
+    _ricalcola_tecnico(db, [stock for stock, _ in found])
 
 
 def main() -> None:
@@ -361,7 +381,7 @@ def main() -> None:
                 print(f"  FALLITO {stock.ticker:<10} {str(exc)[:70]}")
         print(f"\nriparati {ok}, falliti {failed}.")
         if ok:
-            print("Ricalcola i punteggi tecnici: i vecchi restano sulla base sbagliata.")
+            _ricalcola_tecnico(db, [stock for stock, _ in found])
     finally:
         db.close()
 

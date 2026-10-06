@@ -95,3 +95,49 @@ class TestTheCrash:
     def test_too_little_history_returns_none(self, db):
         s = _stock_with_history(db, ticker="EEE", bars=10)
         assert svc.recompute_one(db, s.id) is None
+
+
+class TestUnaStoriaTroppoCorta:
+    """CTVA, 2026-10-06: tagliata a 3 barre dopo la separazione societaria,
+    continuava a dire «10,6 Debole» — un punteggio calcolato sulla serie
+    dell'azienda di prima e affermato al presente."""
+
+    def test_il_punteggio_vecchio_si_toglie(self, db):
+        from sqlalchemy import delete, select
+
+        from app.models.technical_score import TechnicalScore
+
+        s = _stock_with_history(db, ticker="CTVA")
+        assert svc.recompute_one(db, s.id) is not None
+        # La storia si accorcia sotto le 30 barre, come dopo un --truncate.
+        ultime = [r.date for r in db.execute(
+            select(OhlcvDaily).where(OhlcvDaily.stock_id == s.id).order_by(OhlcvDaily.date)
+        ).scalars()][-3:]
+        db.execute(delete(OhlcvDaily).where(OhlcvDaily.stock_id == s.id, OhlcvDaily.date < ultime[0]))
+        db.commit()
+
+        assert svc.recompute_one(db, s.id) is None
+        assert db.execute(select(TechnicalScore).where(TechnicalScore.stock_id == s.id)).first() is None
+
+    def test_senza_barre_non_resta_niente(self, db):
+        from sqlalchemy import delete, select
+
+        from app.models.technical_score import TechnicalScore
+
+        s = _stock_with_history(db, ticker="ZERO")
+        svc.recompute_one(db, s.id)
+        db.execute(delete(OhlcvDaily).where(OhlcvDaily.stock_id == s.id))
+        db.commit()
+
+        assert svc.recompute_one(db, s.id) is None
+        assert db.execute(select(TechnicalScore).where(TechnicalScore.stock_id == s.id)).first() is None
+
+    def test_controllo_negativo_una_storia_sana_resta(self, db):
+        from sqlalchemy import select
+
+        from app.models.technical_score import TechnicalScore
+
+        s = _stock_with_history(db, ticker="SANO")
+        svc.recompute_one(db, s.id)
+        svc.recompute_one(db, s.id)
+        assert db.execute(select(TechnicalScore).where(TechnicalScore.stock_id == s.id)).first() is not None

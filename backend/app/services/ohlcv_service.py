@@ -143,6 +143,24 @@ _SPLIT_RATIOS = (3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0)
 _SPLIT_TOLERANCE = 0.08
 
 
+#: Rotture gia' VERIFICATE a mano come movimenti reali, per (ticker, data), con
+#: la ragione. ⚠️ Per data e non per titolo: una rottura NUOVA sullo stesso
+#: titolo conta di nuovo. Senza questo elenco una rottura verificata resta nel
+#: contatore della Salute per sempre e avvisa due volte al giorno, che e' il
+#: modo in cui un allarme impara a farsi ignorare.
+ROTTURE_VERIFICATE: dict[tuple[str, str], str] = {
+    ("EYPT", "2026-08-17"): (
+        "movimento reale, non uno split: 254 M$ scambiati contro 20,7 M$ di "
+        "mediana a sei mesi, e la sorgente fresca la riproduce (CLAUDE.md, «EYPT: RESOLVED»)"
+    ),
+}
+
+
+def rotture_da_guardare(ticker: str, breaks: list) -> list:
+    """Le rotture di `ticker` che NON sono gia' state verificate a mano."""
+    return [b for b in breaks if (ticker, str(b.date)[:10]) not in ROTTURE_VERIFICATE]
+
+
 @dataclass(frozen=True)
 class BasisBreak:
     """A suspected unrepaired split inside a stock's STORED history."""
