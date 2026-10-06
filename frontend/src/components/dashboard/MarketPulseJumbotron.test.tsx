@@ -318,11 +318,25 @@ describe("la riga di contesto sta allineata", () => {
       indice("BTC-USD", { category: "crypto" }),
     ];
     montaA(SEDUTA);
-    const contesto = screen.getByText("Indici").closest("div")!;
+    const contesto = screen.getByText("Indici").closest("div")!.parentElement!;
     expect(contesto.querySelectorAll(".w-px")).toHaveLength(0);
     // Controllo negativo: il gruppo c'e' davvero, quindi «zero separatori» non
     // e' il risultato di una riga che non e' stata resa.
     expect(contesto.textContent).toContain("Cripto");
+  });
+
+  it("una riga per tipo: le cripto non vanno in coda alle materie prime", () => {
+    assets = [
+      indice("^N225", { category: "index" }),
+      indice("GC=F", { category: "commodity" }),
+      indice("BTC-USD", { category: "crypto" }),
+    ];
+    montaA(SEDUTA);
+    const riga = (titolo: string) => screen.getByText(titolo).closest("div")!;
+    // Tre righe distinte, e ognuna porta solo le sue voci.
+    expect(new Set([riga("Indici"), riga("Materie prime"), riga("Cripto"), riga("ETF")]).size).toBe(4);
+    expect(riga("Materie prime").textContent).not.toContain("Bitcoin");
+    expect(riga("Cripto").textContent).toContain("Bitcoin");
   });
 
   it("le icone di materie prime e cripto sono a colori, e non sono la palette direzionale", () => {
@@ -553,11 +567,42 @@ describe("l'agenda del giorno", () => {
     expect(screen.getByText(/\(AAPL\)/)).toBeInTheDocument();
   });
 
-  it("⚠️ senza eventi la riga non c'e': non scrive «nessun evento»", () => {
-    // Una riga intera per dire zero e' spazio tolto a cio' che ha qualcosa da
-    // dire. E' anche il controllo negativo del test qui sopra.
+  it("⚠️ senza eventi il riquadro c'e' lo stesso, e dice che oggi non c'e' niente", () => {
+    // Il riquadro sta accanto a indici e materie prime con un'altezza sua: se
+    // sparisse a giornata vuota la fascia cambierebbe forma (FA-106). E' anche
+    // il controllo negativo del test qui sopra.
     montaA(PREMARKET);
-    expect(screen.queryByText("Oggi")).not.toBeInTheDocument();
+    expect(screen.getByText("Oggi")).toBeInTheDocument();
+    expect(screen.getByText("Niente in calendario oggi.")).toBeInTheDocument();
+    expect(screen.queryByText("Richieste sussidi")).not.toBeInTheDocument();
+  });
+
+  it("i giorni dopo: solo macro importanti e trimestrali dei tuoi titoli", () => {
+    // Lunedi' 21, tre giorni dopo il venerdi' del test.
+    eventi = [
+      { kind: "macro", date: "2026-09-21", label: "Inflazione CPI", importance: "high",
+        region: "US", release_time: "12:30", series_id: 2 } as CalendarEvent,
+      { kind: "macro", date: "2026-09-21", label: "Scorte di magazzino", importance: "low",
+        region: "US", release_time: "14:00", series_id: 3 } as CalendarEvent,
+      { kind: "earnings", date: "2026-09-21", ticker: "NVDA", name: "Nvidia",
+        eps_estimate: null, revenue_estimate: null, sector: null, market_cap: 4e12,
+        earnings_when: "after" } as CalendarEvent,
+      { kind: "earnings", date: "2026-09-21", ticker: "MSFT", name: "Microsoft",
+        eps_estimate: null, revenue_estimate: null, sector: null, market_cap: 3e12,
+        earnings_when: "after" } as CalendarEvent,
+    ];
+    seguiti = new Map([["NVDA", "posizione"]]);
+    try {
+      montaA(PREMARKET);
+      const agenda = screen.getByRole("region", { name: "Agenda" });
+      expect(within(agenda).getByText("Inflazione CPI")).toBeInTheDocument();
+      expect(within(agenda).getByText("NVDA")).toBeInTheDocument();
+      // Non seguito, e macro minore: restano nel calendario completo.
+      expect(within(agenda).queryByText("MSFT")).not.toBeInTheDocument();
+      expect(within(agenda).queryByText("Scorte di magazzino")).not.toBeInTheDocument();
+    } finally {
+      seguiti = new Map();
+    }
   });
 });
 
@@ -686,20 +731,16 @@ describe("il VIX tradotto in movimento atteso", () => {
     montaA(SEDUTA);
     expect(screen.getByText("±0,99%")).toBeInTheDocument();
     expect(screen.getByText("7.628–7.780")).toBeInTheDocument();
-    expect(screen.getByText("±4,5%")).toBeInTheDocument();       // 30 giorni di calendario
   });
 
-  it("mette la variazione di oggi a confronto con l'atteso", () => {
-    // 0,27 / 0,99 = 0,3.
+  it("la riga «a 30 giorni» non c'e' piu', con il suo confronto con l'atteso", () => {
+    // Tolta su richiesta il 2026-10-06. Controllo negativo: il riquadro c'e'
+    // ed e' pieno, quindi l'assenza non e' quella di un riquadro non reso.
     conVix(0.06, 0.27);
     montaA(SEDUTA);
-    expect(screen.getByText("0,3×")).toBeInTheDocument();
-  });
-
-  it("⚠️ una seduta oltre l'atteso si nota in ambra, non nel colore di una direzione", () => {
-    conVix(0.06, -1.5);
-    montaA(SEDUTA);
-    expect(screen.getByText("1,5×").className).toContain("amber");
+    expect(screen.getByText("±0,99%")).toBeInTheDocument();
+    expect(screen.queryByText(/a 30 giorni/)).not.toBeInTheDocument();
+    expect(screen.queryByText("0,3×")).not.toBeInTheDocument();
   });
 
   it("⚠️ un VIX che SALE ha il colore di un mercato che scende", () => {
@@ -733,15 +774,14 @@ describe("MarketPulseJumbotron — la forma c'e' prima dei dati (FA-106)", () =>
     }
   });
 
-  it("il riquadro VIX ha le sue tre righe anche senza valori", () => {
+  it("il riquadro VIX ha la sua riga anche senza valori", () => {
     quotazioniInArrivo = true;
     try {
       montaA(SEDUTA);
       expect(screen.getByText("VIX")).toBeInTheDocument();
-      // Le due righe del movimento atteso, con «—» al posto dei numeri: senza,
-      // il riquadro nascerebbe di una riga e ne guadagnerebbe due all'arrivo.
+      // La riga del movimento atteso, con «—» al posto dei numeri: senza, il
+      // riquadro nascerebbe piu' basso e crescerebbe all'arrivo dei dati.
       expect(screen.getByText(/S&P atteso in una seduta/)).toHaveTextContent("—");
-      expect(screen.getByText(/a 30 giorni/)).toHaveTextContent("—");
     } finally {
       quotazioniInArrivo = false;
     }

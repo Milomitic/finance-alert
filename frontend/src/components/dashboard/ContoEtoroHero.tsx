@@ -58,6 +58,20 @@ function ora(iso: string | null): string {
 
 const USD = (v: number) => formatMoney(v, "USD");
 
+/** L'intestazione di una colonna. ⚠️ Altezza FISSA (h-7, quella del gruppo di
+ *  bottoni della curva): con l'altezza del contenuto i tre titoli stavano a tre
+ *  quote diverse, perche' solo la curva ha dei bottoni accanto al titolo. */
+function Intestazione({ titolo, destra }: { titolo: React.ReactNode; destra?: React.ReactNode }) {
+  return (
+    <div className="flex h-7 shrink-0 items-center justify-between gap-2">
+      <span className="inline-flex items-center gap-1 text-[0.6765rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {titolo}
+      </span>
+      {destra}
+    </div>
+  );
+}
+
 function Tessera({ etichetta, children, sotto, className }: {
   etichetta: string; children: React.ReactNode; sotto?: React.ReactNode; className?: string;
 }) {
@@ -75,19 +89,21 @@ function Saldo({ v }: { v: EtoroVivo }) {
   return (
     <div className="flex min-h-0 flex-col justify-between gap-3 p-4">
       <div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[0.6765rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Conto eToro</span>
-          <span className="inline-flex items-center gap-1.5 text-[0.6471rem] text-muted-foreground">
-            <span
-              aria-hidden
-              className={cn(
-                "h-1.5 w-1.5 rounded-full",
-                v.in_ritardo ? "bg-amber-500" : "animate-pulse bg-emerald-500",
-              )}
-            />
-            {v.in_ritardo ? `in ritardo · ${ora(v.aggiornato_il)}` : `dal vivo · ${ora(v.aggiornato_il)}`}
-          </span>
-        </div>
+        <Intestazione
+          titolo="Conto eToro"
+          destra={
+            <span className="inline-flex items-center gap-1.5 text-[0.6471rem] text-muted-foreground">
+              <span
+                aria-hidden
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  v.in_ritardo ? "bg-amber-500" : "animate-pulse bg-emerald-500",
+                )}
+              />
+              {v.in_ritardo ? `in ritardo · ${ora(v.aggiornato_il)}` : `dal vivo · ${ora(v.aggiornato_il)}`}
+            </span>
+          }
+        />
         <FlashValue
           value={v.valore}
           format={USD}
@@ -99,15 +115,12 @@ function Saldo({ v }: { v: EtoroVivo }) {
           <span className="text-xs">({fmtPct(v.guadagno_giorno_pct, 2)})</span>
           <span className="font-normal text-muted-foreground">oggi</span>
         </div>
-        {v.valore_ieri != null && (
-          <div className="text-[0.6471rem] text-muted-foreground tabular-nums">chiusura di ieri {USD(v.valore_ieri)}</div>
-        )}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         <Tessera etichetta="P/L aperto" className={tono(v.pnl_aperto)}>
           {formatMoneySigned(v.pnl_aperto, "USD")}
         </Tessera>
-        <Tessera etichetta="Margine usato" sotto={`${v.posizioni} posizioni`}>
+        <Tessera etichetta="Margine usato">
           {formatMoney(v.margine_usato, "USD")}
         </Tessera>
         <Tessera
@@ -139,14 +152,17 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
 
   return (
     <div className="flex min-h-0 flex-col p-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1 text-[0.6765rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          Andamento
-          <InfoHint
-            label="Che cosa mostra la curva"
-            text="Il valore del conto Trading a fine giornata, e oggi minuto per minuto. Comprende versamenti e prelievi: il rendimento vero del periodo è il P/L generato qui sotto, cioè i profitti chiusi più la variazione del P/L aperto. La percentuale è sul capitale mediamente impegnato nel periodo: un versamento conta per i giorni in cui è rimasto nel conto, non come se ci fosse stato dall'inizio."
-          />
-        </span>
+      <Intestazione
+        titolo={
+          <>
+            Andamento
+            <InfoHint
+              label="Che cosa mostra la curva"
+              text="Il valore del conto Trading a fine giornata, e oggi minuto per minuto. Comprende versamenti e prelievi: il rendimento vero del periodo è il P/L generato qui sotto, cioè i profitti chiusi più la variazione del P/L aperto. La percentuale è sul capitale mediamente impegnato nel periodo: un versamento conta per i giorni in cui è rimasto nel conto, non come se ci fosse stato dall'inizio."
+            />
+          </>
+        }
+        destra={
         <div role="group" aria-label="Intervallo della curva" className="flex rounded-md border border-border/60 p-0.5">
           {INTERVALLI.map((i) => (
             <button
@@ -163,11 +179,12 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
             </button>
           ))}
         </div>
-      </div>
+        }
+      />
 
       <div
         ref={riquadro}
-        className="relative mt-2 min-h-0 flex-1"
+        className="relative my-2 min-h-0 flex-1"
         onPointerMove={(e) => {
           const r = riquadro.current?.getBoundingClientRect();
           if (r && r.width > 0) setCursore(((e.clientX - r.left) / r.width) * 1000);
@@ -176,7 +193,7 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
       >
         {t ? (
           <>
-            <svg viewBox="0 0 1000 300" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" role="img" aria-label={descrizione}>
+            <svg viewBox="0 0 1000 300" preserveAspectRatio="none" className="absolute inset-x-0 bottom-4 top-4 h-[calc(100%-2rem)] w-full" role="img" aria-label={descrizione}>
               <defs>
                 <linearGradient id="conto-etoro-area" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colore} stopOpacity="0.28" />
@@ -199,7 +216,7 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
             {punto && (
               <div
                 className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background"
-                style={{ left: `${punto.x / 10}%`, top: `${(punto.y / 300) * 100}%`, width: 10, height: 10, background: colore }}
+                style={{ left: `${punto.x / 10}%`, top: `calc(1rem + (100% - 2rem) * ${punto.y / 300})`, width: 10, height: 10, background: colore }}
                 aria-hidden
               />
             )}
@@ -222,7 +239,7 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
         )}
       </div>
 
-      <div className="mt-2 min-h-[2.25rem] text-xs tabular-nums">
+      <div className="min-h-[1.25rem] text-xs tabular-nums">
         {intervallo === "oggi" ? (
           <span className="text-muted-foreground">
             Dalla chiusura di ieri:{" "}
@@ -253,26 +270,35 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
   );
 }
 
-const RIGHE_MOVIMENTI = 5;
+/** Quante righe: dieci riempiono il riquadro a tutta altezza da `lg`. Sul
+ *  telefono la colonna sta sotto la curva e se ne mostrano cinque, perche'
+ *  ogni riga in piu' la toglierebbe alla curva (l'altezza totale e' fissa). */
+const RIGHE_MOVIMENTI = 10;
+const RIGHE_TELEFONO = 5;
 
 function Movimenti({ strumenti }: { strumenti: EtoroStrumentoOggi[] }) {
   const righe = strumenti.filter((s) => s.guadagno_giorno != null).slice(0, RIGHE_MOVIMENTI);
   const massimo = Math.max(...righe.map((s) => Math.abs(s.guadagno_giorno ?? 0)), 1);
   return (
     <div className="flex min-h-0 flex-col p-4">
-      <span className="text-[0.6765rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-        Chi muove il conto oggi
-      </span>
+      <Intestazione titolo="Movers" />
       {righe.length === 0 ? (
         <p className="mt-3 text-xs text-muted-foreground">Nessun movimento ancora oggi.</p>
       ) : (
         <ul className="mt-2 space-y-1.5">
-          {righe.map((s) => {
+          {righe.map((s, i) => {
             const g = s.guadagno_giorno ?? 0;
             const largo = `${(Math.abs(g) / massimo) * 50}%`;
             const nome = s.ticker ?? s.simbolo ?? `#${s.instrument_id}`;
             return (
-              <li key={s.instrument_id} className="grid grid-cols-[4.5rem_minmax(0,1fr)_4.75rem] items-center gap-2 text-xs">
+              <li
+                key={s.instrument_id}
+                className={cn(
+                  "grid-cols-[4.5rem_minmax(0,1fr)_4.75rem] items-center gap-2 text-xs",
+                  i < RIGHE_TELEFONO ? "grid" : "hidden lg:grid",
+                )}
+                title="Guadagno di oggi su questo strumento, calcolato da eToro"
+              >
                 {s.ticker ? (
                   <Link to={`/stocks/${encodeURIComponent(s.ticker)}`} className="truncate font-semibold hover:underline">{nome}</Link>
                 ) : (
@@ -292,10 +318,6 @@ function Movimenti({ strumenti }: { strumenti: EtoroStrumentoOggi[] }) {
           })}
         </ul>
       )}
-      <p className="mt-auto pt-2 text-[0.6471rem] text-muted-foreground">
-        Guadagno di oggi per strumento, calcolato da eToro.{" "}
-        <Link to="/positions" className="underline">Tutte le posizioni</Link>
-      </p>
     </div>
   );
 }

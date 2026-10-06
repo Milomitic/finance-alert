@@ -1,5 +1,5 @@
 import {
-  Bitcoin, CalendarClock, Clock3, Coins, Flame, Fuel, Gem, Star,
+  Bitcoin, Clock3, Coins, Flame, Fuel, Gem, Star,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -8,6 +8,7 @@ import type {
   IndexBreadth, IndexMover, LiveQuote, MarketGlobal, MoversBlock,
 } from "@/api/types";
 import type { PremarketMover } from "@/api/dashboard";
+import { AgendaCompatta } from "@/components/dashboard/AgendaCompatta";
 import { MarketBreadthBand } from "@/components/dashboard/MarketBreadthBand";
 import { MarketStateBadge, type MarketPhase } from "@/components/dashboard/MarketStateBadge";
 import { Card } from "@/components/ui/card";
@@ -24,14 +25,15 @@ import { useTitoliSeguiti } from "@/hooks/useTitoliSeguiti";
 import { cumulativeVolumeFraction } from "@/lib/intradayVolume";
 import { formatLivello, formatVariazione, posizioneNelRange } from "@/lib/marketNumber";
 import { moversDeiMiei } from "@/lib/moversMiei";
-import { agendaDelGiorno, agendaVuota } from "@/lib/oggiMercato";
+import { agendaDelGiorno } from "@/lib/oggiMercato";
 import { PANIERE_CONTESTO } from "@/lib/paniereLive";
+import { settimana } from "@/lib/settimana";
 import { sparklinePoints } from "@/lib/sparkline";
 import { etToday, formatDelta, usSessionClock, type UsPhase } from "@/lib/usSession";
 import { cn } from "@/lib/utils";
 import {
-  bandaVix, CLASSE_BANDA, formatPercento, intervalloSeduta, movimentoSeduta, movimentoTrentaGiorni,
-  multiploAtteso, spiegazioneBande, tonoVariazioneVix,
+  bandaVix, CLASSE_BANDA, formatPercento, intervalloSeduta, movimentoSeduta, spiegazioneBande,
+  tonoVariazioneVix,
 } from "@/lib/vix";
 import { fmtVolume } from "@/lib/volumeFormat";
 
@@ -207,12 +209,10 @@ function RiquadroVix({ vix, sp500, inArrivo }: {
   const valore = vix?.quote?.price ?? null;
   const cambio = vix?.quote?.change_pct ?? null;
   const seduta = movimentoSeduta(valore);
-  const trenta = movimentoTrentaGiorni(valore);
   const q = sp500?.quote;
   const chiusuraPrec = q?.prev_close
     ?? (q?.price != null && q?.change_abs != null ? q.price - q.change_abs : null);
   const intervallo = intervalloSeduta(chiusuraPrec, valore);
-  const multiplo = multiploAtteso(q?.change_pct, valore);
   const banda = valore != null ? bandaVix(valore) : null;
   return (
     <div
@@ -242,10 +242,11 @@ function RiquadroVix({ vix, sp500, inArrivo }: {
           </span>
         )}
       </div>
-      {/* ⚠️ Le due righe ci sono SEMPRE, con «—» dove manca un valore
-          (FA-106). Rese solo coi dati, il riquadro passava da una riga a tre
-          quando arrivava il VIX, e tutto cio' che sta sotto scendeva di
-          ~40px. Stessa forma prima e dopo: arrivano i numeri, non le righe. */}
+      {/* ⚠️ La riga c'e' SEMPRE, con «—» dove manca un valore (FA-106): resa
+          solo coi dati, il riquadro cambiava altezza quando arrivava il VIX e
+          tutto cio' che sta sotto scendeva. Arrivano i numeri, non le righe.
+          La riga «a 30 giorni» e' stata tolta su richiesta: la seduta e' la
+          misura che serve la mattina. */}
       {(
         <div className="mt-1 text-xs leading-snug text-muted-foreground">
           <div>
@@ -259,28 +260,6 @@ function RiquadroVix({ vix, sp500, inArrivo }: {
                 <span className="tabular-nums text-foreground">
                   {formatLivello(intervallo.basso)}–{formatLivello(intervallo.alto)}
                 </span>
-              </>
-            )}
-          </div>
-          <div>
-            a 30 giorni{" "}
-            <span className="font-semibold tabular-nums text-foreground">
-              {trenta != null ? `±${formatPercento(trenta, 1)}%` : "—"}
-            </span>
-            {multiplo != null && (
-              <>
-                {" · oggi "}
-                {/* Oltre il movimento atteso e' la seduta da notare: ambra,
-                    non rosa — e' un avviso sull'ampiezza, non sulla direzione. */}
-                <span
-                  className={cn(
-                    "font-semibold tabular-nums",
-                    multiplo > 1 ? "text-amber-700 dark:text-amber-400" : "text-foreground",
-                  )}
-                >
-                  {formatPercento(multiplo, 1)}×
-                </span>{" "}
-                l'atteso
               </>
             )}
           </div>
@@ -327,7 +306,7 @@ function EstremiIndice({ ampiezza }: { ampiezza: IndexBreadth | undefined }) {
      suggerimento lo nega a parole, che e' l'unico posto dove ci sta. */
   const daIstantanea = "Dall'ultima istantanea di mercato, come i numeri di ampiezza — non dal prezzo live qui sopra";
   return (
-    <div className="mt-2 hidden border-t pt-1 text-[0.6471rem] leading-tight lg:block">
+    <div className="hidden border-t pt-1 text-[0.6471rem] leading-tight lg:block">
       {su.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
           <span className="shrink-0 font-bold uppercase tracking-wider text-muted-foreground" title={daIstantanea}>su</span>
@@ -464,7 +443,7 @@ function IndiceTile({ asset, nome, ampiezza }: {
            lo stacco che si vede e' quello che avanza dopo di essa. Da `xl` il
            tracciato sta a destra e la barra segue punti e apertura, quindi
            basta meno. */
-        <div className="mt-5 hidden lg:block xl:mt-3">
+        <div className="hidden lg:block">
           {/* Il minimo e il massimo da soli non dicono DOVE sta il prezzo. Il
               marcatore lo dice senza far fare il conto. */}
           <div
@@ -491,15 +470,22 @@ function IndiceTile({ asset, nome, ampiezza }: {
   return asset ? (
     <Link
       to={`/markets/${encodeURIComponent(asset.symbol)}`}
-      className="min-w-0 rounded-md border bg-card/70 p-2 transition-colors hover:bg-accent/40"
+      className="flex min-w-0 flex-col justify-between gap-2 rounded-md border bg-card/70 p-2 transition-colors hover:bg-accent/40"
       title={`${nome} — apri il dettaglio`}
     >
       {corpo}
     </Link>
   ) : (
-    <div className="min-w-0 rounded-md border bg-card/70 p-2">{corpo}</div>
+    <div className="flex min-w-0 flex-col justify-between gap-2 rounded-md border bg-card/70 p-2">{corpo}</div>
   );
 }
+
+/* Letterali: il purger di Tailwind vede solo le classi scritte per intero.
+ * Sul telefono ogni voce sta su una riga sua (`flex-col`), da `sm` si
+ * affiancano e vanno a capo sotto la loro etichetta. */
+const RIGA_GRUPPO = "flex min-w-0 flex-col items-start gap-y-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1";
+const ETICHETTA_GRUPPO =
+  "text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:w-[7.5rem] sm:shrink-0";
 
 /* ─── Una voce della riga di contesto ────────────────────────────────────── */
 function Chip({ asset }: { asset: LiveAsset }) {
@@ -680,6 +666,13 @@ function RigaMover({ ticker, nome, cambio, prezzoOra, volume, etf, flipRef }: {
   );
 }
 
+/** Rialzi e ribassi AFFIANCATI sul telefono e da `xl`, impilati in mezzo.
+ *  Sul telefono la riga mostra solo ticker e variazione, che in mezza
+ *  larghezza ci stanno; fra `md` e `xl` il riquadro e' mezza fascia, e due
+ *  colonne li' taglierebbero i nomi. Letterale: il purger di Tailwind non vede
+ *  le classi composte. */
+const GRIGLIA_MOVERS = "grid grid-cols-2 gap-x-4 gap-y-1 md:grid-cols-1 xl:grid-cols-2";
+
 /** Una delle due liste, senza titoletto: il verso lo dice gia' il colore di
  *  ogni variazione, e «Su»/«Giu'» costavano una riga di altezza per lato.
  *
@@ -696,7 +689,7 @@ function Colonna({ etichetta, seconda = false, children }: {
     <div
       role="group"
       aria-label={etichetta}
-      className={cn("min-w-0", seconda && "border-t pt-1 xl:border-t-0 xl:pt-0")}
+      className={cn("min-w-0", seconda && "md:border-t md:pt-1 xl:border-t-0 xl:pt-0")}
     >
       {children}
     </div>
@@ -817,10 +810,20 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
    * una finestra di UN giorno solo, con cinque minuti di validita'. Il giorno
    * e' quello di New York: alle 01:00 italiane a Wall Street e' ancora ieri. */
   const giornoET = useMemo(() => etToday(new Date(ora)), [ora]);
-  const calendarioQ = useCalendar({ from: giornoET, to: giornoET, kinds: ["macro", "earnings"] });
+  const finoA = useMemo(() => {
+    const t = new Date(`${giornoET}T12:00:00Z`);
+    t.setUTCDate(t.getUTCDate() + 6);
+    return t.toISOString().slice(0, 10);
+  }, [giornoET]);
+  const calendarioQ = useCalendar({ from: giornoET, to: finoA, kinds: ["macro", "earnings"] });
   const agenda = useMemo(
     () => agendaDelGiorno(calendarioQ.data?.events, giornoET),
     [calendarioQ.data, giornoET],
+  );
+
+  const prossimi = useMemo(
+    () => settimana(calendarioQ.data?.events, giornoET, seguiti),
+    [calendarioQ.data, giornoET, seguiti],
   );
 
   const badge: MarketPhase = fase === "open" ? "open" : fase === "pre" ? "pre" : "closed";
@@ -927,14 +930,14 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 quando i dati lo smentiscono e' il titolo qui sopra a dirlo. */}
             <div className="mt-1.5">
               {sessione.minutesToNext != null ? (
-                <>
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {sessione.nextLabel} fra
-                  </div>
-                  <div className="text-2xl font-bold leading-none tabular-nums">
+                  </span>
+                  <span className="text-xl font-bold leading-none tabular-nums">
                     {formatDelta(sessione.minutesToNext)}
-                  </div>
-                </>
+                  </span>
+                </div>
               ) : (
                 <div className="text-sm text-muted-foreground">
                   {sessione.nextLabel}{" "}
@@ -996,41 +999,28 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
             risposto: il gruppo a leva viene da un'altra interrogazione
             (`/api/stocks/quotes`), e legarlo alla presenza degli indici lo
             faceva sparire insieme a loro quando quella query taceva. */}
-        {(
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-t pt-2">
+        <div className="grid gap-3 border-t pt-2 lg:grid-cols-2">
+          {/* ⚠️ Una riga per tipo — indici, materie prime, cripto, ETF — con
+              l'etichetta a larghezza fissa, cosi' le voci partono allineate.
+              Prima era una fila sola che andava a capo dove capitava, e le
+              cripto finivano in coda alle materie prime. Sul telefono ogni
+              voce va a capo da sola: affiancate si sovrapponevano. */}
+          <div className="flex min-w-0 flex-col gap-1.5">
             {gruppi.map(([titolo, voci]) =>
               voci.length === 0 ? null : (
-                /* `gap-x-3` dentro il gruppo e `gap-x-5` fra i gruppi: prima
-                   erano rispettivamente 1 e 3, e undici voci attaccate si
-                   leggevano come una sola stringa lunga. */
-                /* ⚠️ Niente separatore verticale fra i gruppi. Ce n'era uno
-                   davanti a ogni gruppo tranne il primo, e quando la riga
-                   andava A CAPO il gruppo che apriva la riga nuova se lo
-                   portava dietro: «CRIPTO» partiva qualche pixel piu' a destra
-                   di «INDICI», per un tratto che li' non separava niente. Il
-                   CSS non sa dove cade il ritorno a capo, quindi l'unica forma
-                   che regge e' non averlo — lo spazio fra i gruppi lo fa
-                   `gap-x-6`, che e' il doppio di quello interno. */
-                <span key={titolo} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
-                    {titolo}
-                  </span>
+                <div key={titolo} className={RIGA_GRUPPO}>
+                  <span className={ETICHETTA_GRUPPO}>{titolo}</span>
                   {voci.map((a) => (
                     <Chip key={a.symbol} asset={a} />
                   ))}
-                </span>
+                </div>
               ),
             )}
-            {/* Gli ETF, in coda alle materie prime e alle cripto: e'
-                l'ultimo gruppo perche' e' il piu' specialistico, non il meno
+            {/* Gli ETF in coda: e' il gruppo piu' specialistico, non il meno
                 importante. Il paniere fisso a leva, e dietro i fondi che si
-                muovono nel pre-market — prima stavano in una riga loro in
-                fondo al riquadro dei movers, cioe' due righe di ETF sulla
-                stessa fascia. */}
-            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
-                ETF
-              </span>
+                muovono nel pre-market. */}
+            <div className={RIGA_GRUPPO}>
+              <span className={ETICHETTA_GRUPPO}>ETF</span>
               {ETF_LEVA.map((t) => {
                 const q = perTicker.get(t);
                 return (
@@ -1057,65 +1047,18 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                   titolo={`${m.name ?? m.ticker} — in movimento nel pre-market. Molti di questi fondi sono a leva o inversi: si muovono piu' del mercato per costruzione, non perche' stia succedendo qualcosa di loro.`}
                 />
               ))}
-            </span>
+            </div>
           </div>
-        )}
-
-        {/* Fascia 3: che cosa esce oggi. In pre-market e' la domanda che viene
-            subito dopo «dove sono i futures», e un dato macro alle 08:30 di New
-            York muove l'apertura piu' di qualunque movimento di stanotte. */}
-        {!agendaVuota(agenda) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2 text-sm">
-            <span className="flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-              Oggi
-            </span>
-            {agenda.macro.slice(0, 4).map((m) => (
-              <span key={`${m.etichetta}-${m.oraET}`} className="flex min-w-0 items-baseline gap-1">
-                {m.oraET ? (
-                  <span className="shrink-0 font-semibold tabular-nums">{m.oraET}</span>
-                ) : (
-                  <span className="shrink-0 text-muted-foreground" title="Orario di rilascio non pubblicato">
-                    ora n/d
-                  </span>
-                )}
-                <span
-                  className={cn(
-                    "truncate",
-                    m.importanza === "high" ? "font-semibold text-foreground" : "text-muted-foreground",
-                  )}
-                  title={`${m.etichetta} · ${m.regione} · importanza ${m.importanza}`}
-                >
-                  {m.etichetta}
-                </span>
-              </span>
-            ))}
-            {agenda.primaDellApertura.length > 0 && (
-              <span className="min-w-0 text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  {agenda.primaDellApertura.length}
-                </span>{" "}
-                trimestrali prima dell'apertura
-                <span className="ml-1">
-                  ({agenda.primaDellApertura.slice(0, 3).map((e) => e.ticker).join(", ")}
-                  {agenda.primaDellApertura.length > 3 ? "…" : ""})
-                </span>
-              </span>
-            )}
-            {agenda.dopoLaChiusura.length > 0 && (
-              <span className="text-muted-foreground">
-                <span className="font-semibold text-foreground">{agenda.dopoLaChiusura.length}</span>{" "}
-                dopo la chiusura
-              </span>
-            )}
-            <Link
-              to="/calendar"
-              className="ml-auto shrink-0 text-[0.6765rem] text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              calendario
-            </Link>
-          </div>
-        )}
+          {/* Che cosa esce oggi e nei prossimi giorni. In pre-market e' la
+              domanda che viene subito dopo «dove sono i futures»: un dato macro
+              alle 08:30 di New York muove l'apertura piu' di qualunque
+              movimento di stanotte. */}
+          <AgendaCompatta
+            oggi={agenda}
+            prossimi={prossimi}
+            stato={calendarioQ.isError ? "errore" : calendarioQ.isLoading ? "carica" : "pronto"}
+          />
+        </div>
 
         {/* Fascia 4: chi si muove adesso, e l'ampiezza in cui leggerlo. */}
         <div className="grid gap-3 border-t pt-2 md:grid-cols-2">
@@ -1168,7 +1111,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+                  <div className={GRIGLIA_MOVERS}>
                     <Colonna etichetta="In rialzo">
                       {moversMiei.su.map((m) => (
                         <RigaMover key={m.ticker} ticker={m.ticker} nome={null} cambio={m.cambio}
@@ -1193,7 +1136,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
               <>
                 {/* Gli ETF in movimento non stanno qui: sono nella riga ETF
                     della fascia sopra, accanto al paniere a leva. */}
-                <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+                <div className={GRIGLIA_MOVERS}>
                   <Colonna etichetta="In rialzo">
                     {equity(pre.gainers).slice(0, RIGHE_MOVERS).map((m) => (
                       <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
@@ -1211,7 +1154,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                 </div>
               </>
             ) : mostraLive && liveMovers ? (
-              <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+              <div className={GRIGLIA_MOVERS}>
                 <Colonna etichetta="In rialzo">
                   {liveMovers.gainers.slice(0, RIGHE_MOVERS).map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name} cambio={m.change_pct}
@@ -1236,7 +1179,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                  perche' un dato di chiusura accanto a numeri che battono ogni
                  quindici secondi si legge come live se nessuno dice che non
                  lo e'. */
-              <div className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+              <div className={GRIGLIA_MOVERS}>
                 <Colonna etichetta="In rialzo">
                   {sedutaSu.map((m) => (
                     <RigaMover key={m.ticker} ticker={m.ticker} nome={m.name}

@@ -65,7 +65,10 @@ describe("ContoEtoroHero", () => {
     expect(within(s).getByText("-$457.96")).toBeTruthy();
     expect(within(s).getByText("(-5.25%)")).toBeTruthy();
     expect(within(s).getByText("leva effettiva ×4.6")).toBeTruthy();
-    expect(within(s).getByText("19 posizioni")).toBeTruthy();
+    // Tolti su richiesta il 2026-10-06: il numero di posizioni sotto il margine
+    // e la riga della chiusura di ieri sotto il risultato del giorno.
+    expect(within(s).queryByText("19 posizioni")).toBeNull();
+    expect(within(s).queryByText(/chiusura di ieri \$/)).toBeNull();
     expect(within(s).getByText(/dal vivo/)).toBeTruthy();
   });
 
@@ -108,15 +111,38 @@ describe("ContoEtoroHero", () => {
     expect(screen.getByText("Storico non ancora disponibile.")).toBeTruthy();
   });
 
-  it("chi muove il conto: in ordine, col link solo se il titolo e' nel catalogo", () => {
+  it("i movers: in ordine, col link solo se il titolo e' nel catalogo", () => {
     monta();
-    const lista = screen.getByText("Chi muove il conto oggi").parentElement!;
-    const righe = within(lista).getAllByRole("listitem");
+    expect(screen.getByText("Movers")).toBeTruthy();
+    const righe = within(screen.getByRole("list")).getAllByRole("listitem");
     expect(righe.map((r) => r.textContent)).toEqual([
       expect.stringContaining("SOXL"), expect.stringContaining("SMCI"), expect.stringContaining("XYZ"),
     ]);
     expect(within(righe[0]).getByRole("link", { name: "SOXL" }).getAttribute("href")).toBe("/stocks/SOXL");
     expect(within(righe[2]).queryByRole("link")).toBeNull();
+  });
+
+  it("i movers riempiono il riquadro: dieci da lg, cinque sul telefono, niente frase in fondo", () => {
+    const strumenti = Array.from({ length: 12 }, (_, i) => ({
+      instrument_id: i + 1, ticker: `T${i + 1}`, simbolo: `T${i + 1}`, nome: null,
+      guadagno_giorno: 100 - i, pnl: 0, esposizione: 100, margine: 20,
+    }));
+    monta({ ...VIVO, strumenti });
+    const righe = within(screen.getByRole("list")).getAllByRole("listitem");
+    expect(righe).toHaveLength(10);
+    expect(righe.slice(0, 5).every((r) => r.className.split(" ").includes("grid"))).toBe(true);
+    expect(righe.slice(5).every((r) => r.className.includes("hidden lg:grid"))).toBe(true);
+    expect(screen.queryByText(/calcolato da eToro\./)).toBeNull();
+  });
+
+  it("i tre titoli stanno alla stessa altezza", () => {
+    // Stessa intestazione a altezza fissa per le tre colonne: prima la curva,
+    // che ha i bottoni accanto al titolo, lo portava piu' in basso degli altri.
+    monta();
+    for (const t of ["Conto eToro", "Movers"]) {
+      expect(screen.getByText(t).parentElement!.className).toContain("h-7");
+    }
+    expect(screen.getByText("Andamento").parentElement!.className).toContain("h-7");
   });
 
   it("nessuna violazione strutturale", async () => {
