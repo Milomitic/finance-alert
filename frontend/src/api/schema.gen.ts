@@ -1948,6 +1948,7 @@ export interface StockOut {
   instrument_type?: string;
   in_etfs?: string[];
   in_indices?: IndexOptionOut[];
+  fondi_detentori?: number | null;
   market_cap_usd: number | null;
 }
 

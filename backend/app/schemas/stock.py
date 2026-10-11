@@ -38,6 +38,12 @@ class StockOut(BaseModel):
     # catalogue tracks every constituent it ingests, so an absent code means
     # "not in that index" and the UI may say "in" without hedging.
     in_indices: list[IndexOptionOut] = []
+    # Quanti fondi tracciati (13F / superinvestor) detengono il titolo
+    # nell'ultima dichiarazione, come il badge dello screener
+    # (`institutional_service.holder_counts_for_tickers`). None = questa rotta
+    # non lo calcola, NON «nessun fondo»: lo riempiono solo le rotte del
+    # singolo titolo, via `_con_appartenenze` (la trappola di FA-055).
+    fondi_detentori: int | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

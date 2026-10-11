@@ -42,6 +42,9 @@ export interface Stock {
    *  l'assenza di un codice significa davvero "non e' in quell'indice".
    *  Opzionale per retrocompatibilita' con risposte in cache precedenti. */
   in_indices?: IndexOption[];
+  /** Quanti fondi tracciati (13F / superinvestor) lo detengono nell'ultima
+   *  dichiarazione. Solo sulle rotte del singolo titolo; null altrove. */
+  fondi_detentori?: number | null;
 }
 
 /** A row in the screener result. Stock anagrafica plus a join to the

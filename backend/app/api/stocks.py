@@ -51,6 +51,7 @@ from app.services import (
     etf_holdings_service,
     etoro_catalogo_service,
     fetch_cache_store,
+    institutional_service,
     live_quote_service,
     news_analyst_extractor,
     price_base,
@@ -385,6 +386,9 @@ def _con_appartenenze(db: Session, out: StockOut, stock: Stock) -> StockOut:
             .order_by(Index.code)
         ).all()
     ]
+    # I fondi tracciati che lo detengono: una query raggruppata, la stessa del
+    # badge «N fondi» dello screener, cosi' i due numeri non possono divergere.
+    out.fondi_detentori = institutional_service.holder_counts_for_tickers(db, [stock.ticker]).get(stock.ticker, 0)
     return out
 
 

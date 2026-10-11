@@ -91,3 +91,39 @@ def test_un_titolo_senza_indici_rende_liste_VUOTE_non_assenti(
 
     assert corpo["in_indices"] == []
     assert corpo["in_etfs"] == []
+
+
+def test_il_dettaglio_porta_quanti_fondi_lo_detengono(client: TestClient, db: Session) -> None:
+    """Il numero sotto il nome del titolo e' lo stesso del badge dello
+    screener: i fondi tracciati con il titolo nell'ULTIMA dichiarazione."""
+    from app.models import Institutional, InstitutionalFiling, InstitutionalHolding
+
+    _titolo(db)
+    recente = date.today() - timedelta(days=40)
+
+    def fondo(slug: str, ticker: str | None, *, periodo: date = recente, azioni: int = 100) -> None:
+        f = Institutional(slug=slug, name=slug.upper(), type="superinvestor", source="dataroma")
+        db.add(f)
+        db.flush()
+        dich = InstitutionalFiling(institutional_id=f.id, period_end_date=periodo)
+        db.add(dich)
+        db.flush()
+        if ticker:
+            db.add(InstitutionalHolding(filing_id=dich.id, ticker=ticker, company_name=ticker, shares=azioni,
+                                        value_usd=1_000_000, portfolio_pct=5.0))
+
+    fondo("uno", "NVDA")
+    fondo("due", "NVDA")
+    fondo("venduto", "NVDA", azioni=0)  # una posizione chiusa non e' un detentore
+    fondo("altro", "AAPL")
+    db.commit()
+
+    dettaglio = client.get("/api/stocks/NVDA/detail").json()["stock"]
+    titolo = client.get("/api/stocks/NVDA").json()
+    assert dettaglio["fondi_detentori"] == titolo["fondi_detentori"] == 2
+
+
+def test_nessun_fondo_e_zero_non_assente(client: TestClient, db: Session) -> None:
+    # Zero = calcolato, nessuno lo detiene; None resta per le rotte che non lo calcolano.
+    _titolo(db)
+    assert client.get("/api/stocks/NVDA/detail").json()["stock"]["fondi_detentori"] == 0

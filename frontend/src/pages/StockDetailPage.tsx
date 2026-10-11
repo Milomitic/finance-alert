@@ -794,7 +794,10 @@ export default function StockDetailPage() {
               fund is more decisive than the insider buy/sell rhythm.
               Empty list still renders a 1-line "no fund holds this"
               note so the sidebar shape doesn't shift between stocks. */}
-          <InstitutionalHoldersCard ticker={ticker} />
+          {/* L'ancora dell'etichetta «N fondi» sotto il nome del titolo. */}
+          <div id="fondi-detentori" className="scroll-mt-20">
+            <InstitutionalHoldersCard ticker={ticker} />
+          </div>
           {/* InsidersAnalystCard occupa lo slot che teneva la PriceAlertsCard.
               Per feedback dell'utente la lista dei price alert non vale una
               card intera nella sidebar, e quella decisione resta: gli alert si

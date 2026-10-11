@@ -1,3 +1,4 @@
+import { Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
@@ -209,6 +210,19 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                   Le due formulazioni sono vincolate da test separati — sembrano
                   la stessa chip e affermano cose diverse. */}
               <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
+              {/* I fondi tracciati che lo detengono (13F / superinvestor): lo
+                  stesso numero del badge dello screener. Porta all'elenco dei
+                  detentori nella colonna a destra. Zero non si mostra: un
+                  titolo senza fondi non ha bisogno di un'etichetta che lo dica. */}
+              {stock.fondi_detentori ? (
+                <a
+                  href="#fondi-detentori"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
+                >
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  {stock.fondi_detentori} {stock.fondi_detentori === 1 ? "fondo lo detiene" : "fondi lo detengono"}
+                </a>
+              ) : null}
               {suEtoro && (
                 <span
                   className="inline-flex items-center rounded-md border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
