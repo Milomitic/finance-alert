@@ -33,6 +33,7 @@ from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models.alert import Alert
 from app.models.institutional import Institutional
+from app.models.macro import MacroReleaseDate, MacroSeries
 from app.models.ohlcv import OhlcvDaily
 from app.models.stock import Stock
 from app.models.user import User
@@ -334,6 +335,44 @@ def valuta_senza_rete(db) -> None:
     setup_service.run_post_scan_bookkeeping(db, universe=True)
 
 
+#: Tre rilasci macro, uno per importanza, nella data di OGGI del seme.
+CALENDARIO_MACRO = (
+    ("E2E_CPI", "US CPI release", "high"),
+    ("E2E_PMI", "ISM Manufacturing PMI", "medium"),
+    ("E2E_SCORTE", "Scorte all'ingrosso", "low"),
+)
+
+
+def semina_calendario(db, oggi: date) -> int:
+    """Il calendario del gate (2026-10-11).
+
+    ⚠️ Il seme non aveva NESSUN evento di calendario: i chip che /calendar
+    mostrava al gate venivano dall'elenco macro scritto a mano, che finisce il
+    31 agosto 2026. Da ottobre la pagina era vuota, il gate misurava una
+    griglia senza un chip (`nested-interactive` 3 -> 0) e la domenica 11
+    ottobre ha arrossito su un nodo che dipendeva dal giorno — quarta istanza
+    del seme legato all'orologio (CLAUDE.md).
+
+    Nella data di OGGI e non «oggi + N»: e' l'unica che cade sempre nella
+    griglia del mese visibile, qualunque sia il giorno della corsa. N giorni
+    dopo cadono fuori dalla griglia negli ultimi giorni del mese, e il numero
+    di chip cambierebbe con la data."""
+    n = 0
+    for codice, etichetta, importanza in CALENDARIO_MACRO:
+        serie = db.query(MacroSeries).filter(MacroSeries.fred_series_id == codice).first()
+        if serie is None:
+            serie = MacroSeries(fred_series_id=codice, label=etichetta, region="US",
+                                importance=importanza, unit="index", source="seme e2e")
+            db.add(serie)
+            db.flush()
+        if db.query(MacroReleaseDate).filter(MacroReleaseDate.series_id == serie.id,
+                                             MacroReleaseDate.date == oggi).first() is None:
+            db.add(MacroReleaseDate(series_id=serie.id, date=oggi))
+            n += 1
+    db.flush()
+    return n
+
+
 def main() -> None:
     rng = random.Random(20260912)  # deterministico: un gate che cambia esito da solo non e' un gate
     db = SessionLocal()
@@ -439,6 +478,8 @@ def main() -> None:
                             "chain_summary": catena,
                         }),
                     ))
+        # ⚠️ Prima degli istituzionali e senza toccare `rng`, come loro.
+        semina_calendario(db, oggi)
         # ⚠️ Per ULTIMA, e senza toccare `rng`: vedi la sezione FA-068 in cima.
         fondi = semina_istituzionali(db, oggi)
         db.commit()

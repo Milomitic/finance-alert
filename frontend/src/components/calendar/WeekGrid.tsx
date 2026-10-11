@@ -95,7 +95,7 @@ export function WeekGrid({
                     className={cn(
                       "tabular-nums font-mono text-[0.8235rem] leading-none",
                       isToday
-                        ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white font-bold shadow-sm"
+                        ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-700 text-white font-bold shadow-sm"
                         : "text-foreground/85 font-semibold",
                     )}
                   >

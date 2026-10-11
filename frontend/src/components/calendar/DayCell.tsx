@@ -100,13 +100,16 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           />
         )}
 
-        {/* Date number row */}
+        {/* Date number row. ⚠️ Il cerchio di oggi e' `sky-700`, non `sky-500`:
+            bianco su sky-500 vale ~2,8:1 contro i 4,5:1 del testo normale. axe
+            di solito non lo misurava per l'alone sfumato dietro la cella, e la
+            domenica 11 ottobre 2026 ci e' riuscito (gate UI rosso). */}
         <div className="relative flex items-baseline gap-1.5">
           <span
             className={cn(
               "tabular-nums font-mono text-[13.5px] tracking-tight leading-none",
               isToday
-                ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-500 text-white font-bold shadow-sm dark:bg-sky-500/90"
+                ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-700 text-white font-bold shadow-sm"
                 : day.inMonth
                   ? "text-foreground/85 px-0.5"
                   : "text-muted-foreground px-0.5",

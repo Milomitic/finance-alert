@@ -182,3 +182,44 @@ def test_nessun_segnale_viene_scattato_nel_FUTURO(scarto):
             k = (i + j) % 5
             trig = _ancora(feriali[-(1 + k)]) + timedelta(days=5 if k == 4 else 1)
             assert trig <= limite, f"scatto nel futuro: {trig} > {limite}"
+
+
+# ─── Il calendario del gate (2026-10-11) ────────────────────────────────────
+
+
+def _griglia_del_mese(oggi: date) -> tuple[date, date]:
+    """Gli estremi della griglia mese di /calendar: dal lunedi' della prima
+    settimana alla domenica dell'ultima, come `buildMonthGrid`."""
+    primo = oggi.replace(day=1)
+    inizio = primo - timedelta(days=primo.weekday())
+    prossimo = (primo + timedelta(days=32)).replace(day=1)
+    ultimo = prossimo - timedelta(days=1)
+    return inizio, ultimo + timedelta(days=6 - ultimo.weekday())
+
+
+@pytest.mark.parametrize("scarto", range(14))
+def test_i_rilasci_del_seme_cadono_sempre_nella_griglia_visibile(db, scarto):
+    """Ogni giorno della settimana, anche a cavallo di fine mese: stessi tre
+    chip. Prima il calendario del gate viveva dell'elenco scritto a mano, che
+    finisce il 31 agosto 2026, e da ottobre era vuoto."""
+    from app.scripts.seed_e2e import CALENDARIO_MACRO, semina_calendario
+    from app.services import calendar_service
+
+    oggi = date(2026, 10, 25) + timedelta(days=scarto)  # attraversa la fine del mese
+    semina_calendario(db, oggi)
+    db.commit()
+    inizio, fine = _griglia_del_mese(oggi)
+    del_seme = [e for e in calendar_service.get_events(db, inizio, fine, kinds={"macro"})
+                if e.label in {etichetta for _, etichetta, _ in CALENDARIO_MACRO}]
+    assert len(del_seme) == 3
+    assert {e.date for e in del_seme} == {oggi}
+
+
+def test_seminare_due_volte_non_raddoppia(db):
+    from app.models.macro import MacroReleaseDate
+    from app.scripts.seed_e2e import semina_calendario
+
+    oggi = date(2026, 10, 11)
+    assert semina_calendario(db, oggi) == 3
+    assert semina_calendario(db, oggi) == 0
+    assert db.query(MacroReleaseDate).count() == 3
