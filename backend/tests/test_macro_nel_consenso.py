@@ -20,6 +20,16 @@ def test_prima_dell_uscita_attuale_e_l_ultima_release_e_precedente_dai_livelli()
     assert precedente == pytest.approx((332.813 / 331.5 - 1) * 100)
 
 
+def test_una_serie_fred_che_non_e_la_stessa_misura_non_da_il_precedente() -> None:
+    """Il PPI del 2026-10-11: FRED +0,96% sull'ultimo mese, Forexfactory 0,4%.
+    Sono due indici diversi, e il precedente ricavato da FRED sarebbe un numero
+    di un'altra misura accanto al consenso."""
+    ppi = [(date(2026, 6, 1), 286.0), (date(2026, 7, 1), 285.181), (date(2026, 8, 1), 287.928)]
+    attuale, _, precedente, _ = valori_nel_consenso("PPI m/m", "0.5%", "", "0.4%", "index", ppi)
+    assert attuale == 0.4
+    assert precedente is None
+
+
 def test_uscito_il_dato_attuale_e_il_dato_e_precedente_il_previous() -> None:
     assert valori_nel_consenso("CPI m/m", "0.6%", "0.3%", "0.4%", "index", STORIA) == (0.3, 0.6, 0.4, "%")
 

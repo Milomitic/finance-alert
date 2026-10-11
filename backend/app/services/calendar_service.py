@@ -369,6 +369,12 @@ def _enrich_with_fred_value(db: Session, ev: MacroEventDC) -> None:
     ev.history = [(r.date, r.value) for r in reversed(history_rows)]
 
 
+#: Quanto possono differire la variazione ricavata da FRED e quella pubblicata
+#: perche' siano la stessa misura: l'arrotondamento a un decimale vale 0,05, e
+#: il resto copre le piccole revisioni.
+_TOLLERANZA_CONSENSO = 0.1
+
+
 def _formato(raw: str | None) -> str:
     s = (raw or "").strip()
     if s.endswith("%"):
@@ -418,8 +424,17 @@ def valori_nel_consenso(
     precedente = None
     if re.search(r"(?<![a-z])m/m(?![a-z])", titolo, re.IGNORECASE) and unita_fred in ("index", "level"):
         livelli = [v for _, v in storia if v is not None]
-        if len(livelli) >= 3 and livelli[-3]:
-            precedente = (livelli[-2] / livelli[-3] - 1.0) * 100.0
+        if len(livelli) >= 3 and livelli[-2] and livelli[-3] and prima is not None:
+            ultima = (livelli[-1] / livelli[-2] - 1.0) * 100.0
+            # ⚠️ La serie FRED deve essere LA STESSA misura del consenso, e lo
+            # si verifica sui dati invece di supporlo: la sua ultima variazione
+            # deve coincidere col `previous` di Forexfactory entro l'arrotondamento
+            # a un decimale. Misurato il 2026-10-11: il CPI coincide (0,396
+            # contro 0,4), il PPI no (0,96 contro 0,4: FRED segue un altro
+            # indice dei prezzi alla produzione) e nemmeno le vendite (1,13
+            # contro 1,4). Dove non coincide, il precedente resta assente.
+            if abs(ultima - prima) <= _TOLLERANZA_CONSENSO:
+                precedente = (livelli[-2] / livelli[-3] - 1.0) * 100.0
     return prima, previsto, precedente, formato
 
 
