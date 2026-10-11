@@ -1,243 +1,207 @@
-import { Building2 } from "lucide-react";
+import { Building2, ChevronDown, ChevronUp } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { TickerHolder } from "@/api/types";
-import { AllocationBars } from "@/components/dashboard/AllocationBars";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTickerInstitutionalHolders } from "@/hooks/useInstitutionals";
+import { type Ordine, ordina, riepilogo, variazione } from "@/lib/fondiDetentori";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
 
-interface Props {
-  ticker: string;
-}
+/* ─── Chi detiene il titolo (riassetto del 2026-10-12) ─────────────────────
+ *
+ * Prima: una tabella dell'ULTIMA operazione (Add / Reduce / Nuovo, con la
+ * data) e sotto un grafico delle posizioni coi nomi tagliati a dieci lettere
+ * e le barre che partivano a x diverse, perche' la variazione stava in una
+ * colonna di larghezza variabile prima della barra.
+ *
+ * Ora una vista sola che risponde a cio' che si chiede aprendo la scheda:
+ *   - in testa quanti fondi, quanto valgono in tutto le loro posizioni, chi
+ *     ha aumentato e chi ridotto, a che trimestre si riferisce;
+ *   - una riga per fondo: il nome intero e il VALORE della posizione sopra, il
+ *     PESO nel portafoglio del fondo sotto, con la barra che parte sempre alla
+ *     stessa x e sulla stessa scala, e il movimento del trimestre come
+ *     contorno a destra;
+ *   - i fondi usciti in un elenco a parte, chiuso: sono storia, non posizioni.
+ */
 
+const PRIME = 10;
 
-function fmtPct(v: number | null | undefined, digits = 1): string {
-  if (v == null) return "—";
-  return `${v.toFixed(digits)}%`;
-}
-
-function shortDate(s: string): string {
+function dataBreve(s: string | null): string {
   if (!s) return "—";
   const [y, m, d] = s.split("-");
-  if (!y || !m || !d) return s;
-  return `${d}/${m}/${y.slice(2)}`;
+  return y && m && d ? `${d}/${m}/${y.slice(2)}` : s;
 }
 
-/**
- * Action label + tone. Mirrors the Dataroma vocabulary:
- *   new      — first-time position
- *   add      — added shares (Q/Q)
- *   reduce   — trimmed
- *   sold_out — fully exited (still surfaced because the position was on
- *              the previous filing — the "sold out" signal is editorial value)
- *   hold     — unchanged
- */
-function actionMeta(action: string | null): {
-  label: string;
-  tone: string;
-} {
-  switch (action) {
-    case "new":
-      return { label: "Nuovo", tone: "text-emerald-800 dark:text-emerald-300" };
-    case "add":
-      return { label: "Add", tone: "text-emerald-800 dark:text-emerald-300" };
-    case "reduce":
-      return { label: "Reduce", tone: "text-amber-700 dark:text-amber-300" };
-    case "sold_out":
-      return { label: "Sold out", tone: "text-rose-700 dark:text-rose-300" };
-    case "hold":
-      return { label: "Hold", tone: "text-muted-foreground" };
-    default:
-      return { label: action ?? "—", tone: "text-muted-foreground" };
-  }
-}
-
-/* Shared column grid — header row and every data row use the SAME
- * template string so the cells align by construction. Tracks:
- *   name (flex, truncates) · action · % · value$ · date
- * `minmax(0,1fr)` (not plain `1fr`) is load-bearing: it injects the
- * implicit min-width:0 that lets the long fund name truncate instead
- * of overflowing its track. */
-const HOLDER_GRID =
-  "grid grid-cols-[minmax(0,1fr)_4rem_3rem_4.75rem_3.5rem] items-baseline gap-2 min-w-[340px] md:min-w-0";
-
-function HolderHeader() {
+function Riga({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
+  const v = variazione(h);
+  const peso = h.portfolio_pct;
+  const larghezza = peso != null && maxPeso > 0 ? Math.max(2, (peso / maxPeso) * 100) : 0;
   return (
-    <li
-      className={cn(
-        HOLDER_GRID,
-        "pb-1 text-[0.6765rem] uppercase tracking-wider text-muted-foreground font-semibold",
-      )}
-    >
-      <span className="truncate">Fondo</span>
-      <span className="truncate">Azione</span>
-      <span className="text-right">%</span>
-      <span className="text-right">Valore</span>
-      <span className="text-right">Data</span>
+    <li className="border-t border-border/40 py-1.5">
+      <div className="flex min-w-0 items-baseline justify-between gap-2">
+        <Link
+          to={`/institutionals/${h.institutional_slug}`}
+          className="min-w-0 truncate text-sm font-semibold hover:underline"
+          title={h.institutional_name}
+        >
+          {h.institutional_name}
+        </Link>
+        <span className="shrink-0 text-sm font-semibold tabular-nums">{fmtBig(h.value_usd)}</span>
+      </div>
+      {/* Una griglia sola per tutte le righe: barra, peso e movimento stanno in
+          colonna per costruzione, e la barra ha sempre la stessa scala. */}
+      <div className="mt-1 grid grid-cols-[minmax(0,1fr)_3rem_3.75rem] items-center gap-2">
+        <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+          <span className="block h-full rounded-full bg-primary/80" style={{ width: `${larghezza}%` }} />
+        </span>
+        <span className="text-right text-xs font-semibold tabular-nums">
+          {peso == null ? "—" : `${peso.toFixed(1)}%`}
+        </span>
+        <span
+          className={cn("text-right text-[0.7059rem] tabular-nums",
+            v?.tono === "su" ? TONO_VARIAZIONE.su : v?.tono === "giu" ? TONO_VARIAZIONE.giu : TONO_VARIAZIONE.fermo)}
+          title={v?.spiegazione}
+        >
+          {v?.testo ?? ""}
+        </span>
+      </div>
     </li>
   );
 }
 
-function HolderRow({ h }: { h: TickerHolder }) {
-  const a = actionMeta(h.action);
-  // Show ONLY the fund/firm — the individual manager/analyst name is
-  // deliberately omitted (user spec: "lascia solo le società e i fondi
-  // di appartenenza").
-  const displayName = h.institutional_name;
-
+function Riepilogo({ fondi }: { fondi: TickerHolder[] }) {
+  const r = riepilogo(fondi);
   return (
-    <li
-      className={cn(
-        HOLDER_GRID,
-        "py-1 border-t border-border/40 leading-tight",
-      )}
-    >
-      <Link
-        to={`/institutionals/${h.institutional_slug}`}
-        className="text-[13.5px] font-semibold truncate hover:underline min-w-0"
-        title={displayName}
-      >
-        {displayName}
-      </Link>
-      <span className={cn("text-[0.7059rem] truncate", a.tone)} title={a.label}>
-        {a.label}
-      </span>
-      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
-        {fmtPct(h.portfolio_pct)}
-      </span>
-      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
-        {fmtBig(h.value_usd)}
-      </span>
-      <span className="text-[0.7059rem] text-muted-foreground tabular-nums text-right">
-        {shortDate(h.period_end_date)}
-      </span>
-    </li>
+    <div className="mb-2 grid grid-cols-3 gap-2">
+      <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+        <div className="text-[0.6471rem] uppercase tracking-wider text-muted-foreground">Fondi</div>
+        <div className="text-lg font-bold leading-tight tabular-nums">{r.fondi}</div>
+      </div>
+      <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+        <div className="truncate text-[0.6471rem] uppercase tracking-wider text-muted-foreground">Valore detenuto</div>
+        <div className="text-lg font-bold leading-tight tabular-nums">{fmtBig(r.valoreTotale)}</div>
+      </div>
+      <div className="min-w-0 rounded-md bg-muted/30 px-2 py-1.5">
+        <div className="truncate text-[0.6471rem] uppercase tracking-wider text-muted-foreground">Nel trimestre</div>
+        <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs font-semibold leading-tight tabular-nums">
+          <span className={TONO_VARIAZIONE.su}>▲ {r.aumentano + r.nuovi}</span>
+          <span className={TONO_VARIAZIONE.giu}>▼ {r.riducono}</span>
+        </div>
+        {r.nuovi > 0 && <div className="text-[0.6471rem] text-muted-foreground">{r.nuovi} nuovi</div>}
+      </div>
+    </div>
   );
 }
 
-/**
- * Lists the institutionals / superinvestors holding `ticker` in their
- * latest filing. Sits ABOVE the InsidersAnalystCard in the right
- * sidebar of the stock detail page (per user spec: "sopra insider").
- *
- * Empty data path: render a tiny "Nessun fondo tracciato detiene…"
- * line — the user explicitly opted to keep the card visible even when
- * empty so the info-architecture doesn't shift between stocks.
- */
-export function InstitutionalHoldersCard({ ticker }: Props) {
-  const q = useTickerInstitutionalHolders(ticker, 25, true);
+export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
+  // Tutti i detentori, non i primi 25: il riepilogo somma i valori, e una
+  // somma sulla prima pagina sarebbe un totale falso.
+  const q = useTickerInstitutionalHolders(ticker, 200, true);
+  const [ordine, setOrdine] = useState<Ordine>("peso");
+  const [tutti, setTutti] = useState(false);
+  const [usciti, setUsciti] = useState(false);
+
+  const fondi = useMemo(() => q.data?.holders ?? [], [q.data]);
+  const ordinati = useMemo(() => ordina(fondi, ordine), [fondi, ordine]);
+  const attuali = new Set(fondi.map((h) => h.institutional_id));
+  const storici = (q.data?.historical ?? []).filter((h) => !attuali.has(h.institutional_id));
+  const visibili = tutti ? ordinati : ordinati.slice(0, PRIME);
+  const maxPeso = Math.max(0, ...fondi.map((h) => h.portfolio_pct ?? 0));
+  const r = riepilogo(fondi);
 
   if (q.isLoading) {
     return (
       <Card>
         <CardContent className="p-3">
-          <SectionTitle icon={Building2} label="Superinvestor / fondi" className="mb-2" />
-          <div className="h-24 animate-pulse bg-muted/40 rounded" />
+          <SectionTitle icon={Building2} label="Fondi che lo detengono" className="mb-2" />
+          <div className="h-24 animate-pulse rounded bg-muted/40" />
         </CardContent>
       </Card>
     );
   }
 
-  const holders = q.data?.holders ?? [];
-  const historical = q.data?.historical ?? [];
-  const visible = holders.slice(0, 10);
-
-  /* The positions panel, and why it is NOT the table above repeated.
-   *
-   * The table lists the latest TRANSACTIONS: one row per fund, labelled with
-   * the 13F verb (Add / Reduce / Nuovo). This panel answers a different
-   * question — who HOLDS this stock and how much of their book it is — so it
-   * must not carry the same verbs. `value_usd` and `portfolio_pct` are the
-   * fund's TOTAL position in its latest filing, not the size of the change:
-   * an "Add" adds to whatever the fund already held, or equals the position
-   * when it is the first. Labelling a total-position bar "ADD" answered a
-   * question nobody asked of it. The movement now shows as a signed delta.
-   *
-   * One row per institution. A fund can appear in both lists (a stale current
-   * row plus a newer historical one); the CURRENT row wins, because the panel
-   * describes what is held now.
-   *
-   * Historical funds are `exited` → struck through with a dashed, hollow bar,
-   * and AllocationBars keeps them in their own block so the `max` cut can
-   * never drop them silently. Before this they were sorted in with live
-   * positions by weight, so on any stock whose top ten holders were all
-   * current the panel rendered exactly the ten rows above it — which is the
-   * bug that made "incl. storiche" a promise the panel did not keep.
-   */
-  const seen = new Set<number>();
-  const allocItems = [
-    ...holders.map((h) => ({
-      key: `cur-${h.institutional_id}-${h.period_end_date}`,
-      label: h.institutional_name,
-      href: `/institutionals/${h.institutional_slug}`,
-      valueUsd: h.value_usd,
-      pct: h.portfolio_pct,
-      deltaPct: h.portfolio_weight_delta_pp,
-      sharesChangePct: h.shares_change_pct,
-      exited: false,
-      id: h.institutional_id,
-    })),
-    ...historical.map((h) => ({
-      key: `hist-${h.institutional_id}-${h.period_end_date}`,
-      label: h.institutional_name,
-      href: `/institutionals/${h.institutional_slug}`,
-      valueUsd: h.value_usd,
-      pct: h.portfolio_pct,
-      deltaPct: null,
-      exited: true,
-      id: h.institutional_id,
-    })),
-  ].filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)));
-
   return (
     <Card>
       <CardContent className="p-3">
-        <SectionTitle
-          icon={Building2}
-          label="Superinvestor / fondi"
-          className="mb-2"
-          right={
-            holders.length > 0 ? (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {visible.length} di {holders.length}
-              </span>
-            ) : undefined
-          }
-        />
-        {holders.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-3">
+        <SectionTitle icon={Building2} label="Fondi che lo detengono" className="mb-2" />
+        {fondi.length === 0 ? (
+          <div className="py-3 text-center text-sm text-muted-foreground">
             Nessun fondo tracciato detiene questo titolo.
           </div>
         ) : (
           <>
-            {/* The fixed columns are wider than a phone; scroll the list
-                rather than let the identity cell collapse to zero. */}
-            <div className="overflow-x-auto md:overflow-visible">
+            <Riepilogo fondi={fondi} />
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[0.7059rem] text-muted-foreground">
+                Barra = peso nel portafoglio del fondo · 13F al {dataBreve(r.periodo)}
+              </span>
+              <div className="flex rounded-md border p-0.5" role="group" aria-label="Ordina i fondi">
+                {(["peso", "valore"] as const).map((o) => (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => setOrdine(o)}
+                    aria-pressed={ordine === o}
+                    className={cn(
+                      "min-h-[28px] rounded px-2 text-xs font-semibold capitalize transition-colors",
+                      ordine === o ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
             <ul>
-              <HolderHeader />
-              {visible.map((h) => (
-                <HolderRow key={`${h.institutional_id}-${h.period_end_date}`} h={h} />
+              {visibili.map((h) => (
+                <Riga key={`${h.institutional_id}-${h.period_end_date}`} h={h} maxPeso={maxPeso} />
               ))}
             </ul>
-            </div>
-            {/* Besides the latest transactions above, the same data as
-                an infographic: WHO holds this stock and in what
-                measure — bar length = the holder's portfolio WEIGHT
-                (the % shown next to it), so a tiny-weight mega-fund no
-                longer fills the whole bar just because its dollar
-                position is the largest. */}
-            <div className="mt-3 border-t border-border/40 pt-3">
-              <AllocationBars
-                title="Posizioni per istituzione (incl. uscite)"
-                max={14}
-                metric="weight"
-                items={allocItems}
-              />
-            </div>
+            {fondi.length > PRIME && (
+              <button
+                type="button"
+                onClick={() => setTutti((t) => !t)}
+                className="mt-1 inline-flex min-h-[32px] items-center gap-1 text-xs font-medium text-primary hover:underline"
+                aria-expanded={tutti}
+              >
+                {tutti ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+                {tutti ? "Mostra i primi 10" : `Mostra tutti i ${fondi.length}`}
+              </button>
+            )}
           </>
+        )}
+        {storici.length > 0 && (
+          <div className="mt-2 border-t border-border/40 pt-1">
+            <button
+              type="button"
+              onClick={() => setUsciti((u) => !u)}
+              className="inline-flex min-h-[32px] items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              aria-expanded={usciti}
+            >
+              {usciti ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+              Usciti di recente ({storici.length})
+            </button>
+            {usciti && (
+              <ul className="mt-1 space-y-1">
+                {storici.map((h) => (
+                  <li key={`${h.institutional_id}-${h.period_end_date}`}
+                    className="flex min-w-0 items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                    <Link to={`/institutionals/${h.institutional_slug}`} className="min-w-0 truncate hover:underline"
+                      title={h.institutional_name}>
+                      {h.institutional_name}
+                    </Link>
+                    <span className="shrink-0 tabular-nums">
+                      {h.portfolio_pct == null ? "—" : `${h.portfolio_pct.toFixed(1)}%`} · {fmtBig(h.value_usd)} · {dataBreve(h.period_end_date)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
