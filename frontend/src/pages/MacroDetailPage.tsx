@@ -501,9 +501,9 @@ export default function MacroDetailPage() {
                 </th>
                 <th className="text-right font-semibold pb-2">Sull'anno</th>
                 <th className="text-right font-semibold pb-2 hidden sm:table-cell">
-                  <HintLabel text="Il consenso del rilascio di quel periodo e il dato uscito, nell'unità del consenso. Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati; sotto, la stima e il dato sull'anno quando la fonte li porta.">Previsto</HintLabel>
+                  <HintLabel text="Il dato uscito e il consenso del suo rilascio, nell'unità del consenso: l'attuale è verde sopra il previsto, rosso sotto. Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati; sotto, il dato e la stima sull'anno quando la fonte li porta.">Attuale</HintLabel>
                 </th>
-                <th className="text-right font-semibold pb-2 hidden sm:table-cell">Uscito</th>
+                <th className="text-right font-semibold pb-2 hidden sm:table-cell">Previsto</th>
               </tr>
             </thead>
             <tbody>
@@ -529,12 +529,6 @@ export default function MacroDetailPage() {
                   <td className={cn("py-2 text-right font-semibold", tonoEsito(r.esito_anno))}>
                     {formatVariazioneMacro(r.variazione_annua, unita)}
                   </td>
-                  <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
-                    {formatConsenso(r.previsto_consenso, formato, unita === "%")}
-                    {r.previsto_annuo_consenso != null && (
-                      <div className="text-[0.7059rem]">a/a {formatConsenso(r.previsto_annuo_consenso, "%", true)}</div>
-                    )}
-                  </td>
                   <td className="py-2 text-right font-bold hidden sm:table-cell">
                     <span className={tonoControStima(r.attuale_consenso, r.previsto_consenso)}>
                       {formatConsenso(r.attuale_consenso, formato, unita === "%")}
@@ -543,6 +537,12 @@ export default function MacroDetailPage() {
                       <div className={cn("text-[0.7059rem]", tonoControStima(r.attuale_annuo_consenso, r.previsto_annuo_consenso))}>
                         a/a {formatConsenso(r.attuale_annuo_consenso, "%", true)}
                       </div>
+                    )}
+                  </td>
+                  <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
+                    {formatConsenso(r.previsto_consenso, formato, unita === "%")}
+                    {r.previsto_annuo_consenso != null && (
+                      <div className="text-[0.7059rem]">a/a {formatConsenso(r.previsto_annuo_consenso, "%", true)}</div>
                     )}
                   </td>
                 </tr>

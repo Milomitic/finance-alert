@@ -56,7 +56,10 @@ describe("MacroDetailPage — le variazioni in evidenza", () => {
     const testo = (t: string) => celle.find((c) => c.textContent === t)!;
     expect(testo("+0.4%").className).toContain("emerald");
     expect(testo("+2.9%").className).toContain("rose");
-    expect(testo("+0.3%a/a +3%")).toBeDefined();
+    // Prima l'attuale, poi il previsto, come nello storico del calendario.
+    const intestazioni = within(tabella).getAllByRole("columnheader").map((h) => h.textContent);
+    expect(intestazioni.slice(-2)).toEqual(["Attuale", "Previsto"]);
+    expect(celle.slice(-2).map((c) => c.textContent)).toEqual(["+0.4%a/a +2.9%", "+0.3%a/a +3%"]);
     // Negativo ma sopra la stima: verde.
     const luglioMese = within(luglio).getAllByRole("cell").find((c) => c.textContent === "−0.1%")!;
     expect(luglioMese.className).toContain("emerald");
