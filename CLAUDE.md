@@ -1970,6 +1970,22 @@ first. `risk.py` learned it the hard way — 75 stocks scored as stable mega-cap
 in native currency without being anything of the kind (7270.T at $10.9bn,
 033780.KS at $14.4bn).
 
+## ⚠️ Il consenso macro e la serie FRED non sono la stessa misura (2026-10-11)
+
+Il previsto di Forexfactory e' nell'unita' del SUO evento («CPI m/m» = una
+variazione mensile in %, NFP = «212K»); `prev_value`/`prior_value` sono LIVELLI
+FRED. A schermo stava «Attuale 334.1 · Previsto 0.6 · Precedente 332.8».
+`calendar_service.valori_nel_consenso` porta attuale, previsto e precedente
+nell'unita' del consenso.
+
+⚠️ E la serie FRED abbinata a un evento NON e' per forza la misura del
+consenso, anche col nome giusto: misurato, il CPI coincide (FRED +0,396% contro
+0,4), il PPI no (+0,96 contro 0,4: un altro indice dei prezzi alla
+produzione), le vendite al dettaglio nemmeno (1,13 contro 1,4). Un valore
+ricavato da FRED si usa accanto al consenso SOLO se la sua ultima variazione
+coincide col `previous` della fonte entro l'arrotondamento — lo si verifica sui
+dati, non lo si suppone.
+
 ## Units are the third recurring defect class, after palettes and rates (2026-09-10)
 
 The honesty rules in this file are applied to STATISTICS and not to
@@ -2163,6 +2179,28 @@ innocuo finche' il seme non ha notizie.
 `http://0.0.0.0:9`: una connessione a una porta chiusa di `127.0.0.1` impiega
 ~2s a essere rifiutata (su Linux e' istantanea), e tre test scadono per il
 tempo, non per un difetto.
+
+### 5. ⚠️ Il seme non aveva NESSUN evento di calendario (2026-10-11)
+
+I chip che /calendar mostrava al gate venivano dall'elenco macro scritto a
+mano (`calendar_macros._MACRO_EVENTS`), che finisce il 31 agosto 2026. Da
+ottobre il gate misurava una griglia vuota (`nested-interactive` 3 -> 0) e la
+domenica 11 ottobre e' arrossito su `color-contrast 3 -> 4` per un commit che
+non toccava il calendario — riprodotto in locale, lo stesso rosso usciva col
+frontend di PRIMA. Il nodo nuovo era un difetto vero (il cerchio di oggi,
+bianco su sky-500, ~2,8:1) che axe di solito non misurava per l'alone sfumato.
+
+`semina_calendario` mette tre rilasci nella data di OGGI del seme: e' l'unica
+che cade sempre nella griglia del mese visibile. ⚠️ Un elenco scritto a mano
+con date assolute e' un orologio anche lui: scade, e il gate smette di
+misurare senza dirlo.
+
+⚠️ Riprodurre il gate in locale e' un quarto d'ora, non una giornata: database
+`sqlite:///./data/e2e_gate.db`, `create_all` + `seed_e2e`, uvicorn su una porta
+libera con il proxy su `http://0.0.0.0:9`, cookie firmato con una chiave
+usa-e-getta, `E2E_BASE_URL` e `E2E_SESSION_COOKIE` per Playwright. La prova che
+il commit e' innocente si fa riportando A PRIMA i soli file toccati e
+rilanciando: se il rosso resta, non e' il commit.
 
 ### Stringere una linea di base vuole DUE osservazioni
 
