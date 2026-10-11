@@ -588,19 +588,31 @@ describe("l'agenda del giorno", () => {
     expect(giu.className).toContain("rose");
   });
 
-  it("molte trimestrali: una voce per riga sul telefono, due colonne quando c'e' spazio", () => {
-    // Prima era una riga sola coi primi quattro nomi, che sul telefono usciva
-    // dal riquadro. Ora sono tutte, in una griglia a una o due colonne.
+  it("quattro giorni lavorativi in due righe, ad altezza fissa e senza scorrimento", () => {
+    // Venerdi' 18: poi lunedi', martedi', mercoledi'. Il fine settimana salta.
+    montaA(PREMARKET);
+    const agenda = screen.getByRole("region", { name: "Agenda" });
+    for (const g of ["Oggi", "lun 21", "mar 22", "mer 23"]) {
+      expect(within(agenda).getByText(g)).toBeInTheDocument();
+    }
+    const riquadro = within(agenda).getByText("Oggi").closest("div.h-\\[13\\.75rem\\]")!;
+    expect(riquadro).not.toBeNull();
+    expect(riquadro.className).not.toContain("overflow-y-auto");
+  });
+
+  it("molte trimestrali: la riga piena si prende lo spazio, e le altre si contano", () => {
+    // Prima la colonna scorreva; ora il giorno pieno ha otto linee su dieci e
+    // dice quante ne restano fuori invece di tagliarle in silenzio.
     eventi = Array.from({ length: 14 }, (_, i) => ({
       kind: "earnings", date: "2026-09-18", ticker: `T${i}`, name: `Titolo ${i}`, eps_estimate: 1,
       revenue_estimate: null, sector: null, market_cap: 1e9 - i, earnings_when: i % 2 ? "after" : "pre",
     }) as CalendarEvent);
     montaA(PREMARKET);
     const agenda = screen.getByRole("region", { name: "Agenda" });
-    expect(within(agenda).getAllByRole("link", { name: /^T\d+$/ })).toHaveLength(14);
-    const griglia = within(agenda).getByRole("link", { name: "T0" }).closest("ul")!;
-    expect(griglia.className).toContain("grid-cols-1");
-    expect(griglia.className).toContain("min-[420px]:grid-cols-2");
+    // Le piu' grandi per prime: sette voci e la linea del resto.
+    expect(within(agenda).getAllByRole("link", { name: /^T\d+$/ }).map((a) => a.textContent))
+      .toEqual(["T0", "T1", "T2", "T3", "T4", "T5", "T6"]);
+    expect(within(agenda).getByRole("link", { name: "+7 altre" })).toHaveAttribute("href", "/calendar");
     expect(within(agenda).getByText("14 trimestrali")).toBeInTheDocument();
   });
 
@@ -614,7 +626,7 @@ describe("l'agenda del giorno", () => {
     expect(screen.queryByText("Richieste sussidi")).not.toBeInTheDocument();
   });
 
-  it("i giorni dopo: solo macro importanti e trimestrali dei tuoi titoli", () => {
+  it("i giorni dopo: macro importanti e tutte le trimestrali, prima le tue", () => {
     // Lunedi' 21, tre giorni dopo il venerdi' del test.
     eventi = [
       { kind: "macro", date: "2026-09-21", label: "Inflazione CPI", importance: "high",
@@ -633,9 +645,12 @@ describe("l'agenda del giorno", () => {
       montaA(PREMARKET);
       const agenda = screen.getByRole("region", { name: "Agenda" });
       expect(within(agenda).getByText("Inflazione CPI")).toBeInTheDocument();
-      expect(within(agenda).getByText("NVDA")).toBeInTheDocument();
-      // Non seguito, e macro minore: restano nel calendario completo.
-      expect(within(agenda).queryByText("MSFT")).not.toBeInTheDocument();
+      // Tutte le trimestrali del giorno, e la tua per prima col suo segno,
+      // anche se Microsoft vale di piu' in borsa.
+      const nomi = within(agenda).getAllByRole("link", { name: /^(NVDA|MSFT)$/ }).map((a) => a.textContent);
+      expect(nomi).toEqual(["NVDA", "MSFT"]);
+      expect(within(agenda).getByLabelText("in posizione")).toBeInTheDocument();
+      // Un macro minore resta nel calendario completo.
       expect(within(agenda).queryByText("Scorte di magazzino")).not.toBeInTheDocument();
     } finally {
       seguiti = new Map();

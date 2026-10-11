@@ -3,32 +3,34 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { EarningsEvent } from "@/api/types";
+import { type GiornoAgenda, ripartisciRighe, taglia, vociDelGiorno } from "@/lib/agendaGiorni";
 import { earningsBeatTone, formatEps } from "@/lib/calendarMeta";
-import type { AgendaOggi } from "@/lib/oggiMercato";
-import { etichettaGiorno, type GiornoSettimana } from "@/lib/settimana";
+import { etichettaGiorno } from "@/lib/settimana";
 import { cn } from "@/lib/utils";
 
-/* ─── L'agenda nel jumbotron: oggi e i giorni che vengono ──────────────────
+/* ─── L'agenda nel jumbotron: quattro giorni lavorativi in due righe ───────
  *
- * Prima erano due cose separate: una riga «Oggi» in fondo al jumbotron e la
- * scheda «Questa settimana» sotto di lui, con una colonna per giorno. Qui stanno
- * insieme e piccole, accanto a indici e materie prime: OGGI per intero (tutti i
- * rilasci macro con l'ora di New York e le trimestrali prima e dopo la seduta),
- * i giorni dopo solo cio' che conta — macro importanti e trimestrali dei tuoi
- * titoli.
+ * Oggi (o il primo giorno lavorativo) e i tre successivi, due per riga, coi
+ * rilasci macro e le trimestrali di ciascun giorno (2026-10-12, su richiesta:
+ * prima era una colonna che scorreva).
  *
- * ⚠️ ALTEZZA FISSA, con lo scorrimento dentro (FA-106): il calendario arriva
- * dopo il resto della fascia, e un riquadro che cresce sposterebbe tutto quello
- * che sta sotto. Il riquadro c'e' anche vuoto, e lo dice.
+ * ⚠️ ALTEZZA FISSA e NESSUNO scorrimento. Il calendario arriva dopo il resto
+ * della fascia, e un riquadro che cresce sposterebbe tutto cio' che sta sotto
+ * (FA-106). Le due righe si dividono l'altezza in proporzione alle voci del
+ * giorno piu' pieno di ciascuna (`ripartisciRighe`), e un giorno che non ci
+ * sta dice quante ne restano fuori con «+N altre». Ogni voce e' alta una
+ * linea esatta (`h-4`): e' quello che rende l'aritmetica vera a schermo.
  */
 
-const ALTEZZA = "h-[9.5rem]";
+/** Righe (linee di voci + intestazione) piu' lo spazio fra le due: deve
+ *  restare in pari con `LINEE_AGENDA` e con `h-4` delle voci. */
+const ALTEZZA = "h-[13.75rem]";
 
 function Voce({ ora, testo, forte }: { ora: string | null; testo: string; forte: boolean }) {
   return (
-    <li className="flex min-w-0 items-baseline gap-1.5">
-      <span className="w-10 shrink-0 font-semibold tabular-nums">
-        {ora ?? <span className="font-normal text-muted-foreground" title="Orario di rilascio non pubblicato">n/d</span>}
+    <li className="flex h-4 min-w-0 items-baseline gap-1.5 leading-4">
+      <span className="w-9 shrink-0 font-semibold tabular-nums">
+        {ora ?? <span className="font-normal text-muted-foreground">n/d</span>}
       </span>
       <span className={cn("truncate", forte ? "font-semibold text-foreground" : "text-muted-foreground")} title={testo}>
         {testo}
@@ -38,10 +40,7 @@ function Voce({ ora, testo, forte }: { ora: string | null; testo: string; forte:
 }
 
 /** Una trimestrale nello stile del calendario: stima prima dell'uscita,
- *  EPS reale contro stima dopo, colorato e con la freccia della sorpresa.
- *  ⚠️ Una voce per titolo invece della riga «12 trimestrali prima
- *  dell'apertura (AAPL, MSFT…)»: nelle settimane piene quella riga usciva
- *  dal riquadro sul telefono e i nomi oltre il quarto non si vedevano. */
+ *  EPS reale contro stima dopo, colorato e con la freccia della sorpresa. */
 function VoceTrimestrale({ e, segno }: { e: EarningsEvent; segno?: ReactNode }) {
   const uscita = earningsBeatTone(e.surprise_pct) != null;
   const battuta = uscita && (e.surprise_pct ?? 0) >= 0;
@@ -51,7 +50,7 @@ function VoceTrimestrale({ e, segno }: { e: EarningsEvent; segno?: ReactNode }) 
       ? "text-emerald-800 dark:text-emerald-300"
       : "text-rose-700 dark:text-rose-300";
   return (
-    <li className="flex min-w-0 items-center gap-1 tabular-nums">
+    <li className="flex h-4 min-w-0 items-center gap-1 leading-4 tabular-nums">
       {segno}
       <Link to={`/stocks/${encodeURIComponent(e.ticker)}`} className={cn("shrink-0 font-semibold hover:underline", colore)}>
         {e.ticker}
@@ -75,25 +74,69 @@ function VoceTrimestrale({ e, segno }: { e: EarningsEvent; segno?: ReactNode }) 
   );
 }
 
-/** Una o due colonne: una sul telefono, dove due voci affiancate non ci
- *  stanno, due appena c'e' spazio. Letterale per il purger di Tailwind. */
-const GRIGLIA_TRIMESTRALI = "grid grid-cols-1 gap-x-3 gap-y-0.5 min-[420px]:grid-cols-2";
+function Giorno({ g, linee }: { g: GiornoAgenda; linee: number }) {
+  const voci = vociDelGiorno(g);
+  const { mostrate, altre } = taglia(voci, linee);
+  const macro = g.macro.slice(0, mostrate);
+  const trimestrali = g.trimestrali.slice(0, Math.max(0, mostrate - macro.length));
+  const n = g.trimestrali.length;
+  return (
+    <div className="flex min-w-0 flex-col">
+      {/* Un `div` e non un'intestazione: il jumbotron sta sopra l'`h2` della
+          pagina, e un `h3` qui salterebbe un livello (axe `heading-order`). */}
+      <div className="mb-0.5 flex h-4 min-w-0 items-baseline justify-between gap-2 leading-4">
+        <span className={cn("truncate text-[0.6765rem] font-bold uppercase tracking-wide",
+          g.distanza === 0 ? "text-foreground" : "text-muted-foreground")}>
+          {etichettaGiorno(g.giorno, g.distanza)}
+        </span>
+        {n > 0 && (
+          <span className="shrink-0 text-[0.6471rem] text-muted-foreground">
+            {n} {n === 1 ? "trimestrale" : "trimestrali"}
+          </span>
+        )}
+      </div>
+      {voci === 0 ? (
+        <p className="h-4 leading-4 text-muted-foreground">
+          {g.distanza === 0 ? "Niente in calendario oggi." : "Niente in calendario."}
+        </p>
+      ) : (
+        <ul className="min-w-0">
+          {macro.map((m) => (
+            <Voce key={`${m.etichetta}-${m.oraET}`} ora={m.oraET} testo={m.etichetta}
+              forte={m.importanza === "high"} />
+          ))}
+          {trimestrali.map(({ evento, rilevanza }) => (
+            <VoceTrimestrale
+              key={evento.ticker}
+              e={evento}
+              segno={rilevanza === "posizione" ? (
+                <Briefcase className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="in posizione" />
+              ) : rilevanza === "preferito" ? (
+                <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300" aria-label="preferito" />
+              ) : undefined}
+            />
+          ))}
+          {altre > 0 && (
+            <li className="h-4 leading-4">
+              <Link to="/calendar" className="text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                +{altre} {altre === 1 ? "altra" : "altre"}
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
 
-export function AgendaCompatta({ oggi, prossimi, stato }: {
-  /** Il giorno di New York per intero. */
-  oggi: AgendaOggi;
-  /** I giorni dopo oggi, gia' ridotti a macro importanti e tuoi titoli. */
-  prossimi: GiornoSettimana[];
+export function AgendaCompatta({ giorni, stato }: {
+  /** Quattro giorni lavorativi da oggi (`giorniAgenda`). */
+  giorni: GiornoAgenda[];
   stato: "pronto" | "carica" | "errore";
 }) {
-  const pieni = prossimi.filter((g) => g.distanza > 0 && (g.macro.length > 0 || g.trimestrali.length > 0));
-  const nienteOggi =
-    oggi.macro.length === 0 &&
-    oggi.primaDellApertura.length === 0 &&
-    oggi.dopoLaChiusura.length === 0 &&
-    oggi.senzaOrario.length === 0;
-  // Prima della seduta, dopo, poi senza orario: l'ordine in cui escono.
-  const trimestraliOggi = [...oggi.primaDellApertura, ...oggi.dopoLaChiusura, ...oggi.senzaOrario];
+  const righe = [giorni.slice(0, 2), giorni.slice(2, 4)];
+  const bisogni = righe.map((r) => Math.max(0, ...r.map(vociDelGiorno))) as [number, number];
+  const linee = ripartisciRighe(bisogni);
   return (
     <section aria-label="Agenda" className="flex min-w-0 flex-col text-xs">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -108,73 +151,22 @@ export function AgendaCompatta({ oggi, prossimi, stato }: {
           calendario
         </Link>
       </div>
-      <div className={cn(ALTEZZA, "min-h-0 overflow-y-auto rounded-md border border-border/60 bg-muted/20 px-2 py-1.5")}>
+      <div className={cn(ALTEZZA, "flex flex-col gap-1.5 overflow-hidden rounded-md border border-border/60 bg-muted/20 px-2 py-1.5")}>
         {stato === "carica" ? (
           <div className="h-full animate-pulse rounded bg-muted/40" aria-hidden />
         ) : stato === "errore" ? (
           <p className="text-muted-foreground">Calendario non disponibile.</p>
         ) : (
-          <div className="space-y-1.5">
-            {/* Un `div` e non un'intestazione: il jumbotron sta sopra l'`h2`
-                della pagina, e un `h3` qui salterebbe un livello (axe
-                `heading-order`, la stessa ragione della scheda di prima). */}
-            <div>
-              <div className="text-[0.6765rem] font-bold uppercase tracking-wide">Oggi</div>
-              {nienteOggi ? (
-                <p className="text-muted-foreground">Niente in calendario oggi.</p>
-              ) : (
-                <>
-                  <ul className="space-y-0.5">
-                    {oggi.macro.slice(0, 5).map((m) => (
-                      <Voce
-                        key={`${m.etichetta}-${m.oraET}`}
-                        ora={m.oraET}
-                        testo={m.etichetta}
-                        forte={m.importanza === "high"}
-                      />
-                    ))}
-                  </ul>
-                  {trimestraliOggi.length > 0 && (
-                    <div className="mt-1">
-                      <div className="text-[0.6471rem] text-muted-foreground">
-                        {trimestraliOggi.length} {trimestraliOggi.length === 1 ? "trimestrale" : "trimestrali"}
-                      </div>
-                      <ul className={GRIGLIA_TRIMESTRALI}>
-                        {trimestraliOggi.map((e) => <VoceTrimestrale key={e.ticker} e={e} />)}
-                      </ul>
-                    </div>
-                  )}
-                </>
-              )}
+          righe.map((r, i) => (
+            <div
+              key={i}
+              className={cn("grid min-h-0 grid-cols-2 gap-x-3", i === 1 && "border-t border-border/50 pt-1")}
+              // Intestazione (1rem + margine) piu' le linee assegnate alla riga.
+              style={{ height: `${linee[i] + 1.125 + (i === 1 ? 0.25 : 0)}rem` }}
+            >
+              {r.map((g) => <Giorno key={g.giorno} g={g} linee={linee[i]} />)}
             </div>
-            {pieni.map((g) => (
-              <div key={g.giorno}>
-                <div className="text-[0.6765rem] font-bold uppercase tracking-wide text-muted-foreground">
-                  {etichettaGiorno(g.giorno, g.distanza)}
-                </div>
-                <ul className="space-y-0.5">
-                  {g.macro.map((m) => (
-                    <Voce key={`${m.etichetta}-${m.oraET}`} ora={m.oraET} testo={m.etichetta} forte />
-                  ))}
-                </ul>
-                {g.trimestrali.length > 0 && (
-                  <ul className={GRIGLIA_TRIMESTRALI}>
-                    {g.trimestrali.map(({ evento, rilevanza }) => (
-                      <VoceTrimestrale
-                        key={evento.ticker}
-                        e={evento}
-                        segno={rilevanza === "posizione" ? (
-                          <Briefcase className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="in posizione" />
-                        ) : (
-                          <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-700 dark:fill-amber-300 dark:text-amber-300" aria-label="preferito" />
-                        )}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
-          </div>
+          ))
         )}
       </div>
     </section>

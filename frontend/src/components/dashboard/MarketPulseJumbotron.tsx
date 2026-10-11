@@ -25,9 +25,8 @@ import { useTitoliSeguiti } from "@/hooks/useTitoliSeguiti";
 import { cumulativeVolumeFraction } from "@/lib/intradayVolume";
 import { formatLivello, formatVariazione, posizioneNelRange } from "@/lib/marketNumber";
 import { moversDeiMiei } from "@/lib/moversMiei";
-import { agendaDelGiorno } from "@/lib/oggiMercato";
 import { PANIERE_CONTESTO } from "@/lib/paniereLive";
-import { settimana } from "@/lib/settimana";
+import { giorniAgenda } from "@/lib/agendaGiorni";
 import { sparklinePoints } from "@/lib/sparkline";
 import { etToday, formatDelta, usSessionClock, type UsPhase } from "@/lib/usSession";
 import { cn } from "@/lib/utils";
@@ -831,13 +830,10 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
     return t.toISOString().slice(0, 10);
   }, [giornoET]);
   const calendarioQ = useCalendar({ from: giornoET, to: finoA, kinds: ["macro", "earnings"] });
-  const agenda = useMemo(
-    () => agendaDelGiorno(calendarioQ.data?.events, giornoET),
-    [calendarioQ.data, giornoET],
-  );
-
-  const prossimi = useMemo(
-    () => settimana(calendarioQ.data?.events, giornoET, seguiti),
+  // Oggi (o il primo lavorativo) e i tre lavorativi dopo: la finestra di sei
+  // giorni li copre sempre, anche partendo da un sabato.
+  const giorniInAgenda = useMemo(
+    () => giorniAgenda(calendarioQ.data?.events, giornoET, seguiti),
     [calendarioQ.data, giornoET, seguiti],
   );
 
@@ -1014,7 +1010,9 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
             risposto: il gruppo a leva viene da un'altra interrogazione
             (`/api/stocks/quotes`), e legarlo alla presenza degli indici lo
             faceva sparire insieme a loro quando quella query taceva. */}
-        <div className="grid gap-3 border-t pt-2 lg:grid-cols-2">
+        {/* Piu' spazio alla fascia dei mercati che all'agenda (2026-10-12):
+            i nomi degli indici e degli ETF stavano stretti a meta' riga. */}
+        <div className="grid gap-3 border-t pt-2 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           {/* ⚠️ Una colonna per tipo — indici, materie prime, cripto, ETF.
               Prima era una fila sola che andava a capo dove capitava, e le
               cripto finivano in coda alle materie prime; poi una riga per
@@ -1069,8 +1067,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
               alle 08:30 di New York muove l'apertura piu' di qualunque
               movimento di stanotte. */}
           <AgendaCompatta
-            oggi={agenda}
-            prossimi={prossimi}
+            giorni={giorniInAgenda}
             stato={calendarioQ.isError ? "errore" : calendarioQ.isLoading ? "carica" : "pronto"}
           />
         </div>
