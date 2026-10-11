@@ -563,8 +563,43 @@ describe("l'agenda del giorno", () => {
     expect(screen.getByText("Oggi")).toBeInTheDocument();
     expect(screen.getByText("08:30")).toBeInTheDocument();
     expect(screen.getByText("Richieste sussidi")).toBeInTheDocument();
-    expect(screen.getByText(/trimestrali prima dell'apertura/)).toBeInTheDocument();
-    expect(screen.getByText(/\(AAPL\)/)).toBeInTheDocument();
+    // Una voce per titolo, con la stima prima dell'uscita.
+    const agenda = screen.getByRole("region", { name: "Agenda" });
+    expect(within(agenda).getByRole("link", { name: "AAPL" })).toBeInTheDocument();
+    expect(within(agenda).getByText(/stim\./)).toBeInTheDocument();
+  });
+
+  it("una trimestrale uscita: EPS contro stima, freccia e colore della sorpresa", () => {
+    eventi = [
+      { kind: "earnings", date: "2026-09-18", ticker: "AAPL", name: "Apple", eps_estimate: 1.5,
+        revenue_estimate: null, sector: null, market_cap: 3e12, earnings_when: "pre",
+        eps_reported: 1.65, surprise_pct: 10 } as CalendarEvent,
+      { kind: "earnings", date: "2026-09-18", ticker: "MSFT", name: "Microsoft", eps_estimate: 3,
+        revenue_estimate: null, sector: null, market_cap: 3e12, earnings_when: "pre",
+        eps_reported: 2.7, surprise_pct: -10 } as CalendarEvent,
+    ];
+    montaA(PREMARKET);
+    const agenda = screen.getByRole("region", { name: "Agenda" });
+    const su = within(agenda).getByText(/▲ \+10\.0%/);
+    expect(su.className).toContain("emerald");
+    const giu = within(agenda).getByText(/▼ -10\.0%/);
+    expect(giu.className).toContain("rose");
+  });
+
+  it("molte trimestrali: una voce per riga sul telefono, due colonne quando c'e' spazio", () => {
+    // Prima era una riga sola coi primi quattro nomi, che sul telefono usciva
+    // dal riquadro. Ora sono tutte, in una griglia a una o due colonne.
+    eventi = Array.from({ length: 14 }, (_, i) => ({
+      kind: "earnings", date: "2026-09-18", ticker: `T${i}`, name: `Titolo ${i}`, eps_estimate: 1,
+      revenue_estimate: null, sector: null, market_cap: 1e9 - i, earnings_when: i % 2 ? "after" : "pre",
+    }) as CalendarEvent);
+    montaA(PREMARKET);
+    const agenda = screen.getByRole("region", { name: "Agenda" });
+    expect(within(agenda).getAllByRole("link", { name: /^T\d+$/ })).toHaveLength(14);
+    const griglia = within(agenda).getByRole("link", { name: "T0" }).closest("ul")!;
+    expect(griglia.className).toContain("grid-cols-1");
+    expect(griglia.className).toContain("min-[420px]:grid-cols-2");
+    expect(within(agenda).getByText("14 trimestrali")).toBeInTheDocument();
   });
 
   it("⚠️ senza eventi il riquadro c'e' lo stesso, e dice che oggi non c'e' niente", () => {

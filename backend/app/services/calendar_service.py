@@ -18,6 +18,7 @@ earnings-before-macros, importance desc within a day).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
@@ -106,6 +107,17 @@ class MacroEventDC:
     expected_value: float | None = None
     actual_value: float | None = None
     surprise_pct: float | None = None
+    # ⚠️ Attuale e precedente NELL'UNITA' DEL CONSENSO (2026-10-06). Il
+    # previsto di Forexfactory e' nell'unita' del suo evento — per «CPI m/m»
+    # una variazione mensile in % — mentre `prev_value`/`prior_value` sono i
+    # LIVELLI FRED: a schermo stavano «Attuale 334.1 · Previsto 0.6 ·
+    # Precedente 332.8», tre numeri di cui uno solo confrontabile. Vedi
+    # `valori_nel_consenso`.
+    attuale_consenso: float | None = None
+    previsto_consenso: float | None = None
+    precedente_consenso: float | None = None
+    #: "%" | "K" | "M" | "B" | "" — come scrivere i tre valori del consenso.
+    formato_consenso: str | None = None
     # Backing MacroSeries id — drives the link to /macro/:series_id from
     # the calendar event chip. None when the event came from the
     # hardcoded fallback list AND no MacroSeries with the same `label`
@@ -357,6 +369,60 @@ def _enrich_with_fred_value(db: Session, ev: MacroEventDC) -> None:
     ev.history = [(r.date, r.value) for r in reversed(history_rows)]
 
 
+def _formato(raw: str | None) -> str:
+    s = (raw or "").strip()
+    if s.endswith("%"):
+        return "%"
+    if s and s[-1].upper() in ("K", "M", "B", "T"):
+        return s[-1].upper()
+    return ""
+
+
+def valori_nel_consenso(
+    titolo: str,
+    forecast: str | None,
+    actual: str | None,
+    previous: str | None,
+    unita_fred: str | None,
+    storia: list[tuple[date, float | None]],
+) -> tuple[float | None, float | None, float | None, str]:
+    """(attuale, previsto, precedente, formato) nell'unita' del consenso.
+
+    - Uscito il dato: attuale = `actual` di Forexfactory, precedente = il suo
+      `previous`. Tutti e due nell'unita' del previsto per costruzione.
+    - Non ancora uscito: attuale = `previous`, cioe' l'ultima release
+      UFFICIALE; il precedente (la release prima) solo per le variazioni
+      m/m, ricavandolo dai livelli FRED dove il conto e' certo:
+      livello[-2] / livello[-3] - 1.
+
+    ⚠️ Niente conti su differenze o variazioni annue: i livelli di PAYEMS sono
+    in migliaia mentre Forexfactory scrive «212K», e una y/y vuole tredici
+    osservazioni dove la storia ne porta dodici. Dove il conto non e' certo il
+    valore resta assente invece che sbagliato.
+
+    Valori in unita' monetaria (K, M, B) si riportano alla stessa scala in
+    cui sono scritti: «212K» resta 212 con formato "K".
+    """
+    from app.services import forexfactory_consensus as ff
+
+    formato = _formato(forecast) or _formato(previous) or _formato(actual)
+    scala = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}.get(formato, 1.0)
+
+    def num(raw: str | None) -> float | None:
+        v = ff.parse_numeric(raw)
+        return None if v is None else v / scala
+
+    uscito, previsto, prima = num(actual), num(forecast), num(previous)
+    if uscito is not None:
+        return uscito, previsto, prima, formato
+    precedente = None
+    if re.search(r"(?<![a-z])m/m(?![a-z])", titolo, re.IGNORECASE) and unita_fred in ("index", "level"):
+        livelli = [v for _, v in storia if v is not None]
+        if len(livelli) >= 3 and livelli[-3]:
+            precedente = (livelli[-2] / livelli[-3] - 1.0) * 100.0
+    return prima, previsto, precedente, formato
+
+
 def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
     """Mutate `ev` in place: attach `expected_value`, `actual_value`,
     `surprise_pct` (and as backup `prev_value`) from Forexfactory's
@@ -385,6 +451,10 @@ def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
     previous = ff.parse_numeric(ff_event.previous)
     if expected is not None:
         ev.expected_value = expected
+    (ev.attuale_consenso, ev.previsto_consenso, ev.precedente_consenso,
+     ev.formato_consenso) = valori_nel_consenso(
+        ff_event.title, ff_event.forecast, ff_event.actual, ff_event.previous, ev.unit, ev.history,
+    )
     if actual is not None:
         ev.actual_value = actual
     # Only fall back to FF's `previous` when FRED hasn't already

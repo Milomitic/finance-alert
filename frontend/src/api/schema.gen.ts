@@ -1005,6 +1005,10 @@ export interface MacroEventOut {
   expected_value?: number | null;
   actual_value?: number | null;
   surprise_pct?: number | null;
+  attuale_consenso?: number | null;
+  previsto_consenso?: number | null;
+  precedente_consenso?: number | null;
+  formato_consenso?: string | null;
 }
 
 export interface MacroObservationOut {

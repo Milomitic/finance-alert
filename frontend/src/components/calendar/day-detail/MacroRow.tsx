@@ -10,6 +10,7 @@ import {
   regionFlagAsset,
   regionLabel,
 } from "@/lib/calendarMeta";
+import { eUnaVariazione, formatConsenso } from "@/lib/consensoMacro";
 import { cn } from "@/lib/utils";
 
 import { ImportanceDots } from "../ImportanceDots";
@@ -120,6 +121,25 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           : "neutral"
       : "neutral";
 
+  /* ⚠️ Con un consenso, i tre valori stanno NELL'UNITA' DEL CONSENSO
+   * (2026-10-06). Prima «Attuale» era il livello FRED dell'indice (334.1) e
+   * «Previsto» la variazione mensile di Forexfactory (0.6): tre numeri di cui
+   * uno solo confrontabile, e dopo l'uscita del dato peggio ancora — una
+   * variazione in % confrontata col livello dava «−99.9% vs prec.». */
+  const formato = event.formato_consenso;
+  const nelConsenso = formato != null;
+  const conSegno = eUnaVariazione(event.unit, formato);
+  const attualeC = event.attuale_consenso;
+  const previstoC = event.previsto_consenso;
+  /* La sorpresa nell'unita' del consenso: una DIFFERENZA, «−0.2 pp» o
+   * «−62K». Quella relativa di prima su una percentuale — 0.4% contro 0.6% =
+   * «−33%» — non dice niente. */
+  const sorpresaC = actual != null && attualeC != null && previstoC != null ? attualeC - previstoC : null;
+  const toneC: "pos" | "neg" | "neutral" =
+    actual != null && attualeC != null && previstoC != null
+      ? attualeC > previstoC ? "pos" : attualeC < previstoC ? "neg" : "neutral"
+      : "neutral";
+
   return (
     <div className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2.5">
       {/* Primary KPI strip — Investing-style "Attuale / Previsto / Precedente"
@@ -127,6 +147,34 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           Atteso / Sorpresa" is replaced because the user explicitly
           asked for clearer separation between the latest reading and the
           comparison axes (forecast + prior) on a single visual line. */}
+      {nelConsenso ? (
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <SlotConsenso
+          label="Attuale"
+          hint={actual != null
+            ? "Il dato appena uscito, nell'unità del consenso. Verde se sopra il previsto, rosso se sotto."
+            : "L'ultima release ufficiale, nell'unità del consenso: è la base da cui parte il previsto."}
+          testo={formatConsenso(attualeC, formato, conSegno)}
+          tone={toneC}
+          big
+          sotto={actual == null && prev != null
+            ? `${unit === "index" ? "indice " : ""}${formatMacroValue(prev, unit)}${prevDate ? ` · ${formatMacroDate(prevDate)}` : ""}`
+            : undefined}
+        />
+        <SlotConsenso
+          label="Previsto"
+          hint="Consensus forecast (mediana analisti) dal feed Forexfactory, nella sua unità."
+          testo={formatConsenso(previstoC, formato, conSegno)}
+          big
+        />
+        <SlotConsenso
+          label="Precedente"
+          hint="La release prima di quella attuale, nella stessa unità."
+          testo={formatConsenso(event.precedente_consenso, formato, conSegno)}
+          big
+        />
+      </div>
+      ) : (
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <KpiSlot
           label="Attuale"
@@ -155,11 +203,27 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           unit={unit}
         />
       </div>
+      )}
 
       {/* Surprise badge — separate row, only when meaningful. Replaces the
           old "Sorpresa" 3rd column so Attuale/Previsto/Precedente can use
           the full width like the user's reference screenshot. */}
-      {surprise != null && (
+      {nelConsenso && sorpresaC != null ? (
+        <div
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.7059rem] font-semibold tabular-nums",
+            sorpresaC > 0
+              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+              : sorpresaC < 0
+                ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                : "bg-muted text-muted-foreground",
+          )}
+          title={`Previsto ${formatConsenso(previstoC, formato, conSegno)} → uscito ${formatConsenso(attualeC, formato, conSegno)}`}
+        >
+          Sorpresa {sorpresaC > 0 ? "▲" : sorpresaC < 0 ? "▼" : "·"}{" "}
+          {formato === "%" ? `${formatConsenso(sorpresaC, "", true)} pp` : formatConsenso(sorpresaC, formato, true)}
+        </div>
+      ) : !nelConsenso && surprise != null && (
         <div
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.7059rem] font-semibold tabular-nums",
@@ -211,6 +275,35 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
       {expanded && history.length >= 2 && (
         <ExtendedHistoryChart history={history} unit={unit} />
       )}
+    </div>
+  );
+}
+
+/* ─── SlotConsenso — un valore gia' scritto nell'unita' del consenso ─────── */
+
+function SlotConsenso({ label, hint, testo, tone = "neutral", big, sotto }: {
+  label: string;
+  hint: string;
+  testo: string;
+  tone?: "pos" | "neg" | "neutral";
+  big?: boolean;
+  sotto?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0" title={hint}>
+      <span className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "font-bold tabular-nums leading-tight",
+          big ? "text-lg" : "text-sm",
+          tone === "pos" && "text-emerald-800 dark:text-emerald-400",
+          tone === "neg" && "text-rose-600 dark:text-rose-400",
+          tone === "neutral" && (testo === "—" ? "text-muted-foreground font-normal italic" : "text-foreground"),
+        )}
+      >
+        {testo}
+      </span>
+      {sotto && <span className="text-[0.6471rem] text-muted-foreground tabular-nums truncate">{sotto}</span>}
     </div>
   );
 }
@@ -290,7 +383,7 @@ function KpiSlot({
       {deltaLabel && (
         <span
           className={cn(
-            "text-[10.5px] tabular-nums font-medium",
+            "text-sm font-bold tabular-nums",
             deltaTone === "pos" && "text-emerald-800 dark:text-emerald-400",
             deltaTone === "neg" && "text-rose-600 dark:text-rose-400",
             deltaTone === "neutral" && "text-muted-foreground",

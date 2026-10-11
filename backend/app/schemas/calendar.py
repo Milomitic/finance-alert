@@ -97,6 +97,12 @@ class MacroEventOut(BaseModel):
     expected_value: float | None = None
     actual_value: float | None = None
     surprise_pct: float | None = None
+    # Attuale e precedente nell'unita' del consenso, e come scriverli: vedi
+    # `calendar_service.valori_nel_consenso`. None senza consenso.
+    attuale_consenso: float | None = None
+    previsto_consenso: float | None = None
+    precedente_consenso: float | None = None
+    formato_consenso: str | None = None
 
 
 CalendarEvent = Annotated[

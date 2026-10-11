@@ -1344,6 +1344,13 @@ export interface MacroEvent {
   /** Surprise = (actual - expected) / |expected| * 100. Null when either
    *  side is missing or expected is zero (rare). */
   surprise_pct?: number | null;
+  /** Attuale, previsto e precedente NELL'UNITA' DEL CONSENSO (es. la
+   *  variazione m/m del CPI), e come scriverli: "%", "K", "M", "B" o "".
+   *  Null senza consenso. Vedi `calendar_service.valori_nel_consenso`. */
+  attuale_consenso?: number | null;
+  previsto_consenso?: number | null;
+  precedente_consenso?: number | null;
+  formato_consenso?: string | null;
   /** Stable id of the underlying MacroSeries — drives the deep-link from
    *  a calendar chip to /macro/:series_id. Null for events without a
    *  backing series row (hardcoded fallback list); the "Apri dettaglio"
