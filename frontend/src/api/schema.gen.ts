@@ -122,6 +122,18 @@ export interface AnalystRatingOut {
   strong_sell: number;
 }
 
+export interface AndamentoSettoreOut {
+  serie: PuntoAndamentoOut[];
+  etf_ticker?: string | null;
+  rendimenti: RendimentoFinestraOut[];
+  sopra_ema50: QuotaOut;
+  sopra_ema200: QuotaOut;
+  vicino_massimi: QuotaOut;
+  vicino_minimi: QuotaOut;
+  in_rialzo: QuotaOut;
+  aggiornato_al?: string | null;
+}
+
 export interface ArretratoOut {
   conteggio: number;
   totale?: number | null;
@@ -1515,6 +1527,18 @@ export interface PriceAlertUpdate {
   note?: string | null;
 }
 
+export interface PuntoAndamentoOut {
+  data: string;
+  settore: number;
+  spy?: number | null;
+  etf?: number | null;
+}
+
+export interface QuotaOut {
+  n: number;
+  su: number;
+}
+
 export interface ReazioneRilascioOut {
   data: string;
   rendimento: number;
@@ -1542,6 +1566,13 @@ export interface RefreshAccepted {
 
 export interface RefreshRequest {
   index_code?: string | null;
+}
+
+export interface RendimentoFinestraOut {
+  finestra: string;
+  settore?: number | null;
+  spy?: number | null;
+  etf?: number | null;
 }
 
 export interface RestartDetailOut {
@@ -1648,6 +1679,8 @@ export interface SectorDetailOut {
   top_picks: SectorStockRow[];
   bottom_picks: SectorStockRow[];
   stocks: SectorStockRow[];
+  andamento?: AndamentoSettoreOut | null;
+  segnali?: SegnaliSettoreOut | null;
 }
 
 export interface SectorKpis {
@@ -1671,6 +1704,15 @@ export interface SectorKpis {
   market_cap_distribution: CountBucket[];
 }
 
+export interface SectorPerformanceRowOut {
+  name: string;
+  stock_count: number;
+  etf_ticker?: string | null;
+  ultimo_giorno?: number | null;
+  rendimenti: RendimentoFinestraOut[];
+  sopra_ema200: QuotaOut;
+}
+
 export interface SectorStockRow {
   ticker: string;
   name: string | null;
@@ -1692,6 +1734,14 @@ export interface SectorStockRow {
   revenue_growth: number | null;
   profit_margin: number | null;
   dividend_yield: number | null;
+  technical?: number | null;
+  r_1g?: number | null;
+  r_1m?: number | null;
+  r_3m?: number | null;
+  r_ytd?: number | null;
+  r_1a?: number | null;
+  dal_massimo?: number | null;
+  sopra_ema200?: boolean | null;
 }
 
 export interface SectorSummary {
@@ -1723,6 +1773,28 @@ export interface SectorsOverviewOut {
   total_industries: number;
   sectors: SectorSummary[];
   industries: IndustryRow[];
+}
+
+export interface SectorsPerformanceOut {
+  settori: SectorPerformanceRowOut[];
+  spy: RendimentoFinestraOut[];
+  aggiornato_al?: string | null;
+}
+
+export interface SegnaleRecenteOut {
+  ticker: string;
+  name?: string | null;
+  signal_name?: string | null;
+  tone?: string | null;
+  signal_date?: string | null;
+}
+
+export interface SegnaliSettoreOut {
+  giorni: number;
+  totale: number;
+  rialzisti: number;
+  ribassisti: number;
+  recenti: SegnaleRecenteOut[];
 }
 
 export interface SetupListOut {

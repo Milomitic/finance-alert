@@ -5,9 +5,10 @@ import { LeaderboardStrip } from "@/components/sectors/LeaderboardStrip";
 import { SectorIndustriesBreakdown } from "@/components/sectors/SectorIndustriesBreakdown";
 import { SectorLensMatrix } from "@/components/sectors/SectorLensMatrix";
 import { SectorLensTable } from "@/components/sectors/SectorLensTable";
+import { SectorReturnsTable } from "@/components/sectors/SectorReturnsTable";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
-import { useLeaderboards, useSectorsOverview } from "@/hooks/useSectorDetail";
+import { useLeaderboards, useSectorsOverview, useSectorsPerformance } from "@/hooks/useSectorDetail";
 import { fmtNum } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,9 @@ export default function SectorsOverviewPage() {
   // straight from SQL while the analyst board waits on the fundamentals
   // cache, so the page paints without being held to the slower half.
   const { data: boards, isLoading: boardsLoading } = useLeaderboards();
+  // I rendimenti arrivano dopo, da un endpoint lento: la tabella ha gia' le
+  // sue righe (i nomi dall'overview) e si riempie senza spostare niente.
+  const perf = useSectorsPerformance();
   // Shared highlight between the matrix and the table — hovering a bubble
   // lights its row and vice versa, so the two are one surface.
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
@@ -103,6 +107,7 @@ export default function SectorsOverviewPage() {
             <CardSkeleton key={i} rows={6} />
           ))}
         </div>
+        <CardSkeleton label="RENDIMENTI DEI SETTORI" rows={12} strongHeader className="h-[560px]" />
         <div className="grid gap-3 items-start dense-3:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
           <CardSkeleton rows={6} className="h-[380px]" />
           <CardSkeleton label="SETTORI" rows={11} strongHeader />
@@ -181,6 +186,13 @@ export default function SectorsOverviewPage() {
         signals={boards?.signals ?? []}
         signalWindowDays={boards?.signal_window_days ?? 30}
         isLoading={boardsLoading}
+      />
+
+      {/* ─── Rendimenti: quale settore e' salito, contro l'S&P 500 ──── */}
+      <SectorReturnsTable
+        dati={perf.data}
+        settori={data.sectors.map((s) => s.name)}
+        isLoading={perf.isLoading}
       />
 
       {/* ─── Sectors: matrix over table ────────────────────────────── *

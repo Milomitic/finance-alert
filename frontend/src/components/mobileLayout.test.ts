@@ -59,7 +59,8 @@ describe("traboccamento orizzontale a 375px", () => {
     },
     {
       file: "pages/SectorDetailPage.tsx",
-      pattern: /flex\s+flex-wrap\s+items-center\s+justify-between\s+gap-3/,
+      // Il riassetto del 2026-10-11 allinea in alto (items-start): conta il wrap.
+      pattern: /flex\s+flex-wrap\s+items-(center|start)\s+justify-between\s+gap-3/,
       misura: "/sectors/:name +84px: intestazione senza wrap, più p-6 su mobile",
     },
     {

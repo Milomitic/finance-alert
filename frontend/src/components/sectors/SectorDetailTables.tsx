@@ -10,6 +10,7 @@ import type { SectorStockRow } from "@/hooks/useSectorDetail";
 import { fmtMarketCap, fmtNum } from "@/lib/format";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { scoreColor } from "@/lib/scoreMeta";
+import { formatRendimento, tonoRendimento } from "@/lib/sectorPerformance";
 import { cn } from "@/lib/utils";
 
 /* Score→text-color for the DETAIL page's tables — a bolder palette
@@ -65,6 +66,15 @@ function StockRow({ row }: { row: SectorStockRow }) {
       </td>
       <td className={cn("px-2 py-1.5 text-right tabular-nums", scoreColor(row.composite))}>
         {fmtNum(row.composite, 0)}
+      </td>
+      <td className={cn("px-2 py-1.5 text-right tabular-nums", scoreColor(row.technical ?? null))}>
+        {fmtNum(row.technical ?? null, 0)}
+      </td>
+      <td className={cn("px-2 py-1.5 text-right tabular-nums font-medium", tonoRendimento(row.r_1m))}>
+        {formatRendimento(row.r_1m)}
+      </td>
+      <td className={cn("px-2 py-1.5 text-right tabular-nums font-medium", tonoRendimento(row.r_1a))}>
+        {formatRendimento(row.r_1a)}
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(row.pe, 1)}</td>
       <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(row.pb, 2)}</td>
@@ -163,6 +173,9 @@ type SortKey =
   | "ticker"
   | "country"
   | "composite"
+  | "technical"
+  | "r_1m"
+  | "r_1a"
   | "pe"
   | "pb"
   | "roe"
@@ -184,7 +197,10 @@ interface ColumnSpec {
 const COLUMNS: ColumnSpec[] = [
   { key: "ticker", label: "Stock", align: "left", defaultDir: "asc" },
   { key: "country", label: "Paese", align: "left", defaultDir: "asc" },
-  { key: "composite", label: "Score", align: "right", defaultDir: "desc" },
+  { key: "composite", label: "Qualità", align: "right", defaultDir: "desc" },
+  { key: "technical", label: "Tecnico", align: "right", defaultDir: "desc" },
+  { key: "r_1m", label: "1 mese", align: "right", defaultDir: "desc" },
+  { key: "r_1a", label: "1 anno", align: "right", defaultDir: "desc" },
   { key: "pe", label: "P/E", align: "right", defaultDir: "asc" },
   { key: "pb", label: "P/B", align: "right", defaultDir: "asc" },
   { key: "roe", label: "ROE", align: "right", defaultDir: "desc" },
@@ -220,6 +236,17 @@ const MOBILE_COLUMNS: MetricColumn<SectorStockRow>[] = [
     key: "country",
     label: "Paese",
     cell: (r) => <CountryFlag country={r.country} ticker={r.ticker} />,
+  },
+  { key: "technical", label: "Tecnico", cell: (r) => fmtNum(r.technical ?? null, 0) },
+  {
+    key: "r_1m",
+    label: "1 mese",
+    cell: (r) => <span className={tonoRendimento(r.r_1m)}>{formatRendimento(r.r_1m)}</span>,
+  },
+  {
+    key: "r_1a",
+    label: "1 anno",
+    cell: (r) => <span className={tonoRendimento(r.r_1a)}>{formatRendimento(r.r_1a)}</span>,
   },
   { key: "pe", label: "P/E", cell: (r) => fmtNum(r.pe, 1) },
   { key: "pb", label: "P/B", cell: (r) => fmtNum(r.pb, 2) },

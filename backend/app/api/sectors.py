@@ -22,6 +22,7 @@ from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -40,6 +41,7 @@ from app.models import (
 )
 from app.services import (
     leaderboard_service,
+    sector_performance_service,
     sectors_overview_cache,
     stock_fundamentals_service,
 )
@@ -160,6 +162,69 @@ class SectorStockRow(BaseModel):
     revenue_growth: float | None
     profit_margin: float | None
     dividend_yield: float | None
+    # Lente Tecnico e andamento del titolo (2026-10-11, `sector_performance_service`).
+    technical: float | None = None
+    r_1g: float | None = None
+    r_1m: float | None = None
+    r_3m: float | None = None
+    r_ytd: float | None = None
+    r_1a: float | None = None
+    #: Distanza dal massimo a un anno, in % (0 = sul massimo).
+    dal_massimo: float | None = None
+    sopra_ema200: bool | None = None
+
+
+class PuntoAndamentoOut(BaseModel):
+    """Un giorno del grafico: tre indici con base 100 alla stessa data."""
+    data: date
+    settore: float
+    spy: float | None = None
+    etf: float | None = None
+
+
+class RendimentoFinestraOut(BaseModel):
+    #: "1s" | "1m" | "3m" | "6m" | "ytd" | "1a"
+    finestra: str
+    settore: float | None = None
+    spy: float | None = None
+    etf: float | None = None
+
+
+class QuotaOut(BaseModel):
+    """`n` titoli su `su` con quella proprieta': il denominatore e' quello dei
+    titoli per cui la proprieta' si puo' misurare, non il settore intero."""
+    n: int
+    su: int
+
+
+class AndamentoSettoreOut(BaseModel):
+    """L'andamento del settore. L'indice e' a PESI UGUALI: vedi
+    `sector_performance_service`."""
+    serie: list[PuntoAndamentoOut]
+    etf_ticker: str | None = None
+    rendimenti: list[RendimentoFinestraOut]
+    sopra_ema50: QuotaOut
+    sopra_ema200: QuotaOut
+    vicino_massimi: QuotaOut
+    vicino_minimi: QuotaOut
+    in_rialzo: QuotaOut
+    aggiornato_al: date | None = None
+
+
+class SegnaleRecenteOut(BaseModel):
+    ticker: str
+    name: str | None = None
+    signal_name: str | None = None
+    tone: str | None = None
+    signal_date: date | None = None
+
+
+class SegnaliSettoreOut(BaseModel):
+    giorni: int
+    totale: int
+    rialzisti: int
+    ribassisti: int
+    recenti: list[SegnaleRecenteOut]
 
 
 class CountBucket(BaseModel):
@@ -205,6 +270,73 @@ class SectorDetailOut(BaseModel):
     top_picks: list[SectorStockRow]
     bottom_picks: list[SectorStockRow]
     stocks: list[SectorStockRow]
+    #: None se le barre non bastano o il calcolo fallisce: la pagina resta in piedi.
+    andamento: AndamentoSettoreOut | None = None
+    segnali: SegnaliSettoreOut | None = None
+
+
+#: La finestra dei segnali recenti della pagina di un settore.
+GIORNI_SEGNALI_SETTORE = 30
+
+
+def _andamento_settore(db: Session, name: str, stocks: list, rows: list[SectorStockRow]) -> AndamentoSettoreOut | None:
+    """Calcola l'andamento e porta i rendimenti nelle righe dei titoli."""
+    try:
+        a = sector_performance_service.calcola_in_cache(
+            db, name, {st.id: st.ticker for st in stocks}, etf_ticker=SECTOR_ETF_PROXY.get(name))
+    except Exception as e:  # noqa: BLE001 — l'andamento e' un di piu': la pagina non deve cadere
+        logger.warning(f"[settori] andamento di {name} non calcolato: {e}")
+        return None
+    per_ticker = {t.ticker: t for t in a.titoli}
+    for row in rows:
+        t = per_ticker.get(row.ticker)
+        if t is None:
+            continue
+        row.r_1g, row.r_1m, row.r_3m, row.r_ytd, row.r_1a = t.r_1g, t.r_1m, t.r_3m, t.r_ytd, t.r_1a
+        row.dal_massimo, row.sopra_ema200 = t.dal_massimo, t.sopra_ema200
+    if not a.indice:
+        return None
+    spy, etf = dict(a.spy), dict(a.etf)
+    serie = [PuntoAndamentoOut(data=d, settore=v, spy=spy.get(d), etf=etf.get(d)) for d, v in a.indice]
+    return AndamentoSettoreOut(
+        serie=serie,
+        etf_ticker=a.etf_ticker,
+        rendimenti=[
+            RendimentoFinestraOut(finestra=k, settore=a.rendimenti.get(k), spy=a.rendimenti_spy.get(k),
+                                  etf=a.rendimenti_etf.get(k))
+            for k, _ in sector_performance_service.FINESTRE
+        ],
+        sopra_ema50=QuotaOut(n=a.sopra_ema50[0], su=a.sopra_ema50[1]),
+        sopra_ema200=QuotaOut(n=a.sopra_ema200[0], su=a.sopra_ema200[1]),
+        vicino_massimi=QuotaOut(n=a.vicino_massimi[0], su=a.vicino_massimi[1]),
+        vicino_minimi=QuotaOut(n=a.vicino_minimi[0], su=a.vicino_minimi[1]),
+        in_rialzo=QuotaOut(n=a.in_rialzo[0], su=a.in_rialzo[1]),
+        aggiornato_al=a.indice[-1][0],
+    )
+
+
+def _segnali_settore(db: Session, stocks: list, *, today: date | None = None) -> SegnaliSettoreOut:
+    """I segnali degli ultimi 30 giorni sui titoli del settore: conteggi per
+    tono e gli ultimi otto. Archiviati esclusi, come in `_signals_7d`."""
+    cutoff = (today or date.today()) - timedelta(days=GIORNI_SEGNALI_SETTORE)
+    tone_col = json_text(Alert.snapshot, "tone")
+    ids = [st.id for st in stocks]
+    righe = db.execute(
+        select(Stock.ticker, Stock.name, Alert.signal_name, tone_col, Alert.signal_date)
+        .join(Stock, Stock.id == Alert.stock_id)
+        .where(Alert.stock_id.in_(ids), Alert.signal_date >= cutoff, Alert.archived_at.is_(None))
+        .order_by(Alert.signal_date.desc(), Alert.id.desc())
+    ).all()
+    return SegnaliSettoreOut(
+        giorni=GIORNI_SEGNALI_SETTORE,
+        totale=len(righe),
+        rialzisti=sum(1 for r in righe if r[3] == "bull"),
+        ribassisti=sum(1 for r in righe if r[3] == "bear"),
+        recenti=[
+            SegnaleRecenteOut(ticker=tk, name=nm, signal_name=sn, tone=tn, signal_date=sd)
+            for tk, nm, sn, tn, sd in righe[:8]
+        ],
+    )
 
 
 def _is_finite(x):
@@ -719,6 +851,82 @@ def sectors_overview(db: Session = Depends(get_db), _user: User = Depends(get_cu
     return payload
 
 
+class SectorPerformanceRowOut(BaseModel):
+    """I rendimenti di un settore per la tabella della pagina Esplora."""
+    name: str
+    stock_count: int
+    etf_ticker: str | None = None
+    ultimo_giorno: float | None = None
+    rendimenti: list[RendimentoFinestraOut]
+    sopra_ema200: QuotaOut
+
+
+class SectorsPerformanceOut(BaseModel):
+    settori: list[SectorPerformanceRowOut]
+    #: Lo SPY sulle stesse finestre, come riga di riferimento.
+    spy: list[RendimentoFinestraOut]
+    aggiornato_al: date | None = None
+
+
+@router.get("/performance", response_model=SectorsPerformanceOut)
+def sectors_performance(db: Session = Depends(get_db), _user: User = Depends(get_current_user)):
+    """I rendimenti di ogni settore su sei finestre, con l'S&P 500 accanto.
+
+    Endpoint separato dall'overview di proposito: legge un anno e mezzo di
+    barre per ~1000 titoli (qualche secondo a freddo), mentre l'overview e'
+    SQL e risponde subito. Ogni settore passa da `calcola_in_cache`, la stessa
+    mezz'ora di cache della pagina di dettaglio: aprire un settore dopo la
+    tabella non ricalcola niente. Un settore che fallisce resta fuori, non
+    abbatte gli altri.
+    """
+    righe = db.execute(
+        select(Stock.id, Stock.ticker, Stock.sector)
+        .where(negli_elenchi_clause())
+        .where(Stock.instrument_type == "equity")
+        .where(Stock.sector.is_not(None))
+        .order_by(Stock.ticker.asc())
+    ).all()
+    per_settore: dict[str, dict[int, str]] = {}
+    visti: set[str] = set()
+    for sid, ticker, settore in righe:
+        if ticker in visti:
+            continue
+        visti.add(ticker)
+        per_settore.setdefault(settore, {})[sid] = ticker
+    settori: list[SectorPerformanceRowOut] = []
+    spy: list[RendimentoFinestraOut] = []
+    aggiornato: date | None = None
+    for nome, titoli in sorted(per_settore.items()):
+        try:
+            a = sector_performance_service.calcola_in_cache(
+                db, nome, titoli, etf_ticker=SECTOR_ETF_PROXY.get(nome))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[settori] rendimenti di {nome} non calcolati: {e}")
+            continue
+        if not a.indice:
+            continue
+        ultimo = None
+        if len(a.indice) >= 2 and a.indice[-2][1]:
+            ultimo = (a.indice[-1][1] / a.indice[-2][1] - 1.0) * 100.0
+        settori.append(SectorPerformanceRowOut(
+            name=nome,
+            stock_count=len(titoli),
+            etf_ticker=a.etf_ticker,
+            ultimo_giorno=ultimo,
+            rendimenti=[
+                RendimentoFinestraOut(finestra=k, settore=a.rendimenti.get(k), spy=a.rendimenti_spy.get(k),
+                                      etf=a.rendimenti_etf.get(k))
+                for k, _ in sector_performance_service.FINESTRE
+            ],
+            sopra_ema200=QuotaOut(n=a.sopra_ema200[0], su=a.sopra_ema200[1]),
+        ))
+        if not spy and a.rendimenti_spy:
+            spy = [RendimentoFinestraOut(finestra=k, settore=a.rendimenti_spy.get(k))
+                   for k, _ in sector_performance_service.FINESTRE]
+        aggiornato = max(aggiornato, a.indice[-1][0]) if aggiornato else a.indice[-1][0]
+    return SectorsPerformanceOut(settori=settori, spy=spy, aggiornato_al=aggiornato)
+
+
 @router.get("/{name}/detail", response_model=SectorDetailOut)
 def get_sector_detail(
     name: Annotated[str, Path(min_length=1, max_length=128)],
@@ -796,6 +1004,15 @@ def get_sector_detail(
             func.avg(TechnicalScore.composite),
         ).where(TechnicalScore.stock_id.in_([st.id for st in unique_stocks]))
     ).one()
+    tecnico = dict(db.execute(
+        select(TechnicalScore.stock_id, TechnicalScore.composite)
+        .where(TechnicalScore.stock_id.in_([st.id for st in unique_stocks]))
+    ).all())
+    ticker_by_id = {st.id: st.ticker for st in unique_stocks}
+    tecnico_per_ticker = {ticker_by_id[sid]: v for sid, v in tecnico.items() if v is not None}
+    for row in rows:
+        row.technical = tecnico_per_ticker.get(row.ticker)
+    andamento = _andamento_settore(db, name, unique_stocks, rows)
 
     # V3.2 enrichments: distributions across industry / country / risk
     # / market_cap, plus per-pillar averages. All computed in-loop on
@@ -849,6 +1066,8 @@ def get_sector_detail(
         top_picks=top_picks,
         bottom_picks=bottom_picks,
         stocks=rows,
+        andamento=andamento,
+        segnali=_segnali_settore(db, unique_stocks),
     )
 
 

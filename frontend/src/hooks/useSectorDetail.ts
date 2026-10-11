@@ -34,6 +34,68 @@ export interface SectorStockRow {
   revenue_growth: number | null;
   profit_margin: number | null;
   dividend_yield: number | null;
+  /** Lente Tecnico e andamento del titolo (`sector_performance_service`). */
+  technical?: number | null;
+  r_1g?: number | null;
+  r_1m?: number | null;
+  r_3m?: number | null;
+  r_ytd?: number | null;
+  r_1a?: number | null;
+  /** Distanza dal massimo a un anno, in % (0 = sul massimo). */
+  dal_massimo?: number | null;
+  sopra_ema200?: boolean | null;
+}
+
+/** Un giorno del grafico: tre indici con base 100 alla stessa data. */
+export interface PuntoAndamento {
+  data: string;
+  settore: number;
+  spy?: number | null;
+  etf?: number | null;
+}
+
+export interface RendimentoFinestra {
+  /** "1s" | "1m" | "3m" | "6m" | "ytd" | "1a" */
+  finestra: string;
+  settore?: number | null;
+  spy?: number | null;
+  etf?: number | null;
+}
+
+/** `n` titoli su `su` per cui la proprieta' si puo' misurare. */
+export interface Quota {
+  n: number;
+  su: number;
+}
+
+/** L'andamento del settore: indice a PESI UGUALI, accanto all'ETF settoriale
+ *  (pesato per capitalizzazione) e allo SPY. */
+export interface AndamentoSettore {
+  serie: PuntoAndamento[];
+  etf_ticker?: string | null;
+  rendimenti: RendimentoFinestra[];
+  sopra_ema50: Quota;
+  sopra_ema200: Quota;
+  vicino_massimi: Quota;
+  vicino_minimi: Quota;
+  in_rialzo: Quota;
+  aggiornato_al?: string | null;
+}
+
+export interface SegnaleRecente {
+  ticker: string;
+  name?: string | null;
+  signal_name?: string | null;
+  tone?: string | null;
+  signal_date?: string | null;
+}
+
+export interface SegnaliSettore {
+  giorni: number;
+  totale: number;
+  rialzisti: number;
+  ribassisti: number;
+  recenti: SegnaleRecente[];
 }
 
 export interface CountBucket {
@@ -79,6 +141,9 @@ export interface SectorDetail {
   top_picks: SectorStockRow[];
   bottom_picks: SectorStockRow[];
   stocks: SectorStockRow[];
+  /** None se le barre non bastano: la pagina mostra il resto. */
+  andamento?: AndamentoSettore | null;
+  segnali?: SegnaliSettore | null;
 }
 
 export function useSectorDetail(name: string) {
@@ -88,6 +153,33 @@ export function useSectorDetail(name: string) {
       api<SectorDetail>(`/api/sectors/${encodeURIComponent(name)}/detail`, { signal }),
     enabled: name.length > 0,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** I rendimenti di un settore nella tabella della pagina Esplora. */
+export interface SectorPerformanceRow {
+  name: string;
+  stock_count: number;
+  etf_ticker?: string | null;
+  ultimo_giorno?: number | null;
+  rendimenti: RendimentoFinestra[];
+  sopra_ema200: Quota;
+}
+
+export interface SectorsPerformance {
+  settori: SectorPerformanceRow[];
+  /** Lo SPY sulle stesse finestre (in `settore`), come riga di riferimento. */
+  spy: RendimentoFinestra[];
+  aggiornato_al?: string | null;
+}
+
+/** Separato dall'overview: legge un anno e mezzo di barre (qualche secondo a
+ *  freddo), e la pagina non deve aspettarlo per disegnare il resto. */
+export function useSectorsPerformance() {
+  return useQuery({
+    queryKey: ["sectors-performance"],
+    queryFn: ({ signal }) => api<SectorsPerformance>("/api/sectors/performance", { signal }),
+    staleTime: 15 * 60 * 1000,
   });
 }
 
