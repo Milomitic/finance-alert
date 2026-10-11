@@ -1986,6 +1986,24 @@ ricavato da FRED si usa accanto al consenso SOLO se la sua ultima variazione
 coincide col `previous` della fonte entro l'arrotondamento — lo si verifica sui
 dati, non lo si suppone.
 
+### I previsti PASSATI vengono da Nasdaq, che data al giorno dopo (2026-10-11)
+
+Forexfactory pubblica solo la settimana in corso; l'archivio `macro_consenso`
+si riempie all'indietro dal calendario di Nasdaq
+(`api.nasdaq.com/api/calendar/economicevents?date=...`, User-Agent da browser,
+~5 s a richiesta dal pod) con `app.scripts.backfill_consenso_macro`.
+
+⚠️ **La fonte data ogni evento al giorno DOPO**: le buste paga di venerdi' 5
+settembre 2025 stanno sotto `date=2025-09-06`. Il primo riempimento ha scritto
+475 righe un giorno avanti e, saltando i sabati, ha perso quasi tutte le
+uscite del venerdi'. `eventi_del_giorno(g)` chiede g + 1. **Una fonte di date
+nuova si verifica su un rilascio noto prima di riempire la storia.**
+
+⚠️ Il CPI compare due volte come «CPI» (mese e anno) senza un campo che le
+distingua, e l'ordine cambia: `nasdaq_consensus.assegna` le riconosce contro
+le variazioni FRED. Il colore di una variazione e' il suo ESITO contro la
+stima della sua misura (`macro_consenso_service.esiti`), mai il segno.
+
 ## Units are the third recurring defect class, after palettes and rates (2026-09-10)
 
 The honesty rules in this file are applied to STATISTICS and not to
