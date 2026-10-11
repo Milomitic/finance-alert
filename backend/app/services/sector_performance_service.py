@@ -35,14 +35,17 @@ giornaliere che l'app ha gia':
 """
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import pandas as pd
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.visibility import negli_elenchi_clause
 from app.indicators.ema import ema
 from app.indicators.periods import FIXED_EMA_MID, FIXED_EMA_SLOW
 from app.models import OhlcvDaily, Stock
@@ -67,6 +70,9 @@ FINESTRE: tuple[tuple[str, int | None], ...] = (
 
 _CACHE: dict[tuple, tuple[float, object]] = {}
 _TTL = 30 * 60.0
+#: Le chiavi che un thread sta gia' ricalcolando: un solo ricalcolo per chiave.
+_IN_CORSO: set[tuple] = set()
+_LOCK = threading.Lock()
 
 
 @dataclass
@@ -260,12 +266,82 @@ def calcola(
     return out
 
 
+def _chiave(settore: str, titoli: dict[int, str], etf_ticker: str | None) -> tuple:
+    return (settore, etf_ticker, tuple(sorted(titoli)))
+
+
+def _ricalcola(chiave: tuple, titoli: dict[int, str], etf_ticker: str | None) -> None:
+    """Il ricalcolo in background, con una sessione sua."""
+    from app.core.db import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            _CACHE[chiave] = (time.time(), calcola(db, titoli, etf_ticker=etf_ticker))
+    except Exception as e:  # noqa: BLE001 — resta il valore vecchio, che e' meglio di niente
+        logger.warning(f"[settori] ricalcolo di {chiave[0]} fallito: {e}")
+    finally:
+        with _LOCK:
+            _IN_CORSO.discard(chiave)
+
+
 def calcola_in_cache(db: Session, settore: str, titoli: dict[int, str], *, etf_ticker: str | None) -> Andamento:
-    """`calcola` con mezz'ora di cache: le barre cambiano una volta al giorno."""
-    chiave = (settore, etf_ticker, tuple(sorted(titoli)))
+    """`calcola` con mezz'ora di cache, che non fa MAI aspettare chi l'ha gia'.
+
+    ⚠️ Misurato in produzione il 2026-10-11: undici settori a freddo nel worker
+    vivo costano 35 s (1,3 s per settore in un processo isolato: il resto e'
+    il worker occupato). Quindi a cache scaduta si risponde col valore di prima
+    e un thread lo ricalcola; si aspetta solo la prima volta in vita del
+    processo, e anche quella la toglie `precalcola`, che parte all'avvio.
+    """
+    chiave = _chiave(settore, titoli, etf_ticker)
     trovato = _CACHE.get(chiave)
-    if trovato and time.time() - trovato[0] < _TTL:
+    if trovato is not None:
+        if time.time() - trovato[0] >= _TTL:
+            with _LOCK:
+                parti = chiave not in _IN_CORSO
+                _IN_CORSO.add(chiave)
+            if parti:
+                threading.Thread(target=_ricalcola, args=(chiave, dict(titoli), etf_ticker),
+                                 name=f"settore-{settore}", daemon=True).start()
         return trovato[1]  # type: ignore[return-value]
     risultato = calcola(db, titoli, etf_ticker=etf_ticker)
     _CACHE[chiave] = (time.time(), risultato)
     return risultato
+
+
+def titoli_per_settore(db: Session) -> dict[str, dict[int, str]]:
+    """Settore -> {stock_id: ticker}, coi filtri della pagina di dettaglio:
+    titoli negli elenchi, solo azioni, un id per ticker (il primo per ticker in
+    ordine alfabetico). Le stesse chiavi di cache, quindi, della pagina."""
+    righe = db.execute(
+        select(Stock.id, Stock.ticker, Stock.sector)
+        .where(negli_elenchi_clause())
+        .where(Stock.instrument_type == "equity")
+        .where(Stock.sector.is_not(None))
+        .order_by(Stock.ticker.asc(), Stock.id.asc())
+    ).all()
+    out: dict[str, dict[int, str]] = {}
+    visti: set[str] = set()
+    for sid, ticker, settore in righe:
+        if ticker in visti:
+            continue
+        visti.add(ticker)
+        out.setdefault(settore, {})[sid] = ticker
+    return out
+
+
+def precalcola(etf_per_settore: dict[str, str]) -> int:
+    """Riempie la cache per ogni settore: si lancia all'avvio, in un thread, cosi'
+    il primo visitatore dopo un rilascio non aspetta. Rende quanti settori."""
+    from app.core.db import SessionLocal
+
+    n = 0
+    with SessionLocal() as db:
+        for settore, titoli in titoli_per_settore(db).items():
+            try:
+                chiave = _chiave(settore, titoli, etf_per_settore.get(settore))
+                _CACHE[chiave] = (time.time(), calcola(db, titoli, etf_ticker=etf_per_settore.get(settore)))
+                n += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[settori] precalcolo di {settore} fallito: {e}")
+    return n

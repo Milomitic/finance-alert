@@ -873,26 +873,13 @@ def sectors_performance(db: Session = Depends(get_db), _user: User = Depends(get
     """I rendimenti di ogni settore su sei finestre, con l'S&P 500 accanto.
 
     Endpoint separato dall'overview di proposito: legge un anno e mezzo di
-    barre per ~1000 titoli (qualche secondo a freddo), mentre l'overview e'
-    SQL e risponde subito. Ogni settore passa da `calcola_in_cache`, la stessa
-    mezz'ora di cache della pagina di dettaglio: aprire un settore dopo la
-    tabella non ricalcola niente. Un settore che fallisce resta fuori, non
-    abbatte gli altri.
+    barre per ~1000 titoli (decine di secondi a freddo nel worker vivo),
+    mentre l'overview e' SQL e risponde subito. Ogni settore passa da
+    `calcola_in_cache`, la stessa cache della pagina di dettaglio, riempita
+    all'avvio da `precalcola` e rinnovata in background: nessuno aspetta il
+    calcolo. Un settore che fallisce resta fuori, non abbatte gli altri.
     """
-    righe = db.execute(
-        select(Stock.id, Stock.ticker, Stock.sector)
-        .where(negli_elenchi_clause())
-        .where(Stock.instrument_type == "equity")
-        .where(Stock.sector.is_not(None))
-        .order_by(Stock.ticker.asc())
-    ).all()
-    per_settore: dict[str, dict[int, str]] = {}
-    visti: set[str] = set()
-    for sid, ticker, settore in righe:
-        if ticker in visti:
-            continue
-        visti.add(ticker)
-        per_settore.setdefault(settore, {})[sid] = ticker
+    per_settore = sector_performance_service.titoli_per_settore(db)
     settori: list[SectorPerformanceRowOut] = []
     spy: list[RendimentoFinestraOut] = []
     aggiornato: date | None = None
@@ -941,7 +928,7 @@ def get_sector_detail(
         .where(negli_elenchi_clause())
         .where(Stock.instrument_type == "equity")
         .where(Stock.sector == name)
-        .order_by(Stock.ticker.asc())
+        .order_by(Stock.ticker.asc(), Stock.id.asc())  # lo stesso ordine di `titoli_per_settore`: stesse chiavi di cache
     ).scalars().all()
 
     seen = set()

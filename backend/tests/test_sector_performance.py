@@ -289,3 +289,83 @@ def test_un_settore_che_fallisce_non_abbatte_gli_altri(client: TestClient, db: S
     monkeypatch.setattr(sp, "calcola_in_cache", a_volte)
     body = client.get("/api/sectors/performance").json()
     assert [s["name"] for s in body["settori"]] == ["Energy"]
+
+
+# ── la cache non fa aspettare ─────────────────────────────────────────────
+
+
+class _Ctx:
+    def __init__(self, db):
+        self.db = db
+
+    def __enter__(self):
+        return self.db
+
+    def __exit__(self, *a):
+        return False
+
+
+class _ThreadSubito:
+    """Un thread che gira subito, nel test, al posto di uno vero."""
+    avviati: list = []
+
+    def __init__(self, target, args=(), **kw):
+        self.target, self.args = target, args
+
+    def start(self):
+        _ThreadSubito.avviati.append(self.args[0])
+        self.target(*self.args)
+
+
+def test_a_cache_scaduta_risponde_subito_e_ricalcola_dietro(db: Session, monkeypatch) -> None:
+    import app.core.db as core_db
+
+    versioni = iter([sp.Andamento(indice=[(OGGI, 100.0)]), sp.Andamento(indice=[(OGGI, 120.0)])])
+    monkeypatch.setattr(sp, "calcola", lambda db, titoli, *, etf_ticker=None, oggi=None: next(versioni))
+    monkeypatch.setattr(core_db, "SessionLocal", lambda: _Ctx(db))
+    monkeypatch.setattr(sp.threading, "Thread", _ThreadSubito)
+    _ThreadSubito.avviati = []
+
+    assert sp.calcola_in_cache(db, "Energy", {1: "A"}, etf_ticker=None).indice[0][1] == 100.0
+    chiave = next(iter(sp._CACHE))
+    sp._CACHE[chiave] = (sp._CACHE[chiave][0] - sp._TTL - 1, sp._CACHE[chiave][1])
+    # Scaduta: risponde col valore di prima, e il ricalcolo parte dietro.
+    assert sp.calcola_in_cache(db, "Energy", {1: "A"}, etf_ticker=None).indice[0][1] == 100.0
+    assert _ThreadSubito.avviati == [chiave]
+    assert sp.calcola_in_cache(db, "Energy", {1: "A"}, etf_ticker=None).indice[0][1] == 120.0
+    assert chiave not in sp._IN_CORSO
+
+
+def test_un_ricalcolo_fallito_lascia_il_valore_vecchio(db: Session, monkeypatch) -> None:
+    import app.core.db as core_db
+
+    def rotto(*a, **k):
+        raise RuntimeError("barre illeggibili")
+
+    monkeypatch.setattr(core_db, "SessionLocal", lambda: _Ctx(db))
+    monkeypatch.setattr(sp, "calcola", rotto)
+    chiave = ("Energy", None, (1,))
+    vecchio = sp.Andamento(indice=[(OGGI, 100.0)])
+    sp._CACHE[chiave] = (0.0, vecchio)
+    sp._IN_CORSO.add(chiave)
+    sp._ricalcola(chiave, {1: "A"}, None)
+    assert sp._CACHE[chiave][1] is vecchio
+    assert chiave not in sp._IN_CORSO
+
+
+def test_il_precalcolo_riempie_le_stesse_chiavi_della_pagina(db: Session, monkeypatch) -> None:
+    import app.core.db as core_db
+
+    ids, _ = _settore_lungo(db)
+    doppio = Stock(ticker="L0", exchange="LSE", name="L0 bis", sector="Energy", instrument_type="equity",
+                   country="US")
+    db.add(doppio)
+    db.commit()
+    monkeypatch.setattr(core_db, "SessionLocal", lambda: _Ctx(db))
+    per = sp.titoli_per_settore(db)
+    # Un ticker, un id: il doppione quotato altrove non entra due volte.
+    assert sorted(per["Energy"].values()) == ["L0", "L1", "L2"]
+    assert "Financials" not in per  # lo SPY e' un ETF
+    assert sp.precalcola({"Energy": "XLE"}) == 1
+    a = sp.calcola_in_cache(db, "Energy", per["Energy"], etf_ticker="XLE")
+    assert a.etf_ticker == "XLE" and a.indice

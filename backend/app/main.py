@@ -169,6 +169,24 @@ def _warm_premarket_on_boot() -> None:
         logger.warning(f"[startup] premarket warm skipped: {exc}")
 
 
+def _warm_sector_performance_on_boot() -> None:
+    """L'andamento dei settori costa decine di secondi a freddo nel worker vivo
+    (`sector_performance_service`): lo si precalcola all'avvio, in un thread,
+    cosi' la tabella di /sectors e i dettagli rispondono subito anche dopo un
+    rilascio."""
+    try:
+        from app.api.sectors import SECTOR_ETF_PROXY
+        from app.services import sector_performance_service
+
+        def _lancia() -> None:
+            n = sector_performance_service.precalcola(SECTOR_ETF_PROXY)
+            logger.info(f"[startup] andamento di {n} settori precalcolato")
+
+        threading.Thread(target=_lancia, name="settori-boot-warm", daemon=True).start()
+    except Exception as exc:  # noqa: BLE001 — never block startup
+        logger.warning(f"[startup] precalcolo dei settori saltato: {exc}")
+
+
 #: Quanto aspettare prima di dichiarare morta una scansione rimasta 'running'
 #: all'avvio. Una scansione viva batte l'heartbeat almeno ogni 5 secondi
 #: (`heartbeat_pulse`), quindi 150 secondi fermi non sono una pausa; ed e' meno
@@ -553,6 +571,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yfinance_health.load_from_disk()
     start_scheduler()
     _warm_premarket_on_boot()
+    _warm_sector_performance_on_boot()
     _catch_up_scan_on_boot()
     _catch_up_institutionals_on_boot()
     try:
