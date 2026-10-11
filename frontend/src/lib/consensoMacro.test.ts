@@ -7,6 +7,11 @@ describe("i valori del consenso macro", () => {
     expect(formatConsenso(0.4, "%", true)).toBe("+0.4%");
     expect(formatConsenso(0.396, "%", true)).toBe("+0.4%");
     expect(formatConsenso(-0.1, "%", true)).toBe("-0.1%");
+    // Una variazione percentuale a una cifra decimale: il precedente ricavato da FRED.
+    expect(formatConsenso(0.07, "%", true)).toBe("+0.1%");
+    expect(formatConsenso(-0.46, "%", true)).toBe("-0.5%");
+    // Una sorpresa in punti resta a due: 0,25 non e' 0,3.
+    expect(formatConsenso(0.25, "", true)).toBe("+0.25");
   });
 
   it("un tasso no: «+3.75%» direbbe che e' salito di tanto", () => {

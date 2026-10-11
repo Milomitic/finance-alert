@@ -15,12 +15,15 @@ const CPI: MacroAnalisi = {
 
 describe("MacroAnalisiCard", () => {
   it("i numeri con il loro campione", () => {
-    render(<MacroAnalisiCard a={CPI} unita="%" valueKind="index" sourceScale={null} />);
-    expect(screen.getByText("+0.40%")).toBeInTheDocument();
+    render(<MacroAnalisiCard a={CPI} unita="%" valueKind="index" sourceScale={null} esitoUltima="sotto" />);
+    // L'ultima variazione e' positiva ma sotto la sua stima: rossa.
+    expect(screen.getByText("+0.4%").className).toContain("rose");
+    // Le statistiche non hanno una stima: nessun colore di segno.
+    expect(screen.getByText("+0.3%").className).not.toMatch(/emerald|rose/);
     expect(screen.getByText(/più alta del 74% dei periodi/)).toBeInTheDocument();
     expect(screen.getByText(/su 39 periodi/)).toBeInTheDocument();
     expect(screen.getByText(/3 rialzi/)).toBeInTheDocument();
-    expect(screen.getByText("±0.92%")).toBeInTheDocument();
+    expect(screen.getByText("±0.9%")).toBeInTheDocument();
     expect(screen.getByText(/16 rilasci/)).toBeInTheDocument();
     expect(screen.getByText(/debole positiva/)).toBeInTheDocument();
     expect(screen.getByText(/39 mesi/)).toBeInTheDocument();

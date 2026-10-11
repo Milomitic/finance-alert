@@ -9,6 +9,10 @@ stima di oggi. Da qui vengono due cose a schermo:
 
 Valori nell'unita' del consenso, con la stessa conversione di
 `calendar_service.valori_nel_consenso`.
+
+I rilasci PASSATI vengono da Nasdaq (`archivia_nasdaq`), il cui calendario
+risponde per qualunque giorno: e' cosi' che l'archivio ha anche i previsti di
+prima che esistesse.
 """
 from __future__ import annotations
 
@@ -80,6 +84,147 @@ def archivia(db: Session, *, adesso: datetime | None = None) -> int:
             n += 1
     db.commit()
     return n
+
+
+def _variazioni_fred(db: Session, etichetta: str) -> list | None:
+    """Le variazioni della serie FRED di un'etichetta, per riconoscere le righe
+    di Nasdaq. None se l'etichetta non ha una serie."""
+    from app.models.macro import MacroObservation, MacroSeries
+    from app.services import macro_analisi_service as man
+
+    serie = db.execute(select(MacroSeries).where(MacroSeries.label == etichetta).limit(1)).scalars().first()
+    if serie is None:
+        return None
+    oss = db.execute(
+        select(MacroObservation.date, MacroObservation.value)
+        .where(MacroObservation.series_id == serie.id, MacroObservation.value.is_not(None))
+        .order_by(MacroObservation.date.asc())
+    ).all()
+    return man.variazioni([(d, float(v)) for d, v in oss], serie.unit in man.UNITA_TASSO)
+
+
+def _fred_prima(variazioni: list | None, giorno: date) -> tuple[float | None, float | None] | None:
+    """(sul periodo, sull'anno) dell'ultima osservazione FRED prima del rilascio.
+
+    Basta per riconoscere le due righe: se FRED non ha ancora il mese appena
+    pubblicato, quella del mese prima ha comunque l'ordine di grandezza giusto.
+    """
+    prima = [v for v in (variazioni or []) if v.data < giorno]
+    return (prima[-1].sul_periodo, prima[-1].sull_anno) if prima else None
+
+
+def archivia_nasdaq(
+    db: Session,
+    giorni: list[date],
+    *,
+    leggi=None,
+    adesso: datetime | None = None,
+) -> tuple[int, list[date]]:
+    """I consensi di Nasdaq per ciascuno dei `giorni`, nell'archivio.
+
+    Rende (rilasci scritti o completati, giorni che la fonte non ha servito).
+    Una riga gia' archiviata da Forexfactory resta sua: Nasdaq aggiunge solo
+    cio' che manca, piu' la stima sull'anno che Forexfactory non porta. Una
+    riga a un giorno di distanza e' lo stesso rilascio — le due fonti datano
+    in fusi diversi le uscite asiatiche ed europee.
+    """
+    from app.services import calendar_service
+    from app.services import forexfactory_consensus as ff
+    from app.services import nasdaq_consensus as nq
+
+    leggi = leggi or nq.eventi_del_giorno
+    adesso = adesso or datetime.now(UTC)
+    fred: dict[str, list | None] = {}
+    n = 0
+    mancanti: list[date] = []
+    for giorno in giorni:
+        try:
+            eventi = leggi(giorno)
+        except Exception:  # noqa: BLE001 — il giorno si dichiara mancante, gli altri vanno avanti
+            mancanti.append(giorno)
+            continue
+        for etichetta, (paese, nome, misura) in nq.NASDAQ_MAP.items():
+            righe = [e for e in eventi if e.paese == paese and e.nome == nome]
+            if not righe:
+                continue
+            if etichetta not in fred:
+                fred[etichetta] = _variazioni_fred(db, etichetta)
+            principale, annuo = nq.assegna(righe, misura, _fred_prima(fred[etichetta], giorno))
+            if principale is None or (principale.actual is None and principale.consensus is None):
+                continue
+            formato = calendar_service._formato(principale.consensus) or calendar_service._formato(principale.actual)                 or calendar_service._formato(principale.previous)
+            scala = _scala(formato)
+
+            def num(raw: str | None, scala: float = scala) -> float | None:
+                v = ff.parse_numeric(raw)
+                return None if v is None else v / scala
+
+            vicine = db.execute(
+                select(MacroConsenso).where(
+                    MacroConsenso.etichetta == etichetta,
+                    MacroConsenso.data >= giorno - timedelta(days=1),
+                    MacroConsenso.data <= giorno + timedelta(days=1),
+                )
+            ).scalars().all()
+            riga = next((r for r in vicine if r.data == giorno), vicine[0] if vicine else None)
+            if riga is None:
+                riga = MacroConsenso(etichetta=etichetta, data=giorno, titolo=f"Nasdaq · {nome}"[:128], formato=formato)
+                db.add(riga)
+            if riga.previsto is None:
+                riga.previsto = num(principale.consensus)
+            if riga.attuale is None:
+                riga.attuale = num(principale.actual)
+            if riga.precedente is None:
+                riga.precedente = num(principale.previous)
+            if not riga.formato:
+                riga.formato = formato
+            if annuo is not None:
+                pa, aa = ff.parse_numeric(annuo.consensus), ff.parse_numeric(annuo.actual)
+                riga.previsto_annuo = pa if pa is not None else riga.previsto_annuo
+                riga.attuale_annuo = aa if aa is not None else riga.attuale_annuo
+            riga.aggiornato_il = adesso
+            n += 1
+        db.commit()
+    return n, mancanti
+
+
+Esito = str  # "sopra" | "sotto" | "in_linea"
+
+
+def misura(etichetta: str) -> str:
+    """Quale variazione misura il consenso principale di un'etichetta. Senza
+    una voce in `NASDAQ_MAP` vale «livello»: un livello sopra le attese e' una
+    variazione sopra le attese, perche' il precedente e' lo stesso."""
+    from app.services import nasdaq_consensus as nq
+
+    voce = nq.NASDAQ_MAP.get(etichetta)
+    return voce[2] if voce else "livello"
+
+
+def esito(attuale: float | None, previsto: float | None) -> Esito | None:
+    """Il dato contro la sua stima. Uguale e' «in linea»: la fonte pubblica i
+    due numeri con gli stessi decimali, quindi l'uguaglianza e' quella che si
+    legge a schermo."""
+    if attuale is None or previsto is None:
+        return None
+    d = round(attuale - previsto, 6)
+    return "sopra" if d > 0 else "sotto" if d < 0 else "in_linea"
+
+
+def esiti(riga: MacroConsenso | None, misura_: str) -> tuple[Esito | None, Esito | None]:
+    """(esito della variazione sul periodo, di quella sull'anno) di un rilascio.
+
+    ⚠️ Il colore di una variazione e' il suo esito contro la stima, non il suo
+    segno: un'inflazione al +0,2% contro un +0,4% atteso e' una sorpresa al
+    ribasso anche se e' positiva. Ogni variazione si confronta con la stima
+    DELLA SUA misura; dove non c'e', nessun esito.
+    """
+    if riga is None:
+        return None, None
+    principale = esito(riga.attuale, riga.previsto)
+    if misura_ == "anno":
+        return None, principale
+    return principale, esito(riga.attuale_annuo, riga.previsto_annuo)
 
 
 def ultimo_prima(db: Session, etichetta: str, giorno: date) -> MacroConsenso | None:

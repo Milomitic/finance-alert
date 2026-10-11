@@ -1406,6 +1406,13 @@ export interface MacroRelease {
    *  pubblicato, nell'unita' del consenso. Null prima dell'archivio. */
   previsto_consenso?: number | null;
   attuale_consenso?: number | null;
+  /** La stima e il dato sull'anno, quando la misura principale e' sul periodo. */
+  previsto_annuo_consenso?: number | null;
+  attuale_annuo_consenso?: number | null;
+  /** Ogni variazione contro la stima della SUA misura: "sopra" | "sotto" |
+   *  "in_linea", null senza stima. */
+  esito_periodo?: string | null;
+  esito_anno?: string | null;
 }
 
 /** I numeri della pagina di dettaglio (`macro_analisi_service`). Ogni
@@ -1466,6 +1473,8 @@ export interface MacroSeriesDetail {
   /** "%" su un indice o un livello, "pp" su un tasso. */
   unita_variazione?: string;
   formato_consenso?: string | null;
+  /** Quale variazione misura il consenso: "periodo" | "anno" | "livello". */
+  misura_consenso?: string;
   analisi?: MacroAnalisi | null;
 }
 

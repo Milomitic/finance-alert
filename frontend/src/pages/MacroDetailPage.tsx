@@ -25,7 +25,7 @@ import { HintLabel } from "@/components/ui/info-hint";
 import { formatMacroValue } from "@/lib/macroFormat";
 import { MacroAnalisiCard } from "@/components/macro/MacroAnalisiCard";
 import { formatConsenso } from "@/lib/consensoMacro";
-import { formatVariazioneMacro, tonoControStima, tonoVariazione } from "@/lib/variazioneMacro";
+import { coloreEsito, formatVariazioneMacro, tonoControStima, tonoEsito } from "@/lib/variazioneMacro";
 
 /* ─── /macro/:seriesId — Investing-style indicator detail page ─────────── *
  *
@@ -96,6 +96,8 @@ export default function MacroDetailPage() {
           period: r.period_label ?? "",
           periodo: r.variazione ?? null,
           anno: r.variazione_annua ?? null,
+          esitoPeriodo: r.esito_periodo ?? null,
+          esitoAnno: r.esito_anno ?? null,
         })),
     [filteredHistory],
   );
@@ -118,8 +120,10 @@ export default function MacroDetailPage() {
    * CPI una barra valeva «1.3» punti d'indice, un numero che nessuno usa. */
   const variazioniData = useMemo(
     () => ({
-      periodo: chartData.filter((p) => p.periodo != null).map((p) => ({ ...p, value: p.periodo as number })),
-      anno: chartData.filter((p) => p.anno != null).map((p) => ({ ...p, value: p.anno as number })),
+      periodo: chartData.filter((p) => p.periodo != null)
+        .map((p) => ({ ...p, value: p.periodo as number, esito: p.esitoPeriodo })),
+      anno: chartData.filter((p) => p.anno != null)
+        .map((p) => ({ ...p, value: p.anno as number, esito: p.esitoAnno })),
     }),
     [chartData],
   );
@@ -257,17 +261,18 @@ export default function MacroDetailPage() {
                 tone={surpriseTone(latest)}
               />
               {/* La variazione e' il numero di cui si parla: in evidenza, sotto
-                  il livello, nell'unita' giusta e col colore della direzione. */}
+                  il livello, nell'unita' giusta, colorata contro la SUA stima
+                  — non per il segno. */}
               {(latest?.variazione != null || latest?.variazione_annua != null) && (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
                   {latest?.variazione != null && (
-                    <span className={cn("text-base font-bold", tonoVariazione(latest.variazione))}>
+                    <span className={cn("text-base font-bold", tonoEsito(latest.esito_periodo))}>
                       {formatVariazioneMacro(latest.variazione, unita)}
                       <span className="ml-1 text-xs font-medium text-muted-foreground">sul periodo</span>
                     </span>
                   )}
                   {latest?.variazione_annua != null && (
-                    <span className={cn("text-base font-bold", tonoVariazione(latest.variazione_annua))}>
+                    <span className={cn("text-base font-bold", tonoEsito(latest.esito_anno))}>
                       {formatVariazioneMacro(latest.variazione_annua, unita)}
                       <span className="ml-1 text-xs font-medium text-muted-foreground">sull'anno</span>
                     </span>
@@ -275,7 +280,7 @@ export default function MacroDetailPage() {
                 </div>
               )}
             </div>
-            <div className="flex min-w-0 flex-col gap-1" title="Il consenso del rilascio di questo periodo, dall'archivio. Forexfactory pubblica solo la settimana in corso: per i rilasci prima dell'11 ottobre 2026 non c'è.">
+            <div className="flex min-w-0 flex-col gap-1" title="Il consenso del rilascio di questo periodo, dall'archivio: Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati.">
               <div className="text-xs uppercase tracking-wider text-muted-foreground">Previsto</div>
               <div className="text-2xl font-bold tabular-nums leading-tight">
                 {formatConsenso(latest?.previsto_consenso, formato, unita === "%")}
@@ -283,6 +288,19 @@ export default function MacroDetailPage() {
               {latest?.attuale_consenso != null && (
                 <div className={cn("text-sm font-bold tabular-nums", tonoControStima(latest.attuale_consenso, latest.previsto_consenso))}>
                   uscito {formatConsenso(latest.attuale_consenso, formato, unita === "%")}
+                </div>
+              )}
+              {latest?.previsto_annuo_consenso != null && (
+                <div className="text-xs tabular-nums text-muted-foreground">
+                  sull'anno {formatConsenso(latest.previsto_annuo_consenso, "%", true)}
+                  {latest.attuale_annuo_consenso != null && (
+                    <>
+                      {" → "}
+                      <span className={cn("font-bold", tonoControStima(latest.attuale_annuo_consenso, latest.previsto_annuo_consenso))}>
+                        {formatConsenso(latest.attuale_annuo_consenso, "%", true)}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -343,7 +361,8 @@ export default function MacroDetailPage() {
       </div>
 
       {d.analisi && (
-        <MacroAnalisiCard a={d.analisi} unita={unita} valueKind={valueKind} sourceScale={sourceScale} />
+        <MacroAnalisiCard a={d.analisi} unita={unita} valueKind={valueKind} sourceScale={sourceScale}
+          esitoUltima={latest?.esito_periodo ?? null} />
       )}
 
       {/* Chart + range tabs */}
@@ -446,10 +465,11 @@ export default function MacroDetailPage() {
                   )}
                   {mode !== "level" && (
                   <Bar dataKey="value" radius={[2, 2, 0, 0]}>
-                    {/* Rosa/smeraldo: la DIREZIONE. Il rosso (`destructive`)
-                        e' riservato a cio' che e' rotto (CLAUDE.md). */}
+                    {/* Smeraldo sopra la stima, rosa sotto, grigio senza stima:
+                        l'ESITO, non il segno. Il rosso (`destructive`) e'
+                        riservato a cio' che e' rotto (CLAUDE.md). */}
                     {plotted.map((p, i) => (
-                      <Cell key={i} fill={p.value >= 0 ? "rgb(16 185 129)" : "rgb(244 63 94)"} />
+                      <Cell key={i} fill={coloreEsito((p as { esito?: string | null }).esito)} />
                     ))}
                   </Bar>
                   )}
@@ -476,10 +496,12 @@ export default function MacroDetailPage() {
                 </th>
                 <th className="text-left font-semibold pb-2 hidden sm:table-cell">Periodo</th>
                 <th className="text-right font-semibold pb-2">Valore</th>
-                <th className="text-right font-semibold pb-2">Sul periodo</th>
+                <th className="text-right font-semibold pb-2">
+                  <HintLabel text="Verde se il rilascio ha superato la stima della sua misura, rosso se è rimasto sotto, senza colore in linea o senza stima. Non è il segno della variazione: un'inflazione in crescita meno del previsto è rossa.">Sul periodo</HintLabel>
+                </th>
                 <th className="text-right font-semibold pb-2">Sull'anno</th>
                 <th className="text-right font-semibold pb-2 hidden sm:table-cell">
-                  <HintLabel text="Il consenso del rilascio di quel periodo e il dato uscito, nell'unità del consenso, dall'archivio. Forexfactory pubblica solo la settimana in corso: i rilasci prima dell'11 ottobre 2026 restano «—».">Previsto</HintLabel>
+                  <HintLabel text="Il consenso del rilascio di quel periodo e il dato uscito, nell'unità del consenso. Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati; sotto, la stima e il dato sull'anno quando la fonte li porta.">Previsto</HintLabel>
                 </th>
                 <th className="text-right font-semibold pb-2 hidden sm:table-cell">Uscito</th>
               </tr>
@@ -501,17 +523,27 @@ export default function MacroDetailPage() {
                       ? formatMacroValue(r.actual_value, valueKind, sourceScale)
                       : "—"}
                   </td>
-                  <td className={cn("py-2 text-right font-bold", tonoVariazione(r.variazione))}>
+                  <td className={cn("py-2 text-right font-bold", tonoEsito(r.esito_periodo))}>
                     {formatVariazioneMacro(r.variazione, unita)}
                   </td>
-                  <td className={cn("py-2 text-right font-semibold", tonoVariazione(r.variazione_annua))}>
+                  <td className={cn("py-2 text-right font-semibold", tonoEsito(r.esito_anno))}>
                     {formatVariazioneMacro(r.variazione_annua, unita)}
                   </td>
                   <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
                     {formatConsenso(r.previsto_consenso, formato, unita === "%")}
+                    {r.previsto_annuo_consenso != null && (
+                      <div className="text-[0.7059rem]">a/a {formatConsenso(r.previsto_annuo_consenso, "%", true)}</div>
+                    )}
                   </td>
-                  <td className={cn("py-2 text-right font-bold hidden sm:table-cell", tonoControStima(r.attuale_consenso, r.previsto_consenso))}>
-                    {formatConsenso(r.attuale_consenso, formato, unita === "%")}
+                  <td className="py-2 text-right font-bold hidden sm:table-cell">
+                    <span className={tonoControStima(r.attuale_consenso, r.previsto_consenso)}>
+                      {formatConsenso(r.attuale_consenso, formato, unita === "%")}
+                    </span>
+                    {r.attuale_annuo_consenso != null && (
+                      <div className={cn("text-[0.7059rem]", tonoControStima(r.attuale_annuo_consenso, r.previsto_annuo_consenso))}>
+                        a/a {formatConsenso(r.attuale_annuo_consenso, "%", true)}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -617,7 +649,7 @@ function ImportanceStars({ importance }: { importance: "high" | "medium" | "low"
 }
 
 interface ChartTooltipPayloadEntry {
-  payload: { date: string; value: number; period: string };
+  payload: { date: string; value: number; period: string; esito?: string | null };
 }
 
 function ChartTooltip({
@@ -640,7 +672,7 @@ function ChartTooltip({
     <div className="rounded border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
       <div className="font-medium">{formatMacroDate(p.date)}</div>
       {p.period && <div className="text-muted-foreground tabular-nums">{p.period}</div>}
-      <div className={cn("font-bold tabular-nums mt-0.5", variazione && tonoVariazione(p.value))}>
+      <div className={cn("font-bold tabular-nums mt-0.5", variazione && tonoEsito(p.esito))}>
         {variazione ? formatVariazioneMacro(p.value, variazione) : formatMacroValue(p.value, valueKind, sourceScale)}
       </div>
     </div>

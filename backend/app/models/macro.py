@@ -122,6 +122,8 @@ class MacroReleaseDate(Base):
 class MacroConsenso(Base):
     """Il consenso di un rilascio macro come lo pubblicava Forexfactory quella
     settimana: previsto, dato uscito e precedente, nell'unita' del consenso.
+    I rilasci passati vengono dal calendario di Nasdaq (`nasdaq_consensus`),
+    che porta anche le stime gia' scadute.
 
     ⚠️ Esiste perche' Forexfactory pubblica SOLO la settimana in corso: il
     previsto di un rilascio passato non si recupera piu'. Senza archivio non si
@@ -145,5 +147,9 @@ class MacroConsenso(Base):
     precedente: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: "%" | "K" | "M" | "B" | "" — i valori sono gia' in quella scala.
     formato: Mapped[str] = mapped_column(String(4), nullable=False, default="")
+    #: La stima e il dato SULL'ANNO, quando la misura principale e' sul periodo
+    #: (il CPI ha «CPI m/m» e «CPI y/y»). Da Nasdaq, che li porta entrambi.
+    previsto_annuo: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attuale_annuo: Mapped[float | None] = mapped_column(Float, nullable=True)
     aggiornato_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

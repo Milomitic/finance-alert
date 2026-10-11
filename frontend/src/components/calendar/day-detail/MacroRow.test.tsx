@@ -87,4 +87,15 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
     expect(luglio[3].className).not.toContain("rose");
     expect(luglio[3].className).not.toContain("emerald");
   });
+
+  it("le barrette si colorano contro la stima, non per il segno", () => {
+    // Tre livelli tutti positivi: col segno sarebbero tre barre verdi.
+    const { container } = monta({ ...CPI, storico_consenso: [
+      { periodo: "2026-06-01", previsto: null, attuale: 0.2 },
+      { periodo: "2026-07-01", previsto: 0.2, attuale: 0.4 },
+      { periodo: "2026-08-01", previsto: 0.5, attuale: 0.4 },
+    ] });
+    const barre = Array.from(container.querySelectorAll("svg rect")).map((r) => r.getAttribute("fill"));
+    expect(barre).toEqual(["#94a3b8", "#10b981", "#f43f5e"]);
+  });
 });

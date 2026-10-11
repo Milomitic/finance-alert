@@ -11,8 +11,9 @@
  *  — «+3.75%» su un tasso direbbe che e' salito di tanto. */
 export function formatConsenso(v: number | null | undefined, formato: string | null | undefined, conSegno: boolean): string {
   if (v == null || !Number.isFinite(v)) return "—";
-  // Due decimali al massimo, senza zeri inutili: «0.4», «3.75», «-0.1».
-  const corpo = String(Number(v.toFixed(2)));
+  // Una variazione percentuale a una cifra decimale («+0.1%» per un +0,07);
+  // un tasso o un livello fino a due, senza zeri inutili: «3.75», «-0.1».
+  const corpo = String(Number(v.toFixed(conSegno && formato === "%" ? 1 : 2)));
   const segno = conSegno && v > 0 ? "+" : "";
   if (formato === "%") return `${segno}${corpo}%`;
   if (formato === "K" || formato === "M" || formato === "B" || formato === "T") return `${segno}${corpo}${formato}`;

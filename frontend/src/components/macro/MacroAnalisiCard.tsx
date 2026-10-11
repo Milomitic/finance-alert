@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfoHint } from "@/components/ui/info-hint";
 import { formatMacroValue } from "@/lib/macroFormat";
 import { cn } from "@/lib/utils";
-import { forzaCorrelazione, formatVariazioneMacro, tonoVariazione } from "@/lib/variazioneMacro";
+import { forzaCorrelazione, formatVariazioneMacro, tonoEsito, tonoVariazione } from "@/lib/variazioneMacro";
 
 /* ─── Numeri e correlazioni di un indicatore macro (2026-10-11) ────────────
  *
@@ -48,11 +48,15 @@ function nonBasta(motivo: string) {
   return <span className="text-sm font-normal italic text-muted-foreground">{motivo}</span>;
 }
 
-export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
+export function MacroAnalisiCard({ a, unita, valueKind, sourceScale, esitoUltima = null }: {
   a: MacroAnalisi;
   unita: string;
   valueKind: string;
   sourceScale: string | null;
+  /** L'esito dell'ultimo rilascio contro la sua stima: colora l'ultima
+   *  variazione. Le statistiche (media, ritmo, serie) restano senza colore:
+   *  non hanno una stima contro cui leggersi, e il segno non e' un giudizio. */
+  esitoUltima?: string | null;
 }) {
   const v = (x: number | null | undefined) => formatVariazioneMacro(x, unita);
   const percentile = a.percentile != null ? Math.round(a.percentile) : null;
@@ -71,7 +75,7 @@ export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
             ? <>z-score {a.zscore >= 0 ? "+" : ""}{a.zscore.toFixed(1)} · più alta del {percentile}% dei periodi</>
             : `Servono almeno 12 variazioni per confrontarla (ne abbiamo ${a.n_variazioni ?? 0}).`}
         >
-          <span className={tonoVariazione(a.ultima)}>{v(a.ultima)}</span>
+          <span className={tonoEsito(esitoUltima)}>{v(a.ultima)}</span>
         </Tessera>
 
         <Tessera
@@ -81,7 +85,7 @@ export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
           sotto={a.media != null ? `su ${a.n_variazioni} periodi` : undefined}
         >
           {a.media != null && a.dev_std != null
-            ? <><span className={tonoVariazione(a.media)}>{v(a.media)}</span>{" "}
+            ? <>{v(a.media)}{" "}
                 <span className="text-sm font-normal text-muted-foreground">± {formatVariazioneMacro(a.dev_std, unita).replace(/^\+/, "")}</span></>
             : nonBasta("Storia troppo corta")}
         </Tessera>
@@ -93,7 +97,7 @@ export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
           sotto={a.annualizzata_3m != null ? "annualizzato" : "Solo per le serie mensili di indici e livelli."}
         >
           {a.annualizzata_3m != null
-            ? <span className={tonoVariazione(a.annualizzata_3m)}>{formatVariazioneMacro(a.annualizzata_3m, "%", 1)}</span>
+            ? formatVariazioneMacro(a.annualizzata_3m, "%", 1)
             : nonBasta("Non applicabile")}
         </Tessera>
 
@@ -104,7 +108,7 @@ export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
           sotto={a.serie ? `${Math.abs(a.serie)} ${Math.abs(a.serie) === 1 ? "periodo" : "periodi"} consecutivi` : undefined}
         >
           {a.serie
-            ? <span className={tonoVariazione(a.serie)}>{a.serie > 0 ? "▲" : "▼"} {Math.abs(a.serie)} {a.serie > 0 ? "rialzi" : "ribassi"}</span>
+            ? <>{a.serie > 0 ? "▲" : "▼"} {Math.abs(a.serie)} {a.serie > 0 ? "rialzi" : "ribassi"}</>
             : nonBasta("Nessuna serie in corso")}
         </Tessera>
 
@@ -124,11 +128,11 @@ export function MacroAnalisiCard({ a, unita, valueKind, sourceScale }: {
           titolo="S&P 500 nel giorno del rilascio"
           spiegazione="Il movimento medio dello SPY, in valore assoluto da chiusura a chiusura, nei giorni in cui questo dato è uscito, contro gli altri giorni dello stesso periodo. Si usa il valore assoluto perché un dato sopra o sotto le attese muove il mercato in versi opposti: la media col segno si annullerebbe."
           sotto={a.reazione_n != null
-            ? <>contro ±{a.reazione_altri?.toFixed(2)}% negli altri giorni · {a.reazione_n} rilasci</>
+            ? <>contro ±{a.reazione_altri?.toFixed(1)}% negli altri giorni · {a.reazione_n} rilasci</>
             : "Servono almeno 6 rilasci passati in giorni di seduta."}
         >
           {a.reazione_rilascio != null && rapporto != null
-            ? <>±{a.reazione_rilascio.toFixed(2)}%{" "}
+            ? <>±{a.reazione_rilascio.toFixed(1)}%{" "}
                 <span className={cn("text-sm", rapporto >= 1.2 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
                   ×{rapporto.toFixed(1)}
                 </span></>

@@ -160,6 +160,13 @@ class MacroReleaseOut(BaseModel):
     # dato pubblicato, nell'unita' del consenso. None prima che l'archivio esista.
     previsto_consenso: float | None = None
     attuale_consenso: float | None = None
+    # La stima e il dato sull'anno, quando la misura principale e' sul periodo.
+    previsto_annuo_consenso: float | None = None
+    attuale_annuo_consenso: float | None = None
+    # Ogni variazione contro la stima della SUA misura: "sopra" | "sotto" |
+    # "in_linea", None senza stima (`macro_consenso_service.esiti`).
+    esito_periodo: str | None = None
+    esito_anno: str | None = None
 
 
 class ReazioneRilascioOut(BaseModel):
@@ -227,4 +234,6 @@ class MacroSeriesDetailOut(BaseModel):
     # "%" su un indice o un livello, "pp" su un tasso.
     unita_variazione: str = "%"
     formato_consenso: str | None = None
+    #: Quale variazione misura il consenso: "periodo" | "anno" | "livello".
+    misura_consenso: str = "livello"
     analisi: MacroAnalisiOut | None = None

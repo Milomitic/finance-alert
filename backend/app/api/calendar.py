@@ -333,6 +333,7 @@ def get_macro_detail(
     per_data = {v.data: v for v in an.variazioni}
     archivio = macro_consenso_service.per_periodo(
         db, series.label, [h.observation_period for h in history if h.observation_period])
+    misura = macro_consenso_service.misura(series.label)
     for h in history:
         v = per_data.get(h.observation_period) if h.observation_period else None
         if v is not None:
@@ -340,6 +341,8 @@ def get_macro_detail(
         c = archivio.get(h.observation_period) if h.observation_period else None
         if c is not None:
             h.previsto_consenso, h.attuale_consenso = c.previsto, c.attuale
+            h.previsto_annuo_consenso, h.attuale_annuo_consenso = c.previsto_annuo, c.attuale_annuo
+        h.esito_periodo, h.esito_anno = macro_consenso_service.esiti(c, misura)
     formato = next((c.formato for c in archivio.values() if c.formato), None)
     analisi_out = MacroAnalisiOut(
         ultima=an.ultima, media=an.media, dev_std=an.dev_std, zscore=an.zscore,
@@ -375,5 +378,6 @@ def get_macro_detail(
         upcoming=list(upcoming_rows),
         unita_variazione=an.unita_variazione,
         formato_consenso=formato,
+        misura_consenso=misura,
         analisi=analisi_out,
     )

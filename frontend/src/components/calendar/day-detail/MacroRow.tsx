@@ -245,7 +245,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           }
         >
           Sorpresa {surprise > 0 ? "▲" : surprise < 0 ? "▼" : "·"}{" "}
-          {surprise >= 0 ? "+" : ""}{surprise.toFixed(2)}%
+          {surprise >= 0 ? "+" : ""}{surprise.toFixed(1)}%
         </div>
       )}
 
@@ -255,7 +255,10 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           panel. The full Investing-style page is one click away. */}
       {history.length >= 2 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <MacroMiniBars history={history.slice(-12)} />
+          <MacroMiniBars
+            history={history.slice(-12)}
+            consenso={nelConsenso ? event.storico_consenso ?? [] : null}
+          />
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -416,9 +419,14 @@ function KpiSlot({
 
 function MacroMiniBars({
   history,
+  consenso,
 }: {
   history: { date: string; value: number | null }[];
+  /** Previsto e attuale per periodo: ogni barra si colora contro la SUA stima,
+   *  grigia senza. Il segno del valore non e' un esito (2026-10-11). */
+  consenso: { periodo: string; previsto?: number | null; attuale?: number | null }[] | null;
 }) {
+  const perPeriodo = new Map((consenso ?? []).map((c) => [c.periodo, c]));
   const pts = history.filter(
     (p): p is { date: string; value: number } =>
       p.value != null && Number.isFinite(p.value),
@@ -452,7 +460,9 @@ function MacroMiniBars({
             y={y}
             width={w}
             height={Math.max(h, 0.5)}
-            fill={p.value >= 0 ? "#1ed760" : "#f43f5e"}
+            fill={{ pos: "#10b981", neg: "#f43f5e", neutral: "#94a3b8" }[
+              toneContro(perPeriodo.get(p.date)?.attuale, perPeriodo.get(p.date)?.previsto)
+            ]}
             opacity={i === pts.length - 1 ? 1 : 0.7}
           />
         );

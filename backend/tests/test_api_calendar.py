@@ -524,7 +524,8 @@ def test_macro_detail_porta_variazioni_consenso_e_analisi(authed_client: TestCli
         db.add(MacroObservation(series_id=series.id, date=mese, value=round(100 * 1.01 ** i, 6)))
     # Il CPI di febbraio 2026 (l'ultimo) esce a marzo: stimato 0.8, uscito 1.0.
     db.add(MacroConsenso(etichetta="US CPI release", data=_d(2026, 3, 11), titolo="CPI m/m", previsto=0.8,
-                         attuale=1.0, formato="%", aggiornato_il=datetime(2026, 3, 11, tzinfo=UTC)))
+                         attuale=1.0, formato="%", previsto_annuo=12.9, attuale_annuo=12.7,
+                         aggiornato_il=datetime(2026, 3, 11, tzinfo=UTC)))
     db.commit()
 
     body = authed_client.get(f"/api/macro/{series.id}").json()
@@ -535,6 +536,12 @@ def test_macro_detail_porta_variazioni_consenso_e_analisi(authed_client: TestCli
     assert ultima["variazione"] == pytest.approx(1.0, abs=1e-6)
     assert ultima["variazione_annua"] == pytest.approx((1.01 ** 12 - 1) * 100, abs=1e-6)
     assert (ultima["previsto_consenso"], ultima["attuale_consenso"]) == (0.8, 1.0)
+    assert (ultima["previsto_annuo_consenso"], ultima["attuale_annuo_consenso"]) == (12.9, 12.7)
+    # Ogni variazione contro la stima della SUA misura: sul mese sopra, sull'anno
+    # sotto — lo stesso rilascio puo' sorprendere in due versi.
+    assert body["misura_consenso"] == "periodo"
+    assert (ultima["esito_periodo"], ultima["esito_anno"]) == ("sopra", "sotto")
     assert body["history"][1]["previsto_consenso"] is None
+    assert body["history"][1]["esito_periodo"] is None
     assert body["analisi"]["n_variazioni"] == 13
     assert body["analisi"]["serie"] == 13

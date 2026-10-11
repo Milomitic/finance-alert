@@ -1060,6 +1060,10 @@ export interface MacroReleaseOut {
   variazione_annua?: number | null;
   previsto_consenso?: number | null;
   attuale_consenso?: number | null;
+  previsto_annuo_consenso?: number | null;
+  attuale_annuo_consenso?: number | null;
+  esito_periodo?: string | null;
+  esito_anno?: string | null;
 }
 
 export interface MacroSeriesDetailOut {
@@ -1079,6 +1083,7 @@ export interface MacroSeriesDetailOut {
   upcoming?: string[];
   unita_variazione?: string;
   formato_consenso?: string | null;
+  misura_consenso?: string;
   analisi?: MacroAnalisiOut | null;
 }
 
