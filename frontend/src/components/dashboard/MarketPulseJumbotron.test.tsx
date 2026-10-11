@@ -325,7 +325,7 @@ describe("la riga di contesto sta allineata", () => {
     expect(contesto.textContent).toContain("Cripto");
   });
 
-  it("una riga per tipo: le cripto non vanno in coda alle materie prime", () => {
+  it("una colonna per tipo: le cripto non vanno in coda alle materie prime", () => {
     assets = [
       indice("^N225", { category: "index" }),
       indice("GC=F", { category: "commodity" }),
@@ -333,10 +333,12 @@ describe("la riga di contesto sta allineata", () => {
     ];
     montaA(SEDUTA);
     const riga = (titolo: string) => screen.getByText(titolo).closest("div")!;
-    // Tre righe distinte, e ognuna porta solo le sue voci.
+    // Quattro colonne distinte, e ognuna porta solo le sue voci.
     expect(new Set([riga("Indici"), riga("Materie prime"), riga("Cripto"), riga("ETF")]).size).toBe(4);
     expect(riga("Materie prime").textContent).not.toContain("Bitcoin");
     expect(riga("Cripto").textContent).toContain("Bitcoin");
+    // Le colonne stanno in una griglia che decide da sola quante ne entrano.
+    expect(riga("Indici").parentElement!.className).toContain("auto-fit");
   });
 
   it("le icone di materie prime e cripto sono a colori, e non sono la palette direzionale", () => {

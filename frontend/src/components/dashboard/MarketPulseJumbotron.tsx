@@ -482,11 +482,21 @@ function IndiceTile({ asset, nome, ampiezza }: {
 }
 
 /* Letterali: il purger di Tailwind vede solo le classi scritte per intero.
- * Sul telefono ogni voce sta su una riga sua (`flex-col`), da `sm` si
- * affiancano e vanno a capo sotto la loro etichetta. */
-const RIGA_GRUPPO = "flex min-w-0 flex-col items-start gap-y-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1";
+ *
+ * Una COLONNA per tipo — indici, materie prime, cripto, ETF — con le voci una
+ * sotto l'altra (2026-10-11, su richiesta). In righe, una riga lunga andava a
+ * capo sotto la propria etichetta e la fascia si leggeva come testo; in
+ * colonna nome, prezzo e variazione stanno incolonnati come in una tabella.
+ * Quante colonne decide lo spazio (`auto-fit`, almeno 13rem ciascuna): una sul
+ * telefono, due a meta' schermo, quattro su uno schermo largo. */
+const COLONNE_GRUPPI = "grid min-w-0 grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-x-6 gap-y-3";
+const COLONNA_GRUPPO = "flex min-w-0 flex-col gap-0.5";
 const ETICHETTA_GRUPPO =
-  "text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:w-[7.5rem] sm:shrink-0";
+  "mb-0.5 border-b border-border/60 pb-0.5 text-[0.6765rem] font-bold uppercase tracking-[0.14em] text-muted-foreground/70";
+/* Una voce: nome a sinistra, prezzo e variazione allineati a destra, con la
+ * variazione a larghezza fissa cosi' le cifre stanno in colonna fra le righe. */
+const VOCE_GRUPPO =
+  "grid min-w-0 grid-cols-[minmax(0,1fr)_auto_4rem] items-center gap-x-2 rounded px-1 py-0.5 hover:bg-accent/40";
 
 /* ─── Una voce della riga di contesto ────────────────────────────────────── */
 function Chip({ asset }: { asset: LiveAsset }) {
@@ -498,13 +508,14 @@ function Chip({ asset }: { asset: LiveAsset }) {
   return (
     <Link
       to={`/markets/${encodeURIComponent(asset.symbol)}`}
-      className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
+      className={VOCE_GRUPPO}
       title={[
         asset.name,
         asset.using_futures ? "prezzo dal future" : null,
         asset.is_live ? "mercato aperto adesso" : "mercato chiuso — ultimo prezzo",
       ].filter(Boolean).join(" · ")}
     >
+      <span className="flex min-w-0 items-center gap-1.5">
       {bandiera ? (
         <img
           src={bandiera}
@@ -531,7 +542,8 @@ function Chip({ asset }: { asset: LiveAsset }) {
       {asset.is_live && (
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden />
       )}
-      <span className="text-sm font-semibold tabular-nums">
+      </span>
+      <span className="text-right text-sm font-semibold tabular-nums">
         {asset.quote?.price != null
           ? <FlashValue value={asset.quote.price} format={(v) => formatLivello(v) ?? "—"} noTween />
           : <NoValue hint={perche(asset, nome)} />}
@@ -542,7 +554,7 @@ function Chip({ asset }: { asset: LiveAsset }) {
           oltre la soglia di rilevanza resta: e' li' che serve l'occhio. */}
       <span
         className={cn(
-          "text-xs tabular-nums",
+          "text-right text-xs tabular-nums",
           forte ? "font-bold" : "font-semibold",
           tono(cambio),
         )}
@@ -574,23 +586,25 @@ function ChipEtf({ ticker, prezzo, cambio, titolo, pre = false }: {
   return (
     <Link
       to={`/stocks/${encodeURIComponent(ticker)}`}
-      className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/40"
+      className={VOCE_GRUPPO}
       title={titolo}
     >
-      <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        {ticker}
-      </span>
-      {pre && (
-        <span className="rounded bg-muted px-1 text-[0.6176rem] font-bold uppercase tracking-wide text-muted-foreground">
-          pre
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {ticker}
         </span>
-      )}
-      <span className="text-sm font-semibold tabular-nums">
+        {pre && (
+          <span className="rounded bg-muted px-1 text-[0.6176rem] font-bold uppercase tracking-wide text-muted-foreground">
+            pre
+          </span>
+        )}
+      </span>
+      <span className="text-right text-sm font-semibold tabular-nums">
         {prezzo != null
           ? <FlashValue value={prezzo} format={(v) => formatLivello(v) ?? "—"} noTween />
           : <NoValue hint={`${ticker}: quotazione non disponibile`} />}
       </span>
-      <span className={cn("text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
+      <span className={cn("text-right text-xs tabular-nums", forte ? "font-bold" : "font-semibold", tono(cambio))}>
         {cambio != null
           ? <FlashValue value={cambio} format={(v) => formatVariazione(v) ?? "—"} noTween />
           : ""}
@@ -1001,15 +1015,15 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
             (`/api/stocks/quotes`), e legarlo alla presenza degli indici lo
             faceva sparire insieme a loro quando quella query taceva. */}
         <div className="grid gap-3 border-t pt-2 lg:grid-cols-2">
-          {/* ⚠️ Una riga per tipo — indici, materie prime, cripto, ETF — con
-              l'etichetta a larghezza fissa, cosi' le voci partono allineate.
+          {/* ⚠️ Una colonna per tipo — indici, materie prime, cripto, ETF.
               Prima era una fila sola che andava a capo dove capitava, e le
-              cripto finivano in coda alle materie prime. Sul telefono ogni
-              voce va a capo da sola: affiancate si sovrapponevano. */}
-          <div className="flex min-w-0 flex-col gap-1.5">
+              cripto finivano in coda alle materie prime; poi una riga per
+              tipo, che sugli schermi larghi andava comunque a capo. Vedi
+              `COLONNE_GRUPPI`. */}
+          <div className={COLONNE_GRUPPI}>
             {gruppi.map(([titolo, voci]) =>
               voci.length === 0 ? null : (
-                <div key={titolo} className={RIGA_GRUPPO}>
+                <div key={titolo} className={COLONNA_GRUPPO}>
                   <span className={ETICHETTA_GRUPPO}>{titolo}</span>
                   {voci.map((a) => (
                     <Chip key={a.symbol} asset={a} />
@@ -1020,7 +1034,7 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
             {/* Gli ETF in coda: e' il gruppo piu' specialistico, non il meno
                 importante. Il paniere fisso a leva, e dietro i fondi che si
                 muovono nel pre-market. */}
-            <div className={RIGA_GRUPPO}>
+            <div className={COLONNA_GRUPPO}>
               <span className={ETICHETTA_GRUPPO}>ETF</span>
               {ETF_LEVA.map((t) => {
                 const q = perTicker.get(t);
