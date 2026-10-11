@@ -89,10 +89,14 @@ _FF_LABEL_MAP: dict[str, tuple[str, str]] = {
     "US NFP / Non-Farm Payrolls": ("USD", r"^Non-Farm Employment Change$"),
     "US Unemployment Rate":       ("USD", r"^Unemployment Rate$"),
     "FOMC rate decision":         ("USD", r"^Federal Funds Rate$"),
-    "US GDP (real)":              ("USD", r"GDP.*q/q|Advance GDP|GDP m/m"),
-    "US GDP (advance, Q1)":       ("USD", r"GDP.*q/q|Advance GDP"),
-    "US GDP (final, Q1)":         ("USD", r"GDP.*q/q|Final GDP"),
-    "US Retail Sales":            ("USD", r"^(Core )?Retail Sales m/m$"),
+    "US GDP (real)":              ("USD", r"^(Advance |Prelim |Final )?GDP q/q$"),
+    "US GDP (advance, Q1)":       ("USD", r"^(Advance )?GDP q/q$"),
+    "US GDP (final, Q1)":         ("USD", r"^(Final )?GDP q/q$"),
+    # ⚠️ Il dato COMPLESSIVO, non la «Core» senza auto: la nostra serie FRED
+    # (RSAFS) e' il complessivo, e la regola che le prendeva entrambe dava al
+    # calendario il previsto della core (2026-10-11: +0,5 contro +0,3). Lo stesso
+    # per il PIL: `GDP.*q/q` prendeva anche il deflatore («GDP Price Index q/q»).
+    "US Retail Sales":            ("USD", r"^Retail Sales m/m$"),
     "ISM Manufacturing PMI":      ("USD", r"^ISM Manufacturing PMI$"),
     "ISM Services PMI":           ("USD", r"^ISM Services PMI$"),
 

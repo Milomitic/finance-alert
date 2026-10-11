@@ -39,11 +39,19 @@ def archivia(db: Session, *, adesso: datetime | None = None) -> int:
     adesso = adesso or datetime.now(UTC)
     eventi = ff._get_events()
     n = 0
+    visti: set[tuple[str, date]] = set()
     for etichetta, (paese, schema) in ff._FF_LABEL_MAP.items():
         titolo_re = re.compile(schema, re.IGNORECASE)
         for ev in eventi:
             if ev.country != paese or not titolo_re.search(ev.title):
                 continue
+            # ⚠️ Un rilascio, un evento: il PRIMO che combacia, come fa
+            # `consensus_for_label` per il calendario. Una regola che ne prende
+            # due nello stesso giorno («Retail Sales» e «Core Retail Sales»)
+            # violava il vincolo e faceva cadere l'intero giro (2026-10-11).
+            if (etichetta, ev.date) in visti:
+                continue
+            visti.add((etichetta, ev.date))
             formato = calendar_service._formato(ev.forecast) or calendar_service._formato(ev.previous) \
                 or calendar_service._formato(ev.actual)
             scala = _scala(formato)

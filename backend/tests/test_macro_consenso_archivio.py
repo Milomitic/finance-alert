@@ -152,3 +152,21 @@ def test_il_job_non_cade_se_il_feed_e_giu(db: Session, monkeypatch) -> None:
     monkeypatch.setattr(ff, "_get_events", giu)
     run_archivia_consenso_macro()
     assert db.query(MacroConsenso).count() == 0
+
+
+def test_due_titoli_dello_stesso_rilascio_non_fanno_cadere_il_giro(db: Session, settimana) -> None:
+    """2026-10-11 in produzione: «Core Retail Sales m/m» e «Retail Sales m/m»
+    lo stesso giorno, e la regola li prendeva entrambi. Ora un rilascio, un
+    evento, e per le vendite il COMPLESSIVO — la misura della serie FRED."""
+    settimana.append(_ff("Core Retail Sales m/m", date(2026, 10, 15), "0.5%", previous="1.4%"))
+    settimana.append(_ff("Retail Sales m/m", date(2026, 10, 15), "0.3%", previous="1.2%"))
+    settimana.append(_ff("Advance GDP Price Index q/q", date(2026, 10, 29), "2.1%", previous="2.0%"))
+    settimana.append(_ff("Advance GDP q/q", date(2026, 10, 29), "1.8%", previous="3.0%"))
+    # Due titoli che la regola stretta prende ENTRAMBI, lo stesso giorno: e' il
+    # caso che solo la deduplica copre.
+    settimana.append(_ff("GDP q/q", date(2026, 10, 29), "9.9%", previous="9.9%"))
+    arch.archivia(db, adesso=ADESSO)
+    vendite = db.query(MacroConsenso).filter_by(etichetta="US Retail Sales").one()
+    assert (vendite.titolo, vendite.previsto) == ("Retail Sales m/m", 0.3)
+    pil = db.query(MacroConsenso).filter_by(etichetta="US GDP (real)").one()
+    assert (pil.titolo, pil.previsto) == ("Advance GDP q/q", 1.8)
