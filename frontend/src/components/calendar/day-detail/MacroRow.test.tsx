@@ -51,15 +51,19 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
     expect(delta.className).toContain("font-bold");
   });
 
-  it("prima dell'uscita: «Attuale» contro la stima del SUO rilascio, non quella del prossimo", () => {
-    // Settembre: stimato 0.3, uscito 0.4 -> verde, anche se il previsto per
-    // ottobre (0.6) e' piu' alto.
-    monta({ ...CPI, previsto_attuale: 0.3 });
+  it("prima dell'uscita: «Attuale» contro il «Previsto» che gli sta accanto", () => {
+    // 0.4 contro lo 0.6 previsto -> rosso, anche se il suo rilascio era in linea.
+    monta({ ...CPI, previsto_attuale: 0.4 });
+    expect(screen.getAllByText("+0.4%")[0].className).toContain("rose");
+  });
+
+  it("senza previsto, la stima del suo rilascio; senza nessuna delle due, neutro", () => {
+    monta({ ...CPI, previsto_consenso: null, previsto_attuale: 0.3 });
     expect(screen.getAllByText("+0.4%")[0].className).toContain("emerald");
   });
 
-  it("senza la stima del suo rilascio resta neutro invece di indovinare", () => {
-    monta(CPI);
+  it("senza nessuna stima resta neutro invece di indovinare", () => {
+    monta({ ...CPI, previsto_consenso: null });
     const attuale = screen.getAllByText("+0.4%")[0];
     expect(attuale.className).not.toContain("emerald");
     expect(attuale.className).not.toContain("rose");
@@ -76,16 +80,17 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
     const tabella = screen.getByRole("table");
     expect(tabella).toHaveTextContent("Previsto");
     const righe = tabella.querySelectorAll("tbody tr");
-    // La piu' recente in cima: agosto, stimato 0.5, uscito 0.4 -> rosso.
+    // La piu' recente in cima: agosto, uscito 0.4 e stimato 0.5 -> rosso.
+    // Prima l'attuale, poi il previsto.
     const agosto = righe[0].querySelectorAll("td");
-    expect(agosto[2]).toHaveTextContent("+0.5%");
-    expect(agosto[3]).toHaveTextContent("+0.4%");
-    expect(agosto[3].className).toContain("rose");
+    expect(agosto[2]).toHaveTextContent("+0.4%");
+    expect(agosto[3]).toHaveTextContent("+0.5%");
+    expect(agosto[2].className).toContain("rose");
     // Luglio: nessun previsto archiviato -> «—», e l'attuale senza colore.
     const luglio = righe[1].querySelectorAll("td");
-    expect(luglio[2]).toHaveTextContent("—");
-    expect(luglio[3].className).not.toContain("rose");
-    expect(luglio[3].className).not.toContain("emerald");
+    expect(luglio[3]).toHaveTextContent("—");
+    expect(luglio[2].className).not.toContain("rose");
+    expect(luglio[2].className).not.toContain("emerald");
   });
 
   it("le barrette si colorano contro la stima, non per il segno", () => {

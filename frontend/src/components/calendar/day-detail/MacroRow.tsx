@@ -135,12 +135,12 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
    * «−62K». Quella relativa di prima su una percentuale — 0.4% contro 0.6% =
    * «−33%» — non dice niente. */
   const sorpresaC = actual != null && attualeC != null && previstoC != null ? attualeC - previstoC : null;
-  /* ⚠️ Contro la stima DEL SUO RILASCIO, dall'archivio dei consensi. Prima
-   * dell'uscita «Attuale» e' il dato del mese scorso e «Previsto» la stima per
-   * questo mese: colorare l'uno contro l'altro segnerebbe come delusione
-   * un'accelerazione gia' prevista. Senza la stima del suo rilascio resta
-   * neutro invece di indovinare. */
-  const stimaDiAttuale = event.previsto_attuale ?? null;
+  /* «Attuale» contro il «Previsto» che gli sta accanto, scelta dell'utente
+   * (2026-10-11): prima dell'uscita dice se il dato in arrivo dovra' salire
+   * o scendere rispetto all'ultimo. Uscito il dato, il previsto e' quello del
+   * suo rilascio e il confronto e' la sorpresa. Senza previsto, la stima del
+   * rilascio dell'attuale dall'archivio. */
+  const stimaDiAttuale = previstoC ?? event.previsto_attuale ?? null;
   const toneC = toneContro(attualeC, stimaDiAttuale);
 
   return (
@@ -155,7 +155,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
         <SlotConsenso
           label="Attuale"
           hint={stimaDiAttuale != null
-            ? `Verde se sopra la stima del suo rilascio (${formatConsenso(stimaDiAttuale, formato, conSegno)}), rosso se sotto.`
+            ? `Verde se sopra il previsto (${formatConsenso(stimaDiAttuale, formato, conSegno)}), rosso se sotto.`
             : actual != null
               ? "Il dato appena uscito, nell'unità del consenso."
               : "L'ultima release ufficiale. Il colore arriva quando l'archivio conosce la stima di quel rilascio: Forexfactory pubblica solo la settimana in corso."}
@@ -580,8 +580,8 @@ function ExtendedHistoryChart({
               <th className="text-right font-semibold pb-1">Valore</th>
               {consenso && (
                 <>
-                  <th className="text-right font-semibold pb-1">Previsto</th>
                   <th className="text-right font-semibold pb-1">Attuale</th>
+                  <th className="text-right font-semibold pb-1">Previsto</th>
                 </>
               )}
             </tr>
@@ -599,10 +599,10 @@ function ExtendedHistoryChart({
                     const c = perPeriodo.get(p.date);
                     return (
                       <>
-                        <td className="py-1 text-right opacity-80">{formatConsenso(c?.previsto, formato, conSegno)}</td>
                         <td className={cn("py-1 text-right font-bold", TONO_TESTO[toneContro(c?.attuale, c?.previsto)])}>
                           {formatConsenso(c?.attuale, formato, conSegno)}
                         </td>
+                        <td className="py-1 text-right opacity-80">{formatConsenso(c?.previsto, formato, conSegno)}</td>
                       </>
                     );
                   })()}
