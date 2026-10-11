@@ -55,7 +55,9 @@ def test_legge_un_giorno_e_svuota_i_campi_vuoti() -> None:
     assert eventi[0] == _ev("CPI", "0.4%", "0.4%", "0.1%")
     assert (eventi[1].actual, eventi[1].consensus, eventi[1].previous) == (None, None, None)
     _url, kw = s.chiamate[0]
-    assert kw["params"] == {"date": "2026-09-12"}
+    # La fonte data al giorno dopo: il CPI uscito il 12 si chiede col 13. Senza,
+    # le uscite del venerdi' stanno al sabato e un riempimento sui feriali le perde.
+    assert kw["params"] == {"date": "2026-09-13"}
     # Senza un User-Agent da browser l'API non risponde.
     assert "Mozilla" in kw["headers"]["User-Agent"]
 

@@ -12,6 +12,14 @@ PPI la riga annua viene prima). Le assegna `assegna`, confrontandole con le
 variazioni della serie FRED; dove FRED non c'e', la variazione mensile e' la
 piu' piccola delle due in valore assoluto.
 
+⚠️ L'API data ogni evento al giorno DOPO. Le buste paga di venerdi' 5
+settembre 2025 si leggono con `date=2025-09-06`, il CPI che Forexfactory da' al
+14 ottobre 2026 con `date=2026-10-15`. `eventi_del_giorno(g)` chiede quindi
+g + 1: chi la chiama ragiona nel giorno vero del rilascio, e un riempimento
+che salta i fine settimana non perde le uscite del venerdi' (2026-10-11: le
+prime 344 righe erano tutte un giorno avanti, e buste paga e disoccupazione
+quasi assenti).
+
 ⚠️ Senza un User-Agent da browser l'API non risponde. Non e' un accesso
 riservato: e' lo stesso JSON che la pagina pubblica del calendario legge.
 """
@@ -19,7 +27,7 @@ from __future__ import annotations
 
 import html
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
 import requests
@@ -84,10 +92,12 @@ def _pulisci(v: object) -> str | None:
 
 
 def eventi_del_giorno(giorno: date, *, sessione: requests.Session | None = None) -> list[NasdaqEvento]:
-    """Gli eventi di un giorno. Solleva su un errore di rete o di formato: chi
-    riempie la storia deve sapere che quel giorno manca, non leggerlo vuoto."""
+    """Gli eventi usciti il giorno `giorno`. Solleva su un errore di rete o di
+    formato: chi riempie la storia deve sapere che quel giorno manca, non
+    leggerlo vuoto."""
     get = (sessione or requests).get
-    r = get(_URL, params={"date": giorno.isoformat()}, headers=_HEADERS, timeout=_TIMEOUT)
+    richiesta = giorno + timedelta(days=1)  # la fonte data al giorno dopo: vedi sopra
+    r = get(_URL, params={"date": richiesta.isoformat()}, headers=_HEADERS, timeout=_TIMEOUT)
     r.raise_for_status()
     corpo = r.json()
     righe = ((corpo or {}).get("data") or {}).get("rows") or []
