@@ -23,6 +23,9 @@ import { regionFlagAsset, regionLabel } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
 import { formatMacroValue } from "@/lib/macroFormat";
+import { MacroAnalisiCard } from "@/components/macro/MacroAnalisiCard";
+import { formatConsenso } from "@/lib/consensoMacro";
+import { formatVariazioneMacro, tonoControStima, tonoVariazione } from "@/lib/variazioneMacro";
 
 /* ─── /macro/:seriesId — Investing-style indicator detail page ─────────── *
  *
@@ -46,6 +49,8 @@ const RANGES = [
   { id: "max", label: "MAX", years: null },
 ] as const;
 type RangeId = (typeof RANGES)[number]["id"];
+/** Il grafico: il livello, o la variazione sul periodo o sull'anno. */
+type Modo = "level" | "periodo" | "anno";
 
 export default function MacroDetailPage() {
   const { seriesId } = useParams<{ seriesId: string }>();
@@ -78,7 +83,7 @@ export default function MacroDetailPage() {
   // `null` significa "non ancora scelto dall'utente": cosi il default puo
   // seguire il tipo appena i dati arrivano, senza sovrascrivere una scelta
   // fatta a mano.
-  const [modeChoice, setModeChoice] = useState<"level" | "change" | null>(null);
+  const [modeChoice, setModeChoice] = useState<Modo | null>(null);
   const chartData = useMemo(
     () =>
       filteredHistory
@@ -89,6 +94,8 @@ export default function MacroDetailPage() {
           date: r.observation_period as string,
           value: r.actual_value as number,
           period: r.period_label ?? "",
+          periodo: r.variazione ?? null,
+          anno: r.variazione_annua ?? null,
         })),
     [filteredHistory],
   );
@@ -106,13 +113,14 @@ export default function MacroDetailPage() {
    * trasformazione NOSTRA — FRED conserva l'unita originale — e la didascalia
    * lo dice, perche un numero calcolato da noi non deve sembrare della fonte.
    */
-  const deltaData = useMemo(
-    () =>
-      chartData
-        .map((p, i) =>
-          i === 0 ? null : { ...p, value: p.value - chartData[i - 1].value },
-        )
-        .filter((p): p is (typeof chartData)[number] => p !== null),
+  /* ⚠️ Le variazioni vengono dal backend, nell'unita' giusta (% su un indice
+   * o un livello, punti su un tasso). Prima qui si sottraevano i livelli: sul
+   * CPI una barra valeva «1.3» punti d'indice, un numero che nessuno usa. */
+  const variazioniData = useMemo(
+    () => ({
+      periodo: chartData.filter((p) => p.periodo != null).map((p) => ({ ...p, value: p.periodo as number })),
+      anno: chartData.filter((p) => p.anno != null).map((p) => ({ ...p, value: p.anno as number })),
+    }),
     [chartData],
   );
   if (id == null || Number.isNaN(id)) {
@@ -156,11 +164,17 @@ export default function MacroDetailPage() {
   const flagAsset = regionFlagAsset(d.region);
   const valueKind = d.value_kind ?? "";
   const sourceScale = d.source_scale ?? null;
-  // Il default segue il tipo di valore; una scelta manuale lo sovrascrive.
-  const mode: "level" | "change" =
-    modeChoice ?? (valueKind === "level" ? "change" : "level");
-  const plotted = mode === "change" ? deltaData : chartData;
+  // Il default segue il tipo di valore; una scelta manuale lo sovrascrive. Su
+  // un indice o un livello si parte dalla variazione annua — la grandezza di
+  // cui si parla (l'inflazione, non il livello dell'indice) — e su un tasso
+  // dal livello, che li' e' gia' la misura.
+  const unita = d.unita_variazione ?? "%";
+  const tasso = valueKind === "pct" || valueKind === "yield";
+  const mode: Modo =
+    modeChoice ?? (tasso ? "level" : variazioniData.anno.length > 0 ? "anno" : "periodo");
+  const plotted = mode === "level" ? chartData : variazioniData[mode];
   const latest = d.latest;
+  const formato = d.formato_consenso ?? null;
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -233,21 +247,45 @@ export default function MacroDetailPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-6 sm:gap-8 [&>*]:min-w-0">
-            <KpiCell
-              label="Attuale"
-              value={latest?.actual_value}
-              valueKind={valueKind}
-              sourceScale={sourceScale}
-              size="xl"
-              tone={surpriseTone(latest)}
-            />
-            <KpiCell
-              label="Previsto"
-              value={latest?.expected_value}
-              valueKind={valueKind}
-              sourceScale={sourceScale}
-              size="lg"
-            />
+            <div className="flex min-w-0 flex-col gap-1">
+              <KpiCell
+                label="Attuale"
+                value={latest?.actual_value}
+                valueKind={valueKind}
+                sourceScale={sourceScale}
+                size="xl"
+                tone={surpriseTone(latest)}
+              />
+              {/* La variazione e' il numero di cui si parla: in evidenza, sotto
+                  il livello, nell'unita' giusta e col colore della direzione. */}
+              {(latest?.variazione != null || latest?.variazione_annua != null) && (
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 tabular-nums">
+                  {latest?.variazione != null && (
+                    <span className={cn("text-base font-bold", tonoVariazione(latest.variazione))}>
+                      {formatVariazioneMacro(latest.variazione, unita)}
+                      <span className="ml-1 text-xs font-medium text-muted-foreground">sul periodo</span>
+                    </span>
+                  )}
+                  {latest?.variazione_annua != null && (
+                    <span className={cn("text-base font-bold", tonoVariazione(latest.variazione_annua))}>
+                      {formatVariazioneMacro(latest.variazione_annua, unita)}
+                      <span className="ml-1 text-xs font-medium text-muted-foreground">sull'anno</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-col gap-1" title="Il consenso del rilascio di questo periodo, dall'archivio. Forexfactory pubblica solo la settimana in corso: per i rilasci prima dell'11 ottobre 2026 non c'è.">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Previsto</div>
+              <div className="text-2xl font-bold tabular-nums leading-tight">
+                {formatConsenso(latest?.previsto_consenso, formato, unita === "%")}
+              </div>
+              {latest?.attuale_consenso != null && (
+                <div className={cn("text-sm font-bold tabular-nums", tonoControStima(latest.attuale_consenso, latest.previsto_consenso))}>
+                  uscito {formatConsenso(latest.attuale_consenso, formato, unita === "%")}
+                </div>
+              )}
+            </div>
             <KpiCell
               label="Precedente"
               value={latest?.previous_value}
@@ -304,13 +342,17 @@ export default function MacroDetailPage() {
         </Card>
       </div>
 
+      {d.analisi && (
+        <MacroAnalisiCard a={d.analisi} unita={unita} valueKind={valueKind} sourceScale={sourceScale} />
+      )}
+
       {/* Chart + range tabs */}
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-base">Storico osservazioni</CardTitle>
           <div className="flex items-center gap-3">
             <div className="flex gap-1">
-              {(["level", "change"] as const).map((m) => (
+              {(["level", "periodo", "anno"] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -322,7 +364,7 @@ export default function MacroDetailPage() {
                       : "bg-muted/50 text-muted-foreground hover:bg-muted",
                   )}
                 >
-                  {m === "level" ? "Livello" : "Variazione"}
+                  {m === "level" ? "Livello" : m === "periodo" ? "Sul periodo" : "Sull'anno"}
                 </button>
               ))}
             </div>
@@ -375,7 +417,7 @@ export default function MacroDetailPage() {
                     axisLine={{ stroke: "hsl(var(--border))" }}
                     tickLine={{ stroke: "hsl(var(--border))" }}
                     tickFormatter={(v: number) =>
-                      formatMacroValue(v, valueKind, sourceScale)
+                      mode === "level" ? formatMacroValue(v, valueKind, sourceScale) : formatVariazioneMacro(v, unita, 1)
                     }
                     width={64}
                   />
@@ -385,10 +427,11 @@ export default function MacroDetailPage() {
                       <ChartTooltip
                         valueKind={valueKind}
                         sourceScale={sourceScale}
+                        variazione={mode === "level" ? null : unita}
                       />
                     }
                   />
-                  {mode === "change" && (
+                  {mode !== "level" && (
                     <ReferenceLine y={0} stroke="hsl(var(--border))" />
                   )}
                   {mode === "level" && (
@@ -401,17 +444,12 @@ export default function MacroDetailPage() {
                       isAnimationActive={false}
                     />
                   )}
-                  {mode === "change" && (
+                  {mode !== "level" && (
                   <Bar dataKey="value" radius={[2, 2, 0, 0]}>
+                    {/* Rosa/smeraldo: la DIREZIONE. Il rosso (`destructive`)
+                        e' riservato a cio' che e' rotto (CLAUDE.md). */}
                     {plotted.map((p, i) => (
-                      <Cell
-                        key={i}
-                        fill={
-                          p.value >= 0
-                            ? "hsl(var(--primary))"
-                            : "hsl(var(--destructive))"
-                        }
-                      />
+                      <Cell key={i} fill={p.value >= 0 ? "rgb(16 185 129)" : "rgb(244 63 94)"} />
                     ))}
                   </Bar>
                   )}
@@ -437,9 +475,13 @@ export default function MacroDetailPage() {
                   <HintLabel text="Il periodo che il dato misura. La data di pubblicazione non e' fornita dalla fonte per le osservazioni storiche.">Periodo osservato</HintLabel>
                 </th>
                 <th className="text-left font-semibold pb-2 hidden sm:table-cell">Periodo</th>
-                <th className="text-right font-semibold pb-2">Attuale</th>
-                <th className="text-right font-semibold pb-2">Previsto</th>
-                <th className="text-right font-semibold pb-2">Precedente</th>
+                <th className="text-right font-semibold pb-2">Valore</th>
+                <th className="text-right font-semibold pb-2">Sul periodo</th>
+                <th className="text-right font-semibold pb-2">Sull'anno</th>
+                <th className="text-right font-semibold pb-2 hidden sm:table-cell">
+                  <HintLabel text="Il consenso del rilascio di quel periodo e il dato uscito, nell'unità del consenso, dall'archivio. Forexfactory pubblica solo la settimana in corso: i rilasci prima dell'11 ottobre 2026 restano «—».">Previsto</HintLabel>
+                </th>
+                <th className="text-right font-semibold pb-2 hidden sm:table-cell">Uscito</th>
               </tr>
             </thead>
             <tbody>
@@ -454,20 +496,22 @@ export default function MacroDetailPage() {
                   <td className="py-2 text-left text-muted-foreground hidden sm:table-cell">
                     {r.period_label ?? "—"}
                   </td>
-                  <td className="py-2 text-right font-semibold">
+                  <td className="py-2 text-right text-muted-foreground">
                     {r.actual_value != null
                       ? formatMacroValue(r.actual_value, valueKind, sourceScale)
                       : "—"}
                   </td>
-                  <td className="py-2 text-right text-muted-foreground">
-                    {r.expected_value != null
-                      ? formatMacroValue(r.expected_value, valueKind, sourceScale)
-                      : "—"}
+                  <td className={cn("py-2 text-right font-bold", tonoVariazione(r.variazione))}>
+                    {formatVariazioneMacro(r.variazione, unita)}
                   </td>
-                  <td className="py-2 text-right">
-                    {r.previous_value != null
-                      ? formatMacroValue(r.previous_value, valueKind, sourceScale)
-                      : "—"}
+                  <td className={cn("py-2 text-right font-semibold", tonoVariazione(r.variazione_annua))}>
+                    {formatVariazioneMacro(r.variazione_annua, unita)}
+                  </td>
+                  <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
+                    {formatConsenso(r.previsto_consenso, formato, unita === "%")}
+                  </td>
+                  <td className={cn("py-2 text-right font-bold hidden sm:table-cell", tonoControStima(r.attuale_consenso, r.previsto_consenso))}>
+                    {formatConsenso(r.attuale_consenso, formato, unita === "%")}
                   </td>
                 </tr>
               ))}
@@ -581,11 +625,14 @@ function ChartTooltip({
   payload,
   valueKind,
   sourceScale,
+  variazione = null,
 }: {
   active?: boolean;
   payload?: ChartTooltipPayloadEntry[];
   valueKind: string;
   sourceScale?: string | null;
+  /** L'unita' della variazione quando il grafico ne mostra una, null sul livello. */
+  variazione?: string | null;
 }) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
@@ -593,8 +640,8 @@ function ChartTooltip({
     <div className="rounded border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
       <div className="font-medium">{formatMacroDate(p.date)}</div>
       {p.period && <div className="text-muted-foreground tabular-nums">{p.period}</div>}
-      <div className="font-bold tabular-nums mt-0.5">
-        {formatMacroValue(p.value, valueKind, sourceScale)}
+      <div className={cn("font-bold tabular-nums mt-0.5", variazione && tonoVariazione(p.value))}>
+        {variazione ? formatVariazioneMacro(p.value, variazione) : formatMacroValue(p.value, valueKind, sourceScale)}
       </div>
     </div>
   );

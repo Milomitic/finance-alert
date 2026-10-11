@@ -135,10 +135,13 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
    * «−62K». Quella relativa di prima su una percentuale — 0.4% contro 0.6% =
    * «−33%» — non dice niente. */
   const sorpresaC = actual != null && attualeC != null && previstoC != null ? attualeC - previstoC : null;
-  const toneC: "pos" | "neg" | "neutral" =
-    actual != null && attualeC != null && previstoC != null
-      ? attualeC > previstoC ? "pos" : attualeC < previstoC ? "neg" : "neutral"
-      : "neutral";
+  /* ⚠️ Contro la stima DEL SUO RILASCIO, dall'archivio dei consensi. Prima
+   * dell'uscita «Attuale» e' il dato del mese scorso e «Previsto» la stima per
+   * questo mese: colorare l'uno contro l'altro segnerebbe come delusione
+   * un'accelerazione gia' prevista. Senza la stima del suo rilascio resta
+   * neutro invece di indovinare. */
+  const stimaDiAttuale = event.previsto_attuale ?? null;
+  const toneC = toneContro(attualeC, stimaDiAttuale);
 
   return (
     <div className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2.5">
@@ -151,9 +154,11 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <SlotConsenso
           label="Attuale"
-          hint={actual != null
-            ? "Il dato appena uscito, nell'unità del consenso. Verde se sopra il previsto, rosso se sotto."
-            : "L'ultima release ufficiale, nell'unità del consenso: è la base da cui parte il previsto."}
+          hint={stimaDiAttuale != null
+            ? `Verde se sopra la stima del suo rilascio (${formatConsenso(stimaDiAttuale, formato, conSegno)}), rosso se sotto.`
+            : actual != null
+              ? "Il dato appena uscito, nell'unità del consenso."
+              : "L'ultima release ufficiale. Il colore arriva quando l'archivio conosce la stima di quel rilascio: Forexfactory pubblica solo la settimana in corso."}
           testo={formatConsenso(attualeC, formato, conSegno)}
           tone={toneC}
           big
@@ -273,7 +278,13 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
       )}
 
       {expanded && history.length >= 2 && (
-        <ExtendedHistoryChart history={history} unit={unit} />
+        <ExtendedHistoryChart
+          history={history}
+          unit={unit}
+          consenso={nelConsenso ? event.storico_consenso ?? [] : null}
+          formato={formato ?? null}
+          conSegno={conSegno}
+        />
       )}
     </div>
   );
@@ -455,13 +466,32 @@ function MacroMiniBars({
 
 /** Taller chart of the last ~36 observations. Used when the user
  *  expands the macro insight strip in the detail panel. */
+function toneContro(v: number | null | undefined, stima: number | null | undefined): "pos" | "neg" | "neutral" {
+  if (v == null || stima == null) return "neutral";
+  return v > stima ? "pos" : v < stima ? "neg" : "neutral";
+}
+
+const TONO_TESTO = {
+  pos: "text-emerald-800 dark:text-emerald-400",
+  neg: "text-rose-600 dark:text-rose-400",
+  neutral: "",
+} as const;
+
 function ExtendedHistoryChart({
   history,
   unit,
+  consenso,
+  formato,
+  conSegno,
 }: {
   history: { date: string; value: number | null }[];
   unit: string;
+  /** Previsto e attuale per periodo, nell'unita' del consenso; null senza consenso. */
+  consenso: { periodo: string; previsto?: number | null; attuale?: number | null }[] | null;
+  formato: string | null;
+  conSegno: boolean;
 }) {
+  const perPeriodo = new Map((consenso ?? []).map((c) => [c.periodo, c]));
   const pts = history.filter(
     (p): p is { date: string; value: number } =>
       p.value != null && Number.isFinite(p.value),
@@ -527,20 +557,23 @@ function ExtendedHistoryChart({
         {formatMacroDate(last.date)}
       </div>
 
-      {/* Tabular history. Per user feedback (Phase 3G), the "Δ vs prec."
-          column was dropped — comparing raw observations of e.g. CPI
-          index numbers via percent-change is structurally noisy and
-          not the editorially useful number. We keep "Periodo" + "Valore"
-          and leave Atteso/Sorpresa as placeholders for past observations
-          since Forexfactory's consensus is only published the week of
-          the release; historical consensus values aren't free to
-          backfill (would need TradingEconomics). */}
+      {/* Lo storico. Con un consenso porta «Previsto» e «Attuale»
+          nell'unita' del consenso, l'attuale colorato contro la stima del
+          SUO rilascio (2026-10-11). I previsti vengono dall'archivio, che si
+          riempie da quel giorno: Forexfactory pubblica solo la settimana in
+          corso, e i previsti passati restano «—» invece di essere inventati. */}
       <div className="mt-2 pt-2 border-t border-current/15 overflow-x-auto">
         <table className="w-full text-[0.7059rem] tabular-nums">
           <thead>
             <tr className="text-[0.6765rem] uppercase tracking-wider opacity-60">
               <th className="text-left font-semibold pb-1">Periodo</th>
               <th className="text-right font-semibold pb-1">Valore</th>
+              {consenso && (
+                <>
+                  <th className="text-right font-semibold pb-1">Previsto</th>
+                  <th className="text-right font-semibold pb-1">Attuale</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -549,9 +582,20 @@ function ExtendedHistoryChart({
               .map((p) => (
                 <tr key={p.date} className="border-t border-current/10">
                   <td className="py-1 text-left">{formatMacroDate(p.date)}</td>
-                  <td className="py-1 text-right font-semibold">
+                  <td className={cn("py-1 text-right", consenso ? "opacity-70" : "font-semibold")}>
                     {formatMacroValue(p.value, unit)}
                   </td>
+                  {consenso && (() => {
+                    const c = perPeriodo.get(p.date);
+                    return (
+                      <>
+                        <td className="py-1 text-right opacity-80">{formatConsenso(c?.previsto, formato, conSegno)}</td>
+                        <td className={cn("py-1 text-right font-bold", TONO_TESTO[toneContro(c?.attuale, c?.previsto)])}>
+                          {formatConsenso(c?.attuale, formato, conSegno)}
+                        </td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))
               .reverse()}

@@ -41,6 +41,7 @@ const JOB_LABEL: Record<string, string> = {
   addestra_modelli_ombra: "Addestramento modelli in prova",
   archivia_fondamentali: "Archivio analisti / scoperto / insider",
   archivia_opzioni: "Archivio volatilità implicita (opzioni USA)",
+  archivia_consenso_macro: "Archivio consensi macro (Forexfactory)",
 };
 
 // Grace window before a past-due next_run_time reads as "in ritardo": the

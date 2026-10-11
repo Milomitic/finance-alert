@@ -117,3 +117,33 @@ class MacroReleaseDate(Base):
         nullable=False, index=True,
     )
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+
+class MacroConsenso(Base):
+    """Il consenso di un rilascio macro come lo pubblicava Forexfactory quella
+    settimana: previsto, dato uscito e precedente, nell'unita' del consenso.
+
+    ⚠️ Esiste perche' Forexfactory pubblica SOLO la settimana in corso: il
+    previsto di un rilascio passato non si recupera piu'. Senza archivio non si
+    puo' dire se l'ultimo dato ha battuto la SUA stima — e confrontarlo con la
+    stima del rilascio dopo, che riguarda un altro mese, colorerebbe come una
+    delusione un'accelerazione gia' prevista. Si riempie da quando esiste
+    (2026-10-11); le righe prima non ci sono e non si inventano.
+    """
+
+    __tablename__ = "macro_consenso"
+    __table_args__ = (UniqueConstraint("etichetta", "data", name="uq_macro_consenso_rilascio"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    #: L'etichetta del NOSTRO calendario («US CPI release»), non il titolo FF.
+    etichetta: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    #: Il giorno del rilascio.
+    data: Mapped[date] = mapped_column(Date, nullable=False)
+    titolo: Mapped[str] = mapped_column(String(128), nullable=False)
+    previsto: Mapped[float | None] = mapped_column(Float, nullable=True)
+    attuale: Mapped[float | None] = mapped_column(Float, nullable=True)
+    precedente: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: "%" | "K" | "M" | "B" | "" — i valori sono gia' in quella scala.
+    formato: Mapped[str] = mapped_column(String(4), nullable=False, default="")
+    aggiornato_il: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+

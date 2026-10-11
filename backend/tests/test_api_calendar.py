@@ -505,3 +505,36 @@ def test_the_curated_map_declares_the_scale_where_fred_has_one():
     # Una percentuale non ha scala da dichiarare: il campo resta vuoto invece
     # di prendere "ones" per riempirlo.
     assert by_id["UNRATE"].source_scale is None
+
+
+def test_macro_detail_porta_variazioni_consenso_e_analisi(authed_client: TestClient, db: Session):
+    """Le variazioni in tabella, il consenso archiviato del periodo e i numeri
+    della pagina (2026-10-11)."""
+
+    from datetime import date as _d
+
+    from app.models.macro import MacroConsenso, MacroObservation, MacroSeries
+
+    series = MacroSeries(fred_series_id="CPITEST", label="US CPI release", region="US",
+                         importance="high", unit="index")
+    db.add(series)
+    db.flush()
+    for i in range(14):
+        mese = _d(2025 + (i // 12), i % 12 + 1, 1)
+        db.add(MacroObservation(series_id=series.id, date=mese, value=round(100 * 1.01 ** i, 6)))
+    # Il CPI di febbraio 2026 (l'ultimo) esce a marzo: stimato 0.8, uscito 1.0.
+    db.add(MacroConsenso(etichetta="US CPI release", data=_d(2026, 3, 11), titolo="CPI m/m", previsto=0.8,
+                         attuale=1.0, formato="%", aggiornato_il=datetime(2026, 3, 11, tzinfo=UTC)))
+    db.commit()
+
+    body = authed_client.get(f"/api/macro/{series.id}").json()
+    assert body["unita_variazione"] == "%"
+    assert body["formato_consenso"] == "%"
+    ultima = body["history"][0]
+    assert ultima["observation_period"] == "2026-02-01"
+    assert ultima["variazione"] == pytest.approx(1.0, abs=1e-6)
+    assert ultima["variazione_annua"] == pytest.approx((1.01 ** 12 - 1) * 100, abs=1e-6)
+    assert (ultima["previsto_consenso"], ultima["attuale_consenso"]) == (0.8, 1.0)
+    assert body["history"][1]["previsto_consenso"] is None
+    assert body["analisi"]["n_variazioni"] == 13
+    assert body["analisi"]["serie"] == 13

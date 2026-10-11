@@ -1351,6 +1351,13 @@ export interface MacroEvent {
   previsto_consenso?: number | null;
   precedente_consenso?: number | null;
   formato_consenso?: string | null;
+  /** La stima del rilascio mostrato come «Attuale», dall'archivio dei
+   *  consensi: «Attuale» si colora contro QUESTA, non contro il previsto del
+   *  rilascio dopo (che riguarda un altro periodo). */
+  previsto_attuale?: number | null;
+  /** Per ogni periodo dello storico: la stima del suo rilascio e il dato,
+   *  nell'unita' del consenso. Null dove non si sa. */
+  storico_consenso?: { periodo: string; previsto?: number | null; attuale?: number | null }[];
   /** Stable id of the underlying MacroSeries — drives the deep-link from
    *  a calendar chip to /macro/:series_id. Null for events without a
    *  backing series row (hardcoded fallback list); the "Apri dettaglio"
@@ -1391,6 +1398,39 @@ export interface MacroRelease {
    *  endpoint so the table doesn't need a second pass. */
   previous_value?: number | null;
   release_time_utc?: string | null;
+  /** Variazione sul periodo prima e sull'anno prima: % su un indice o un
+   *  livello, punti su un tasso (`MacroSeriesDetail.unita_variazione`). */
+  variazione?: number | null;
+  variazione_annua?: number | null;
+  /** Dall'archivio dei consensi: stima del rilascio di questo periodo e dato
+   *  pubblicato, nell'unita' del consenso. Null prima dell'archivio. */
+  previsto_consenso?: number | null;
+  attuale_consenso?: number | null;
+}
+
+/** I numeri della pagina di dettaglio (`macro_analisi_service`). Ogni
+ *  statistica porta il suo campione; null dove i dati non bastano. */
+export interface MacroAnalisi {
+  ultima?: number | null;
+  media?: number | null;
+  dev_std?: number | null;
+  zscore?: number | null;
+  percentile?: number | null;
+  annualizzata_3m?: number | null;
+  serie?: number;
+  n_variazioni?: number;
+  massimo?: number | null;
+  massimo_il?: string | null;
+  minimo?: number | null;
+  minimo_il?: string | null;
+  reazione_n?: number | null;
+  reazione_rilascio?: number | null;
+  reazione_altri?: number | null;
+  reazione_ultimi?: { data: string; rendimento: number }[];
+  correlazione_r?: number | null;
+  correlazione_n?: number | null;
+  correlazione_dal?: string | null;
+  correlazione_al?: string | null;
 }
 
 /** Full payload of `/api/macro/{series_id}`. The detail page renders
@@ -1423,6 +1463,10 @@ export interface MacroSeriesDetail {
   history: MacroRelease[];
   /** Future scheduled publications (date only). */
   upcoming: string[];
+  /** "%" su un indice o un livello, "pp" su un tasso. */
+  unita_variazione?: string;
+  formato_consenso?: string | null;
+  analisi?: MacroAnalisi | null;
 }
 
 /** Discriminated union over the `kind` tag — narrowing on `kind` gives full

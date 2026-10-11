@@ -20,7 +20,7 @@ from app.models.institutional import (
     InstitutionalHolding,
 )
 from app.models.kpi_snapshot import KpiSnapshot
-from app.models.macro import MacroObservation, MacroReleaseDate, MacroSeries
+from app.models.macro import MacroConsenso, MacroObservation, MacroReleaseDate, MacroSeries
 from app.models.market_snapshot import MarketSnapshot
 from app.models.modello_ombra import ModelloOmbra
 from app.models.novita_notificata import NovitaNotificata
@@ -79,6 +79,7 @@ __all__ = [
     "RevokedSession",
     "FetchCache",
     "MacroSeries",
+    "MacroConsenso",
     "MacroObservation",
     "MacroReleaseDate",
     "Institutional",

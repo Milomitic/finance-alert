@@ -20,11 +20,14 @@ from app.api.deps import get_current_user, get_db
 from app.models import MacroObservation, MacroReleaseDate, MacroSeries, User
 from app.schemas.calendar import (
     CalendarOut,
+    ConsensoPeriodoOut,
     EarningsEventOut,
+    MacroAnalisiOut,
     MacroEventOut,
     MacroObservationOut,
     MacroReleaseOut,
     MacroSeriesDetailOut,
+    ReazioneRilascioOut,
 )
 from app.services import calendar_service
 from app.services.calendar_service import (
@@ -153,6 +156,11 @@ def get_calendar(
                 previsto_consenso=e.previsto_consenso,
                 precedente_consenso=e.precedente_consenso,
                 formato_consenso=e.formato_consenso,
+                previsto_attuale=e.previsto_attuale,
+                storico_consenso=[
+                    ConsensoPeriodoOut(periodo=d, previsto=p, attuale=a)
+                    for d, p, a in e.storico_consenso
+                ],
                 series_id=e.series_id,
                 source=e.source,
                 currency=currency_for_region(e.region),
@@ -318,6 +326,38 @@ def get_macro_detail(
         .limit(5)
     ).scalars().all()
 
+    # Variazioni e numeri della pagina (2026-10-11): vedi `macro_analisi_service`.
+    from app.services import macro_analisi_service, macro_consenso_service
+
+    an = macro_analisi_service.analisi(db, series)
+    per_data = {v.data: v for v in an.variazioni}
+    archivio = macro_consenso_service.per_periodo(
+        db, series.label, [h.observation_period for h in history if h.observation_period])
+    for h in history:
+        v = per_data.get(h.observation_period) if h.observation_period else None
+        if v is not None:
+            h.variazione, h.variazione_annua = v.sul_periodo, v.sull_anno
+        c = archivio.get(h.observation_period) if h.observation_period else None
+        if c is not None:
+            h.previsto_consenso, h.attuale_consenso = c.previsto, c.attuale
+    formato = next((c.formato for c in archivio.values() if c.formato), None)
+    analisi_out = MacroAnalisiOut(
+        ultima=an.ultima, media=an.media, dev_std=an.dev_std, zscore=an.zscore,
+        percentile=an.percentile, annualizzata_3m=an.annualizzata_3m, serie=an.serie,
+        n_variazioni=sum(1 for v in an.variazioni if v.sul_periodo is not None),
+        massimo=an.massimo[1] if an.massimo else None, massimo_il=an.massimo[0] if an.massimo else None,
+        minimo=an.minimo[1] if an.minimo else None, minimo_il=an.minimo[0] if an.minimo else None,
+        reazione_n=an.reazione.n if an.reazione else None,
+        reazione_rilascio=an.reazione.medio_rilascio if an.reazione else None,
+        reazione_altri=an.reazione.medio_altri if an.reazione else None,
+        reazione_ultimi=[ReazioneRilascioOut(data=d, rendimento=r) for d, r in an.reazione.ultimi]
+        if an.reazione else [],
+        correlazione_r=an.correlazione.r if an.correlazione else None,
+        correlazione_n=an.correlazione.n if an.correlazione else None,
+        correlazione_dal=an.correlazione.dal if an.correlazione else None,
+        correlazione_al=an.correlazione.al if an.correlazione else None,
+    )
+
     return MacroSeriesDetailOut(
         series_id=series.id,
         fred_series_id=series.fred_series_id,
@@ -333,4 +373,7 @@ def get_macro_detail(
         latest=latest,
         history=history,
         upcoming=list(upcoming_rows),
+        unita_variazione=an.unita_variazione,
+        formato_consenso=formato,
+        analisi=analisi_out,
     )

@@ -35,7 +35,7 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
   });
 
   it("uscito il dato: la sorpresa e' una differenza in punti, non un rapporto", () => {
-    monta({ ...CPI, actual_value: 0.3, attuale_consenso: 0.3, precedente_consenso: 0.4, surprise_pct: -50 });
+    monta({ ...CPI, actual_value: 0.3, attuale_consenso: 0.3, precedente_consenso: 0.4, surprise_pct: -50, previsto_attuale: 0.6 });
     expect(screen.getByText("+0.3%").className).toContain("rose");
     expect(screen.getByText(/Sorpresa/)).toHaveTextContent(/-0\.3 pp/);
     expect(screen.queryByText(/-50/)).toBeNull();
@@ -49,5 +49,42 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
     expect(delta).toHaveTextContent("+0.4% vs prec.");
     expect(delta.className).toContain("text-sm");
     expect(delta.className).toContain("font-bold");
+  });
+
+  it("prima dell'uscita: «Attuale» contro la stima del SUO rilascio, non quella del prossimo", () => {
+    // Settembre: stimato 0.3, uscito 0.4 -> verde, anche se il previsto per
+    // ottobre (0.6) e' piu' alto.
+    monta({ ...CPI, previsto_attuale: 0.3 });
+    expect(screen.getAllByText("+0.4%")[0].className).toContain("emerald");
+  });
+
+  it("senza la stima del suo rilascio resta neutro invece di indovinare", () => {
+    monta(CPI);
+    const attuale = screen.getAllByText("+0.4%")[0];
+    expect(attuale.className).not.toContain("emerald");
+    expect(attuale.className).not.toContain("rose");
+  });
+
+  it("lo storico porta previsto e attuale, l'attuale colorato contro il previsto", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    monta({ ...CPI, storico_consenso: [
+      { periodo: "2026-06-01", previsto: null, attuale: null },
+      { periodo: "2026-07-01", previsto: null, attuale: 0.396 },
+      { periodo: "2026-08-01", previsto: 0.5, attuale: 0.4 },
+    ] });
+    await userEvent.click(screen.getByRole("button", { name: /Storico/ }));
+    const tabella = screen.getByRole("table");
+    expect(tabella).toHaveTextContent("Previsto");
+    const righe = tabella.querySelectorAll("tbody tr");
+    // La piu' recente in cima: agosto, stimato 0.5, uscito 0.4 -> rosso.
+    const agosto = righe[0].querySelectorAll("td");
+    expect(agosto[2]).toHaveTextContent("+0.5%");
+    expect(agosto[3]).toHaveTextContent("+0.4%");
+    expect(agosto[3].className).toContain("rose");
+    // Luglio: nessun previsto archiviato -> «—», e l'attuale senza colore.
+    const luglio = righe[1].querySelectorAll("td");
+    expect(luglio[2]).toHaveTextContent("—");
+    expect(luglio[3].className).not.toContain("rose");
+    expect(luglio[3].className).not.toContain("emerald");
   });
 });

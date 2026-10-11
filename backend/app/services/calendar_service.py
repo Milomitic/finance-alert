@@ -118,6 +118,12 @@ class MacroEventDC:
     precedente_consenso: float | None = None
     #: "%" | "K" | "M" | "B" | "" — come scrivere i tre valori del consenso.
     formato_consenso: str | None = None
+    #: La stima del rilascio mostrato come «Attuale», dall'archivio: e' contro
+    #: QUESTA che si colora, non contro il previsto del rilascio dopo.
+    previsto_attuale: float | None = None
+    #: (periodo, previsto, attuale) per ogni osservazione dello storico,
+    #: nell'unita' del consenso. None dove non si sa.
+    storico_consenso: list[tuple[date, float | None, float | None]] = field(default_factory=list)
     # Backing MacroSeries id — drives the link to /macro/:series_id from
     # the calendar event chip. None when the event came from the
     # hardcoded fallback list AND no MacroSeries with the same `label`
@@ -438,7 +444,47 @@ def valori_nel_consenso(
     return prima, previsto, precedente, formato
 
 
-def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
+def _stessa_misura(titolo: str, unita_fred: str | None, storia, riferimenti: list[float | None]) -> bool:
+    """La serie FRED e' la stessa misura del consenso: e' una m/m su un indice
+    o un livello, e la sua ultima variazione coincide con uno dei valori
+    pubblicati (il precedente, o il dato appena uscito)."""
+    if not re.search(r"(?<![a-z])m/m(?![a-z])", titolo, re.IGNORECASE) or unita_fred not in ("index", "level"):
+        return False
+    livelli = [v for _, v in storia if v is not None]
+    if len(livelli) < 2 or not livelli[-2]:
+        return False
+    ultima = (livelli[-1] / livelli[-2] - 1.0) * 100.0
+    return any(r is not None and abs(ultima - r) <= _TOLLERANZA_CONSENSO for r in riferimenti)
+
+
+def _consenso_dall_archivio(db: Session, ev: MacroEventDC, titolo: str, uscito: bool) -> None:
+    """`previsto_attuale` e `storico_consenso` dall'archivio dei consensi."""
+    from app.services import macro_consenso_service as arch
+
+    if uscito:
+        ev.previsto_attuale = ev.previsto_consenso
+    else:
+        r = arch.ultimo_prima(db, ev.label, ev.date)
+        # Solo se il rilascio archiviato e' DAVVERO quello mostrato come attuale.
+        if (r is not None and r.attuale is not None and ev.attuale_consenso is not None
+                and abs(r.attuale - ev.attuale_consenso) <= _TOLLERANZA_CONSENSO):
+            ev.previsto_attuale = r.previsto
+    periodi = [d for d, _ in ev.history]
+    archivio = arch.per_periodo(db, ev.label, periodi)
+    verificata = _stessa_misura(titolo, ev.unit, ev.history, [ev.attuale_consenso, ev.precedente_consenso])
+    out: list[tuple[date, float | None, float | None]] = []
+    prima: float | None = None
+    for d, v in ev.history:
+        r = archivio.get(d)
+        attuale = r.attuale if r is not None and r.attuale is not None else None
+        if attuale is None and verificata and v is not None and prima:
+            attuale = (v / prima - 1.0) * 100.0
+        out.append((d, r.previsto if r is not None else None, attuale))
+        prima = v if v is not None else prima
+    ev.storico_consenso = out
+
+
+def _enrich_with_forexfactory(ev: MacroEventDC, db: Session | None = None) -> None:
     """Mutate `ev` in place: attach `expected_value`, `actual_value`,
     `surprise_pct` (and as backup `prev_value`) from Forexfactory's
     free weekly XML feed when a consensus is available for this
@@ -470,6 +516,8 @@ def _enrich_with_forexfactory(ev: MacroEventDC) -> None:
      ev.formato_consenso) = valori_nel_consenso(
         ff_event.title, ff_event.forecast, ff_event.actual, ff_event.previous, ev.unit, ev.history,
     )
+    if db is not None:
+        _consenso_dall_archivio(db, ev, ff_event.title, uscito=ff.parse_numeric(ff_event.actual) is not None)
     if actual is not None:
         ev.actual_value = actual
     # Only fall back to FF's `previous` when FRED hasn't already
@@ -583,7 +631,7 @@ def get_events(
         # even for a 2-week window with ~50 macro events.
         for ev in events:
             if isinstance(ev, MacroEventDC):
-                _enrich_with_forexfactory(ev)
+                _enrich_with_forexfactory(ev, db)
 
     # Final sort:
     #   primary: date asc

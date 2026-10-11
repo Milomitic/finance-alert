@@ -231,6 +231,12 @@ export interface ConfluenceOut {
   components: ConfluenceComponentOut[];
 }
 
+export interface ConsensoPeriodoOut {
+  periodo: string;
+  previsto?: number | null;
+  attuale?: number | null;
+}
+
 export interface CountBucket {
   label: string;
   count: number;
@@ -985,6 +991,29 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface MacroAnalisiOut {
+  ultima?: number | null;
+  media?: number | null;
+  dev_std?: number | null;
+  zscore?: number | null;
+  percentile?: number | null;
+  annualizzata_3m?: number | null;
+  serie?: number;
+  n_variazioni?: number;
+  massimo?: number | null;
+  massimo_il?: string | null;
+  minimo?: number | null;
+  minimo_il?: string | null;
+  reazione_n?: number | null;
+  reazione_rilascio?: number | null;
+  reazione_altri?: number | null;
+  reazione_ultimi?: ReazioneRilascioOut[];
+  correlazione_r?: number | null;
+  correlazione_n?: number | null;
+  correlazione_dal?: string | null;
+  correlazione_al?: string | null;
+}
+
 export interface MacroEventOut {
   date: string;
   kind?: "macro";
@@ -1009,6 +1038,8 @@ export interface MacroEventOut {
   previsto_consenso?: number | null;
   precedente_consenso?: number | null;
   formato_consenso?: string | null;
+  previsto_attuale?: number | null;
+  storico_consenso?: ConsensoPeriodoOut[];
 }
 
 export interface MacroObservationOut {
@@ -1025,6 +1056,10 @@ export interface MacroReleaseOut {
   expected_value?: number | null;
   previous_value?: number | null;
   release_time_utc?: string | null;
+  variazione?: number | null;
+  variazione_annua?: number | null;
+  previsto_consenso?: number | null;
+  attuale_consenso?: number | null;
 }
 
 export interface MacroSeriesDetailOut {
@@ -1042,6 +1077,9 @@ export interface MacroSeriesDetailOut {
   latest?: MacroReleaseOut | null;
   history?: MacroReleaseOut[];
   upcoming?: string[];
+  unita_variazione?: string;
+  formato_consenso?: string | null;
+  analisi?: MacroAnalisiOut | null;
 }
 
 export interface MarketDetailOut {
@@ -1470,6 +1508,11 @@ export interface PriceAlertUpdate {
   target_price?: number | null;
   direction?: string | null;
   note?: string | null;
+}
+
+export interface ReazioneRilascioOut {
+  data: string;
+  rendimento: number;
 }
 
 export interface RecentScanOut {

@@ -155,6 +155,7 @@ export type _M9_ScoreHistoryOut = Nessuno<SoloNelFrontend<M9.ScoreHistoryOut, S.
 export type _M9_EarningsEvent = Nessuno<SoloNelFrontend<M9.EarningsEvent, S.EarningsEventOut>>;
 export type _M9_MacroEvent = Nessuno<SoloNelFrontend<M9.MacroEvent, S.MacroEventOut>>;
 export type _M9_MacroRelease = Nessuno<SoloNelFrontend<M9.MacroRelease, S.MacroReleaseOut>>;
+export type _M9_MacroAnalisi = Nessuno<SoloNelFrontend<M9.MacroAnalisi, S.MacroAnalisiOut>>;
 export type _M9_MacroSeriesDetail = Nessuno<SoloNelFrontend<M9.MacroSeriesDetail, S.MacroSeriesDetailOut>>;
 export type _M9_Calendar = Nessuno<SoloNelFrontend<M9.Calendar, S.CalendarOut>>;
 export type _M9_InstitutionalSummary = Nessuno<SoloNelFrontend<M9.InstitutionalSummary, S.InstitutionalSummaryOut>>;

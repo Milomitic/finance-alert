@@ -37,6 +37,14 @@ class EarningsEventOut(BaseModel):
     surprise_pct: float | None = None
 
 
+class ConsensoPeriodoOut(BaseModel):
+    """Un periodo dello storico nell'unita' del consenso: la stima del suo
+    rilascio (dall'archivio) e il dato. None dove non si sa."""
+    periodo: date
+    previsto: float | None = None
+    attuale: float | None = None
+
+
 class MacroObservationOut(BaseModel):
     """One historical print, used for the small sparkline in the
     calendar's macro detail panel."""
@@ -103,6 +111,10 @@ class MacroEventOut(BaseModel):
     previsto_consenso: float | None = None
     precedente_consenso: float | None = None
     formato_consenso: str | None = None
+    # La stima del rilascio mostrato come attuale (dall'archivio dei consensi):
+    # «Attuale» si colora contro questa, non contro il previsto del rilascio dopo.
+    previsto_attuale: float | None = None
+    storico_consenso: list[ConsensoPeriodoOut] = []
 
 
 CalendarEvent = Annotated[
@@ -140,6 +152,46 @@ class MacroReleaseOut(BaseModel):
     expected_value: float | None = None
     previous_value: float | None = None  # the reading immediately before this one
     release_time_utc: str | None = None  # "14:30" UTC, when known
+    # Variazione sul periodo prima e sull'anno prima: % su un indice o un
+    # livello, punti su un tasso (`MacroSeriesDetailOut.unita_variazione`).
+    variazione: float | None = None
+    variazione_annua: float | None = None
+    # Dall'archivio dei consensi: la stima del rilascio di questo periodo e il
+    # dato pubblicato, nell'unita' del consenso. None prima che l'archivio esista.
+    previsto_consenso: float | None = None
+    attuale_consenso: float | None = None
+
+
+class ReazioneRilascioOut(BaseModel):
+    data: date
+    rendimento: float
+
+
+class MacroAnalisiOut(BaseModel):
+    """I numeri della pagina di dettaglio: vedi `macro_analisi_service`.
+    Ogni statistica porta il suo campione; None dove i dati non bastano."""
+    ultima: float | None = None
+    media: float | None = None
+    dev_std: float | None = None
+    zscore: float | None = None
+    percentile: float | None = None
+    annualizzata_3m: float | None = None
+    serie: int = 0
+    n_variazioni: int = 0
+    massimo: float | None = None
+    massimo_il: date | None = None
+    minimo: float | None = None
+    minimo_il: date | None = None
+    # Lo SPY nei giorni di rilascio contro gli altri, movimento assoluto in %.
+    reazione_n: int | None = None
+    reazione_rilascio: float | None = None
+    reazione_altri: float | None = None
+    reazione_ultimi: list[ReazioneRilascioOut] = []
+    # La variazione del mese contro il rendimento dello SPY nello stesso mese.
+    correlazione_r: float | None = None
+    correlazione_n: int | None = None
+    correlazione_dal: date | None = None
+    correlazione_al: date | None = None
 
 
 class MacroSeriesDetailOut(BaseModel):
@@ -172,3 +224,7 @@ class MacroSeriesDetailOut(BaseModel):
     history: list[MacroReleaseOut] = []
     # Future scheduled publications (date only, no values yet).
     upcoming: list[date] = []
+    # "%" su un indice o un livello, "pp" su un tasso.
+    unita_variazione: str = "%"
+    formato_consenso: str | None = None
+    analisi: MacroAnalisiOut | None = None

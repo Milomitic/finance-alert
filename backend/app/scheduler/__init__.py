@@ -8,6 +8,7 @@ from loguru import logger
 
 from app.core import db as db_module
 from app.core.config import settings
+from app.scheduler.jobs.archivia_consenso_macro import run_archivia_consenso_macro
 from app.scheduler.jobs.archivio_non_prezzo import run_archivia_fondamentali, run_archivia_opzioni
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
 from app.scheduler.jobs.db_backup import run_db_backup
@@ -111,6 +112,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_archivia_fondamentali,
             trigger=_cron(day_of_week="*", hour=0, minute=30),
             id="archivia_fondamentali",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # I consensi macro: Forexfactory pubblica solo la settimana in corso,
+        # quindi un rilascio non archiviato quella settimana perde il previsto.
+        _scheduler.add_job(
+            run_archivia_consenso_macro,
+            trigger=_cron(hour="*/6", minute=17),
+            id="archivia_consenso_macro",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
