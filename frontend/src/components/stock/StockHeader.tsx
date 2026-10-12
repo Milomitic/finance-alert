@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import type { OhlcvBar, Stock, StockKpis } from "@/api/types";
 import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { EtfMembershipStrip } from "@/components/stock/EtfMembershipChips";
+import { EtoroMarchio } from "@/components/stock/EtoroMarchio";
 import { IndexMembershipChips } from "@/components/stock/IndexMembershipChips";
 import { StellaPreferito } from "@/components/stock/StellaPreferito";
 import { StockLogo } from "@/components/dashboard/StockLogo";
@@ -14,6 +15,11 @@ import { useNowTick } from "@/hooks/useNowTick";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
+
+/** Una sola forma per le etichette sotto il nome: borsa, indici, settore,
+ *  sotto-settore e fondi si leggono come la stessa famiglia. */
+const ETICHETTA =
+  "inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors";
 
 interface Props {
   stock: Stock;
@@ -28,8 +34,8 @@ interface Props {
    *  con un prezzo in cima. Chi compone la pagina decide, e sotto il Full HD
    *  non passa nulla — a quelle larghezze il profilo ha una riga sua. */
   sotto?: React.ReactNode;
-  /** Negoziabile su eToro (FA-126): arriva col dettaglio, quindi l'etichetta
-   *  c'e' dal primo disegno e non manda a capo la riga dopo. */
+  /** Negoziabile su eToro (FA-126): arriva col dettaglio, quindi il marchio
+   *  accanto al ticker c'e' dal primo disegno. */
   suEtoro?: boolean;
 }
 
@@ -167,73 +173,77 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                     {stock.ticker}
                   </span>
                   <StellaPreferito ticker={stock.ticker} />
+                  <EtoroMarchio su={suEtoro} />
                 </span>
                 <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>
                   {stock.name}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              {/* Exchange / indice di riferimento — cliccabile: porta allo
-                  screener filtrato per questa borsa. La bandiera del paese
-                  vive dentro il tag (il listing è proprietà dell'exchange). */}
-              <Link
-                to={`/stocks?exchange=${encodeURIComponent(stock.exchange)}`}
-                title={`Vedi i titoli su ${stock.exchange}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
-              >
-                {flag && (
-                  <img
-                    src={`/flags/${flag}.svg`}
-                    alt={stock.country ?? ""}
-                    width={18}
-                    height={12}
-                    style={{ width: "18px", height: "12px", objectFit: "cover" }}
-                    className="rounded-sm shadow-sm"
-                    aria-hidden
-                  />
-                )}
-                {stock.exchange}
-              </Link>
-              {/* Settore — cliccabile: porta alla pagina di dettaglio settore. */}
-              {stock.sector && (
+            {/* Le etichette in tre righe, ciascuna una domanda (2026-10-12):
+                dove si quota e in quali indici sta; in che settore e
+                sotto-settore; quanti fondi lo detengono. Prima erano una riga
+                sola che andava a capo dove capitava, e un indice finiva
+                accanto al settore come se fossero la stessa cosa. */}
+            <div className="mt-3 flex flex-col items-start gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* Exchange: cliccabile, porta allo screener filtrato per questa
+                    borsa. La bandiera vive dentro il tag (il listing e'
+                    proprieta' dell'exchange). */}
                 <Link
-                  to={`/sectors/${encodeURIComponent(stock.sector)}`}
-                  title={`Vedi il settore ${stock.sector}`}
-                  className="inline-flex items-center rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
+                  to={`/stocks?exchange=${encodeURIComponent(stock.exchange)}`}
+                  title={`Vedi i titoli su ${stock.exchange}`}
+                  className={ETICHETTA}
                 >
-                  {stock.sector}
+                  {flag && (
+                    <img
+                      src={`/flags/${flag}.svg`}
+                      alt={stock.country ?? ""}
+                      width={18}
+                      height={12}
+                      style={{ width: "18px", height: "12px", objectFit: "cover" }}
+                      className="rounded-sm shadow-sm"
+                      aria-hidden
+                    />
+                  )}
+                  {stock.exchange}
                 </Link>
+                {/* Gli INDICI: appartenenza completa, non "fra i primi 25" come
+                    le chip ETF. */}
+                <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
+              </div>
+              {(stock.sector || stock.industry) && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {stock.sector && (
+                    <Link
+                      to={`/sectors/${encodeURIComponent(stock.sector)}`}
+                      title={`Vedi il settore ${stock.sector}`}
+                      className={ETICHETTA}
+                    >
+                      {stock.sector}
+                    </Link>
+                  )}
+                  {stock.industry && (
+                    <Link
+                      to={`/stocks?industry=${encodeURIComponent(stock.industry)}`}
+                      title={`Vedi i titoli del sotto-settore ${stock.industry}`}
+                      className={cn(ETICHETTA, "text-foreground/80")}
+                    >
+                      {stock.industry}
+                    </Link>
+                  )}
+                </div>
               )}
-              {/* Appartenenze. Gli INDICI vengono prima perche' l'appartenenza
-                  e' completa; i FONDI dopo perche' dicono solo "fra i primi 25".
-                  Le due formulazioni sono vincolate da test separati — sembrano
-                  la stessa chip e affermano cose diverse. */}
-              <IndexMembershipChips ticker={stock.ticker} indices={stock.in_indices} />
               {/* I fondi tracciati che lo detengono (13F / superinvestor): lo
                   stesso numero del badge dello screener. Porta all'elenco dei
-                  detentori nella colonna a destra. Zero non si mostra: un
-                  titolo senza fondi non ha bisogno di un'etichetta che lo dica. */}
+                  detentori. Zero non si mostra: un titolo senza fondi non ha
+                  bisogno di un'etichetta che lo dica. */}
               {stock.fondi_detentori ? (
-                <a
-                  href="#fondi-detentori"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
-                >
+                <a href="#fondi-detentori" className={ETICHETTA}>
                   <Building2 className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                   {stock.fondi_detentori} {stock.fondi_detentori === 1 ? "fondo lo detiene" : "fondi lo detengono"}
                 </a>
               ) : null}
-              {suEtoro && (
-                <span
-                  className="inline-flex items-center rounded-md border border-emerald-300/60 bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                  title="Questo titolo si negozia su eToro"
-                >
-                  Su eToro
-                </span>
-              )}
-              {/* I FONDI non stanno piu' qui: hanno una fascia propria sotto,
-                  in evidenza. Alla stessa taglia di borsa e settore si
-                  leggevano come un'etichetta in piu'. */}
             </div>
           </div>
 
