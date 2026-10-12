@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TickerHolder } from "@/api/types";
 
-import { ordina, riepilogo, variazione } from "./fondiDetentori";
+import { ordina, ordinaPerData, riepilogo, variazione } from "./fondiDetentori";
 
 function fondo(id: number, nome: string, extra: Partial<TickerHolder> = {}): TickerHolder {
   return {
@@ -44,5 +44,16 @@ describe("i fondi che detengono un titolo", () => {
     expect(variazione(fondo(6, "B", { shares_change_pct: -12.4, action: "reduce" })))
       .toMatchObject({ testo: "−12% az.", tono: "giu" });
     expect(variazione(fondo(7, "C", { action: null }))).toBeNull();
+  });
+});
+
+describe("le ultime operazioni", () => {
+  it("la dichiarazione piu' recente prima, a parita' di data la posizione piu' grande", () => {
+    const f = [
+      fondo(1, "A", { period_end_date: "2026-03-31", value_usd: 9e9 }),
+      fondo(2, "B", { period_end_date: "2026-06-30", value_usd: 1e6 }),
+      fondo(3, "C", { period_end_date: "2026-06-30", value_usd: 5e6 }),
+    ];
+    expect(ordinaPerData(f).map((h) => h.institutional_id)).toEqual([3, 2, 1]);
   });
 });

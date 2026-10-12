@@ -76,3 +76,11 @@ export function variazione(h: TickerHolder): Variazione | null {
   if (h.action === "hold") return { testo: "=", tono: "fermo", spiegazione: "posizione invariata" };
   return null;
 }
+
+/** Le ultime operazioni: la dichiarazione piu' recente prima, e a parita' di
+ *  data la posizione piu' grande. */
+export function ordinaPerData(fondi: readonly TickerHolder[]): TickerHolder[] {
+  return [...fondi].sort(
+    (a, b) => b.period_end_date.localeCompare(a.period_end_date) || (b.value_usd ?? -1) - (a.value_usd ?? -1),
+  );
+}
