@@ -9,6 +9,7 @@ import {
   BARRA_PUNTEGGIO, ETICHETTA_PUNTEGGIO, FONDO_PUNTEGGIO, RIGA_PUNTEGGIO, VALORE_PUNTEGGIO,
 } from "@/lib/rigaPunteggio";
 import { scoreBgColor, scoreColor } from "@/lib/scoreMeta";
+import { CONFIDENZA_BASSA } from "@/lib/confidenza";
 import { cn } from "@/lib/utils";
 
 const DIMS: { key: "trend" | "momentum" | "structure" | "volume" | "rel_strength"; label: string }[] = [
@@ -66,21 +67,38 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
           <div className="text-xs text-muted-foreground italic">Punteggio tecnico non ancora calcolato.</div>
         ) : (
           <>
-            <div className="flex items-baseline gap-2">
-              <span className={cn("text-3xl font-bold tabular-nums", scoreColor(data.composite))}>
-                {data.composite.toFixed(0)}
-              </span>
-              <span className="text-xs text-muted-foreground">/ 100</span>
-              {/* Rango di SETTORE. Non c'e' un rango d'universo perche' la
-                  "Forza relativa" qui sotto e' gia' misurata su tutto il
-                  catalogo: sarebbe il percentile di un percentile. Questo dice
-                  un'altra cosa — un titolo puo' essere anonimo nell'universo e
-                  il piu' forte di un settore debole.
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className={cn("text-3xl font-bold tabular-nums", scoreColor(data.composite))}>
+                  {data.composite.toFixed(0)}
+                </span>
+                <span className="text-xs text-muted-foreground">/ 100</span>
+                {/* La confidenza dell'ultimo segnale si mostra solo quando e'
+                    BASSA (sotto il 50%): e' un avvertimento, e un 95% accanto
+                    a ogni punteggio era rumore che nessuno leggeva. Stessa
+                    regola della scheda Stock Score. */}
+                {data.signals != null && data.signals < CONFIDENZA_BASSA && (
+                  <span
+                    className="ml-auto self-center text-[0.7059rem] text-muted-foreground"
+                    title="Confidenza dell'ultimo segnale emesso su questo titolo: sotto il 50% va letto con cautela"
+                  >
+                    Confidenza{" "}
+                    <span className="font-semibold text-foreground/80">
+                      {data.signals.toFixed(0)}%
+                    </span>
+                  </span>
+                )}
+              </div>
+              {/* Rango di SETTORE, sotto il punteggio. Non c'e' un rango
+                  d'universo perche' la "Forza relativa" qui sotto e' gia'
+                  misurata su tutto il catalogo: sarebbe il percentile di un
+                  percentile. Questo dice un'altra cosa — un titolo puo' essere
+                  anonimo nell'universo e il piu' forte di un settore debole.
                   Con un solo pari non e' una classifica e non la si mostra. */}
               {data.sector_rank != null &&
                 data.sector_peers != null &&
                 data.sector_peers > 1 && (
-                  <span
+                  <div
                     className="text-[0.7059rem] text-muted-foreground"
                     title={`Posizione del composito tecnico fra i ${data.sector_peers} titoli del settore con un punteggio calcolato (1 = il più forte). La Forza relativa qui sotto è invece misurata sull'intero catalogo.`}
                   >
@@ -88,19 +106,8 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                       {data.sector_rank}ª
                     </span>{" "}
                     su {data.sector_peers} nel settore
-                  </span>
+                  </div>
                 )}
-              {data.signals != null && (
-                <span
-                  className="ml-auto self-center text-[0.7059rem] text-muted-foreground"
-                  title="Confidenza dell'ultimo segnale emesso su questo titolo"
-                >
-                  Confidenza{" "}
-                  <span className="font-semibold text-foreground/80">
-                    {data.signals.toFixed(0)}%
-                  </span>
-                </span>
-              )}
             </div>
             {/* Stessa forma dei pilastri della scheda Stock Score
                 (`lib/rigaPunteggio`): due schede affiancate con la stessa

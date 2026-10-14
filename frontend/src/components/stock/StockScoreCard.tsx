@@ -26,6 +26,7 @@ import {
 import {
   BARRA_PUNTEGGIO, ETICHETTA_PUNTEGGIO, FONDO_PUNTEGGIO, RIGA_PUNTEGGIO, VALORE_PUNTEGGIO,
 } from "@/lib/rigaPunteggio";
+import { CONFIDENZA_BASSA } from "@/lib/confidenza";
 import { cn } from "@/lib/utils";
 
 /* ─── Component label map ───────────────────────────────────────────────── */
@@ -726,8 +727,10 @@ export function StockScoreCard({ ticker }: Props) {
     ?._meta_global as
     | { coverage?: number; pillars_present?: number; pillars_total?: number }
     | undefined;
+  // Solo quando e' BASSA: sotto il 50% del peso nominale lo score poggia su
+  // pochi dati e va detto; sopra e' la norma e il numero era rumore.
   const confidenceChip =
-    mg && typeof mg.coverage === "number" ? (
+    mg && typeof mg.coverage === "number" && mg.coverage * 100 < CONFIDENZA_BASSA ? (
       <span
         className="text-[0.6765rem] tabular-nums text-muted-foreground"
         title={`Confidence: lo score poggia sul ${Math.round(mg.coverage * 100)}% del peso fattoriale nominale (${mg.pillars_present ?? "?"}/${mg.pillars_total ?? 6} pilastri con dati). Più basso = score basato su pochi input, da interpretare con cautela.`}

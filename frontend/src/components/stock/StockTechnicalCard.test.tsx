@@ -6,16 +6,14 @@ import { scoreBgColor } from "@/lib/scoreMeta";
 
 import { StockTechnicalCard } from "./StockTechnicalCard";
 
+const BASE = {
+  stock_id: 1, ticker: "SOXL", composite: 95, trend: 100, momentum: 95, structure: 98,
+  volume: 73, rel_strength: 99, signals: 98, posture: "Forte", computed_at: "2026-10-06T08:00:00Z",
+  sector_rank: null as number | null, sector_peers: null as number | null,
+};
+let dati = { ...BASE };
 vi.mock("@/hooks/useStockTechnical", () => ({
-  useStockTechnical: () => ({
-    isLoading: false,
-    noScoreYet: false,
-    data: {
-      stock_id: 1, ticker: "SOXL", composite: 95, trend: 100, momentum: 95, structure: 98,
-      volume: 73, rel_strength: 99, signals: 98, posture: "Forte", computed_at: "2026-10-06T08:00:00Z",
-      sector_rank: null, sector_peers: null,
-    },
-  }),
+  useStockTechnical: () => ({ isLoading: false, noScoreYet: false, data: dati }),
 }));
 
 function monta() {
@@ -27,15 +25,36 @@ function monta() {
 }
 
 describe("StockTechnicalCard", () => {
-  it("niente «composito» e niente «Segnale recente»: resta la confidenza", () => {
+  it("niente «composito» e niente «Segnale recente», e la confidenza alta non si mostra", () => {
+    dati = { ...BASE };
     monta();
     expect(screen.getByText("/ 100")).toBeInTheDocument();
     expect(screen.queryByText(/composito/)).toBeNull();
     expect(screen.queryByText(/Segnale recente/)).toBeNull();
-    expect(screen.getByText(/Confidenza/)).toHaveTextContent("Confidenza 98%");
+    expect(screen.queryByText(/Confidenza/)).toBeNull();
+  });
+
+  it("la confidenza compare solo sotto il 50%", () => {
+    dati = { ...BASE, signals: 49 };
+    const { unmount } = monta();
+    expect(screen.getByText(/Confidenza/)).toHaveTextContent("Confidenza 49%");
+    unmount();
+    dati = { ...BASE, signals: 50 };
+    monta();
+    expect(screen.queryByText(/Confidenza/)).toBeNull();
+  });
+
+  it("il rango nel settore va a capo, sotto il punteggio", () => {
+    dati = { ...BASE, sector_rank: 25, sector_peers: 130 };
+    monta();
+    const rango = screen.getByText(/su 130 nel settore/);
+    const punteggio = screen.getByText("/ 100").parentElement!;
+    expect(punteggio.contains(rango)).toBe(false);
+    expect(punteggio.nextElementSibling).toBe(rango);
   });
 
   it("le dimensioni hanno la forma dei pilastri della scheda Stock Score", () => {
+    dati = { ...BASE };
     // Stessa riga, stessa taglia del valore, barra colorata per fascia (non
     // piu' azzurra): due schede vicine con la stessa scala la dicono uguale.
     monta();
