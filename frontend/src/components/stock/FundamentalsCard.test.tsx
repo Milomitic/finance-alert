@@ -196,3 +196,18 @@ describe("FundamentalsCard — la valuta dei rendiconti", () => {
     expect(tabella(c).textContent).not.toContain("$");
   });
 });
+
+describe("FundamentalsCard — la confidenza", () => {
+  it("compare sotto il 90%: due anni di bilancio su quattro attesi", () => {
+    monta();
+    // 6 valori annuali su 12, trimestrale 2 su 2, risultato passato 2 su 2.
+    expect(screen.getByText("Confidenza 63%")).toHaveAttribute("title", expect.stringContaining("10 valori su 16"));
+  });
+
+  it("con il bilancio completo non c'e'", () => {
+    const anno = (y: number) => ({ fiscal_year_end: `${y}-12-31`, revenue: 1e9, net_income: 1e8, eps: 1 });
+    corrente = { ...DATI, annual: [anno(2025), anno(2024), anno(2023), anno(2022)] };
+    monta();
+    expect(screen.queryByText(/Confidenza/)).toBeNull();
+  });
+});

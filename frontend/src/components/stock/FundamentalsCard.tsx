@@ -17,7 +17,9 @@ import { SourceDegradedNote } from "@/components/stock/SourceDegradedNote";
 import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
+import { useNowTick } from "@/hooks/useNowTick";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
+import { CONFIDENZA_BASSA_FONDAMENTALI, completezzaFondamentali } from "@/lib/confidenza";
 import { formatBigMoney, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
@@ -626,6 +628,9 @@ export function FundamentalsCard({ ticker }: Props) {
   // frequently than annual (earnings season cadence is the dominant info
   // flow), and the upcoming-earnings forecast row only renders here.
   const [tab, setTab] = useState<TabKey>("quarterly");
+  // La data di oggi decide quali trimestrali sono PASSATE per la confidenza;
+  // un'ora di passo basta, e tiene fuori dal render la lettura dell'orologio.
+  const oggi = new Date(useNowTick(3_600_000)).toISOString().slice(0, 10);
 
   if (q.isLoading) {
     return (
@@ -663,6 +668,13 @@ export function FundamentalsCard({ ticker }: Props) {
       </Card>
     );
   }
+
+  // Confidenza: quanta parte del bilancio mostrato esiste davvero. Come nelle
+  // schede Stock Score e Tecnica e' un AVVERTIMENTO e si mostra solo sotto la
+  // soglia (qui il 90%, scelta dell'utente: vedi `lib/confidenza`).
+  const completezza = completezzaFondamentali(f, oggi);
+  const confidenzaBassa =
+    completezza != null && completezza.valore < CONFIDENZA_BASSA_FONDAMENTALI ? completezza : null;
 
   const hasAnnual = f.annual.length > 0;
   const hasQuarterly = f.quarterly.length > 0 || f.earnings.length > 0;
@@ -716,6 +728,14 @@ export function FundamentalsCard({ ticker }: Props) {
           className="mb-2 shrink-0"
           right={
             <div className="flex items-center gap-2">
+              {confidenzaBassa && (
+                <span
+                  className="text-[0.6765rem] tabular-nums text-muted-foreground"
+                  title={`Il bilancio mostrato è completo al ${confidenzaBassa.valore}%: ${confidenzaBassa.presenti} valori su ${confidenzaBassa.attesi} attesi (quattro anni di ricavi, utile netto e utile per azione; trimestrali e risultati solo dove la società li pubblica). Più basso = numeri da leggere con cautela.`}
+                >
+                  Confidenza {confidenzaBassa.valore}%
+                </span>
+              )}
               {f.next_earnings_date ? (
                 <span
                   className="inline-flex items-center gap-1 text-sm px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-blue-700 dark:text-blue-300"
