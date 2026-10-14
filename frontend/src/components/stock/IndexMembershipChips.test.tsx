@@ -29,16 +29,17 @@ const show = (indices: { code: string; name: string }[] | undefined, ticker = "A
 describe("membership here is complete, so it is stated plainly", () => {
   it("says 'fa parte di', with no top-N hedge", () => {
     show([{ code: "SP500", name: "S&P 500" }]);
-    const chip = screen.getByRole("link", { name: "SP500" });
+    const chip = screen.getByRole("link", { name: "S&P 500" });
     expect(chip).toHaveAttribute("title", expect.stringContaining("fa parte di S&P 500"));
     expect(chip.getAttribute("title")).not.toMatch(/fra i primi|posizioni più grandi/);
   });
 
-  it("shows the code and keeps the full name in the tooltip", () => {
-    // "Dow Jones Industrial Average" would blow out a chip row; the code is
-    // what fits, the name is what explains it.
+  it("shows a short name, not the code, and keeps the full name in the tooltip", () => {
+    // "Dow Jones Industrial Average" would blow out a chip row, and the code
+    // ("NDX" beside the "NASDAQ" exchange chip) read as a repetition: the
+    // short name is what fits, the full name is what explains it.
     show([{ code: "DJI", name: "Dow Jones Industrial Average" }]);
-    expect(screen.getByRole("link", { name: "DJI" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Dow Jones" })).toHaveAttribute(
       "title",
       expect.stringContaining("Dow Jones Industrial Average"),
     );
@@ -48,7 +49,7 @@ describe("membership here is complete, so it is stated plainly", () => {
 describe("each chip opens the index", () => {
   it("links to the screener filtered on that index", () => {
     show([{ code: "NDX", name: "Nasdaq-100" }]);
-    expect(screen.getByRole("link", { name: "NDX" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Nasdaq 100" })).toHaveAttribute(
       "href",
       "/stocks?index=NDX",
     );
@@ -61,9 +62,9 @@ describe("each chip opens the index", () => {
       { code: "SP500", name: "S&P 500" },
     ]);
     expect(screen.getAllByRole("link").map((el) => el.textContent?.trim())).toEqual([
-      "DJI",
-      "NDX",
-      "SP500",
+      "Dow Jones",
+      "Nasdaq 100",
+      "S&P 500",
     ]);
   });
 });

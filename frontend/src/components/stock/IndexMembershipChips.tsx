@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { IndexOption } from "@/api/types";
+import { nomeBreveIndice } from "@/lib/indici";
 
 /* Gli indici di cui questo titolo fa parte.
  *
@@ -15,7 +16,10 @@ import type { IndexOption } from "@/api/types";
  * la stessa chip e affermano cose diverse.
  *
  * Nessuna icona, come le chip di borsa e settore: sono appartenenze piene, e
- * l'icona a strati resta il segno di "solo fra i primi N". */
+ * l'icona a strati resta il segno di "solo fra i primi N".
+ *
+ * Per NOME breve, non per sigla (2026-10-14): «NDX» accanto alla borsa
+ * «NASDAQ» si leggeva come una ripetizione. */
 export function IndexMembershipChips({
   ticker,
   indices,
@@ -34,7 +38,7 @@ export function IndexMembershipChips({
           title={`${ticker} fa parte di ${idx.name} — vedi i titoli dell'indice`}
           className="inline-flex items-center rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors"
         >
-          {idx.code}
+          {nomeBreveIndice(idx)}
         </Link>
       ))}
     </>
