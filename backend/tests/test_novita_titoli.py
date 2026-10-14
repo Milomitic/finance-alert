@@ -1,6 +1,6 @@
 """Le novita' sui titoli seguiti nel digest: analisti, insider, trimestrali."""
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -151,6 +151,14 @@ def test_si_rinfresca_solo_la_cache_vecchia(db: Session, seguiti, monkeypatch) -
 # ─── nel digest ──────────────────────────────────────────────────────────
 
 
+def _ieri() -> date:
+    """Il digest legge l'orologio VERO di Roma, non OGGI: una novita' datata a
+    mano esce dalla finestra due settimane dopo che il test e' stato scritto
+    (e' successo il 2026-10-14, con «28/09»). Si data rispetto allo stesso
+    orologio che il digest usa."""
+    return datetime.now(notifier_service.ROMA).date() - timedelta(days=1)
+
+
 @pytest.fixture
 def telegram(monkeypatch) -> list[str]:
     inviati: list[str] = []
@@ -164,19 +172,20 @@ def telegram(monkeypatch) -> list[str]:
 
 
 def test_il_digest_parte_anche_senza_alert_e_non_ripete(db: Session, seguiti, telegram) -> None:
-    _fund("POS", azioni=[_az(target=310, prima=287, mossa="Raises")])
+    ieri = _ieri()
+    _fund("POS", azioni=[_az(data=ieri.isoformat(), target=310, prima=287, mossa="Raises")])
     primo = notifier_service.send_daily_digest(db)
     assert primo.sent
     [testo] = telegram
     assert "Novità sui tuoi titoli (1):" in testo
-    assert "💼 <b>POS</b> 28/09 — Morgan Stanley alza il giudizio" in testo
+    assert f"💼 <b>POS</b> {ieri:%d/%m} — Morgan Stanley alza il giudizio" in testo
     assert "Nessun alert nuovo nelle ultime 24h." in testo
     assert notifier_service.send_daily_digest(db).reason == "no_alerts"
     assert len(telegram) == 1
 
 
 def test_se_telegram_fallisce_le_novita_ripartono_domani(db: Session, seguiti, telegram, monkeypatch) -> None:
-    _fund("POS", azioni=[_az()])
+    _fund("POS", azioni=[_az(data=_ieri().isoformat())])
     monkeypatch.setattr(notifier_service, "_send_telegram", lambda text, what: False)
     assert notifier_service.send_daily_digest(db).reason == "http_error"
     assert db.execute(select(func.count()).select_from(NovitaNotificata)).scalar() == 0
