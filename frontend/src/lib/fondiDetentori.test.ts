@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TickerHolder } from "@/api/types";
 
-import { ordina, ordinaPerData, riepilogo, variazione } from "./fondiDetentori";
+import { ordina, ordinaPerData, riepilogo, separaPerValore, variazione } from "./fondiDetentori";
 
 function fondo(id: number, nome: string, extra: Partial<TickerHolder> = {}): TickerHolder {
   return {
@@ -55,5 +55,19 @@ describe("le ultime operazioni", () => {
       fondo(3, "C", { period_end_date: "2026-06-30", value_usd: 5e6 }),
     ];
     expect(ordinaPerData(f).map((h) => h.institutional_id)).toEqual([3, 2, 1]);
+  });
+});
+
+describe("le posizioni principali", () => {
+  it("subito quelle da 10 milioni in su, le altre a richiesta, nell'ordine dato", () => {
+    const f = [fondo(1, "A", { value_usd: 5e9 }), fondo(2, "B", { value_usd: 10e6 }), fondo(3, "C", { value_usd: 9.9e6 }), fondo(4, "D", { value_usd: null })];
+    const { principali, altri } = separaPerValore(f);
+    expect(principali.map((h) => h.institutional_id)).toEqual([1, 2]);
+    expect(altri.map((h) => h.institutional_id)).toEqual([3, 4]);
+  });
+
+  it("se nessuna arriva alla soglia, tutte", () => {
+    const f = [fondo(1, "A", { value_usd: 2e6 }), fondo(2, "B", { value_usd: 1e6 })];
+    expect(separaPerValore(f)).toEqual({ principali: f, altri: [] });
   });
 });

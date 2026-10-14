@@ -6,7 +6,7 @@ import type { TickerHolder } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTickerInstitutionalHolders } from "@/hooks/useInstitutionals";
-import { type Ordine, ordina, ordinaPerData, riepilogo, variazione } from "@/lib/fondiDetentori";
+import { ordina, ordinaPerData, riepilogo, separaPerValore, variazione } from "@/lib/fondiDetentori";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
@@ -15,13 +15,16 @@ import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
  *
  * Due viste sulla stessa scheda, e rispondono a domande diverse:
  *   - «Detentori»: chi lo detiene ORA, quanto pesa nel suo portafoglio e
- *     quanto vale la posizione. Una riga per fondo, su una linea sola: nome,
- *     barra del peso (stessa scala per tutti), peso, movimento del trimestre,
- *     valore. Le colonne stanno in un'unica griglia, quindi allineate per
- *     costruzione anche fra righe diverse.
+ *     quanto vale la posizione, dalla piu' grande. Una riga per fondo, su una
+ *     linea sola: nome, barra del peso (stessa scala per tutti), peso,
+ *     movimento del trimestre, valore. Subito solo le posizioni da 10 milioni
+ *     in su; le altre a richiesta.
  *   - «Ultime operazioni»: il verbo del 13F (Nuovo / Add / Reduce / Sold out)
  *     con la data, dal piu' recente. I fondi usciti stanno qui, perche' sono
  *     un'operazione, non una posizione.
+ *
+ * Le due viste hanno la stessa grafica: stessa testata, stessa altezza di
+ * riga, stessi corpi (RIGA, TESTATA, NUMERO).
  *
  * Il titolo della scheda NON cambia con la vista: e' la sua identita' (il gate
  * e2e e il link «N fondi» dell'intestazione la trovano per quello).
@@ -41,6 +44,13 @@ function pct(v: number | null | undefined): string {
   return v == null ? "—" : `${v.toFixed(1)}%`;
 }
 
+/* Una riga alta 24px esatti (19 + 4 + 1 di bordo): la distanza minima fra
+ * due bersagli tattili, cosi' i link dei nomi restano conformi per spaziatura. */
+const RIGA = "border-t border-border/40 py-0.5 leading-[1.1875rem]";
+const TESTATA = "pb-0.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground";
+const NUMERO = "text-right text-[0.7059rem] tabular-nums text-muted-foreground";
+const NOME = "min-w-0 truncate text-xs font-medium hover:underline";
+
 function toneDi(tono: "su" | "giu" | "fermo" | undefined): string {
   return tono === "su" ? TONO_VARIAZIONE.su : tono === "giu" ? TONO_VARIAZIONE.giu : TONO_VARIAZIONE.fermo;
 }
@@ -52,7 +62,7 @@ const GRIGLIA_FONDI =
 
 function TestataFondi() {
   return (
-    <li className={cn(GRIGLIA_FONDI, "pb-0.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground")}>
+    <li className={cn(GRIGLIA_FONDI, TESTATA)}>
       <span>Fondo</span>
       <span className="hidden sm:block" aria-hidden />
       <span className="text-right">Peso</span>
@@ -67,10 +77,10 @@ function RigaFondo({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
   const peso = h.portfolio_pct;
   const larghezza = peso != null && maxPeso > 0 ? Math.max(2, (peso / maxPeso) * 100) : 0;
   return (
-    <li className={cn(GRIGLIA_FONDI, "border-t border-border/40 py-1 leading-[1.125rem]")}>
+    <li className={cn(GRIGLIA_FONDI, RIGA)}>
       <Link
         to={`/institutionals/${h.institutional_slug}`}
-        className="min-w-0 truncate text-xs font-medium hover:underline"
+        className={NOME}
         title={h.institutional_name}
       >
         {h.institutional_name}
@@ -78,11 +88,11 @@ function RigaFondo({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
       <span className="hidden h-1.5 overflow-hidden rounded-full bg-muted sm:block" aria-hidden>
         <span className="block h-full rounded-full bg-primary/80" style={{ width: `${larghezza}%` }} />
       </span>
-      <span className="text-right text-[0.7059rem] font-semibold tabular-nums">{pct(peso)}</span>
-      <span className={cn("text-right text-[0.6471rem] tabular-nums", toneDi(v?.tono))} title={v?.spiegazione}>
+      <span className={NUMERO}>{pct(peso)}</span>
+      <span className={cn(NUMERO, "font-semibold", toneDi(v?.tono))} title={v?.spiegazione}>
         {v?.testo ?? ""}
       </span>
-      <span className="text-right text-[0.7059rem] tabular-nums">{fmtBig(h.value_usd)}</span>
+      <span className={NUMERO}>{fmtBig(h.value_usd)}</span>
     </li>
   );
 }
@@ -112,7 +122,7 @@ const GRIGLIA_OPERAZIONI =
 
 function TestataOperazioni() {
   return (
-    <li className={cn(GRIGLIA_OPERAZIONI, "pb-0.5 text-[0.6471rem] font-semibold uppercase tracking-wider text-muted-foreground")}>
+    <li className={cn(GRIGLIA_OPERAZIONI, TESTATA)}>
       <span>Fondo</span>
       <span>Azione</span>
       <span className="text-right">%</span>
@@ -125,18 +135,18 @@ function TestataOperazioni() {
 function RigaOperazione({ h }: { h: TickerHolder }) {
   const a = verbo(h.action);
   return (
-    <li className={cn(GRIGLIA_OPERAZIONI, "border-t border-border/40 py-1 leading-[1.125rem]")}>
+    <li className={cn(GRIGLIA_OPERAZIONI, RIGA)}>
       <Link
         to={`/institutionals/${h.institutional_slug}`}
-        className="min-w-0 truncate text-xs font-medium hover:underline"
+        className={NOME}
         title={h.institutional_name}
       >
         {h.institutional_name}
       </Link>
       <span className={cn("truncate text-[0.7059rem] font-semibold", a.tone)}>{a.label}</span>
-      <span className="text-right text-[0.7059rem] tabular-nums text-muted-foreground">{pct(h.portfolio_pct)}</span>
-      <span className="text-right text-[0.7059rem] tabular-nums text-muted-foreground">{fmtBig(h.value_usd)}</span>
-      <span className="text-right text-[0.7059rem] tabular-nums text-muted-foreground">{dataBreve(h.period_end_date)}</span>
+      <span className={NUMERO}>{pct(h.portfolio_pct)}</span>
+      <span className={NUMERO}>{fmtBig(h.value_usd)}</span>
+      <span className={NUMERO}>{dataBreve(h.period_end_date)}</span>
     </li>
   );
 }
@@ -191,7 +201,7 @@ function Segmenti<T extends string>({ voci, valore, onChange, etichetta }: {
   );
 }
 
-function AltriBottone({ aperto, totale, onClick }: { aperto: boolean; totale: number; onClick: () => void }) {
+function AltriBottone({ aperto, apri, chiudi, onClick }: { aperto: boolean; apri: string; chiudi: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -200,7 +210,7 @@ function AltriBottone({ aperto, totale, onClick }: { aperto: boolean; totale: nu
       aria-expanded={aperto}
     >
       {aperto ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
-      {aperto ? `Mostra i primi ${PRIME}` : `Mostra tutti i ${totale}`}
+      {aperto ? chiudi : apri}
     </button>
   );
 }
@@ -210,16 +220,18 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
   // somma sulla prima pagina sarebbe un totale falso.
   const q = useTickerInstitutionalHolders(ticker, 200, true);
   const [vista, setVista] = useState<Vista>("detentori");
-  const [ordine, setOrdine] = useState<Ordine>("peso");
   const [tutti, setTutti] = useState(false);
 
   const fondi = useMemo(() => q.data?.holders ?? [], [q.data]);
-  const ordinati = useMemo(() => ordina(fondi, ordine), [fondi, ordine]);
+  // Sempre per valore: la domanda e' chi ci ha messo piu' soldi.
+  const { principali, altri } = useMemo(() => separaPerValore(ordina(fondi, "valore")), [fondi]);
   const operazioni = useMemo(() => {
     const attuali = new Set(fondi.map((h) => h.institutional_id));
     const usciti = (q.data?.historical ?? []).filter((h) => !attuali.has(h.institutional_id));
     return ordinaPerData([...fondi, ...usciti]);
   }, [fondi, q.data]);
+  // La scala della barra e' quella di TUTTI i detentori, mostrati o no: aprire
+  // «mostra altri» non deve ridisegnare le barre gia' a schermo.
   const maxPeso = Math.max(0, ...fondi.map((h) => h.portfolio_pct ?? 0));
   const r = riepilogo(fondi);
 
@@ -243,8 +255,10 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
     );
   }
 
-  const elenco = vista === "detentori" ? ordinati : operazioni;
-  const visibili = tutti ? elenco : elenco.slice(0, PRIME);
+  const visibili =
+    vista === "detentori"
+      ? (tutti ? [...principali, ...altri] : principali)
+      : (tutti ? operazioni : operazioni.slice(0, PRIME));
 
   return (
     <Card>
@@ -257,16 +271,8 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
         ) : vista === "detentori" ? (
           <>
             <Riepilogo fondi={fondi} />
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[0.6471rem] text-muted-foreground">
-                Barra = peso nel portafoglio del fondo · 13F al {dataBreve(r.periodo)}
-              </span>
-              <Segmenti
-                etichetta="Ordina i fondi"
-                valore={ordine}
-                onChange={setOrdine}
-                voci={[{ id: "peso", label: "Peso" }, { id: "valore", label: "Valore" }] as const}
-              />
+            <div className="mb-1 text-[0.6471rem] text-muted-foreground">
+              Per valore · barra = peso nel portafoglio del fondo · 13F al {dataBreve(r.periodo)}
             </div>
             {fondi.length === 0 ? (
               <div className="py-2 text-center text-xs text-muted-foreground">
@@ -293,8 +299,21 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
             </ul>
           </div>
         )}
-        {elenco.length > PRIME && (
-          <AltriBottone aperto={tutti} totale={elenco.length} onClick={() => setTutti((t) => !t)} />
+        {vista === "detentori" && altri.length > 0 && (
+          <AltriBottone
+            aperto={tutti}
+            apri={`Mostra altri ${altri.length} (sotto $10M)`}
+            chiudi="Mostra solo da $10M in su"
+            onClick={() => setTutti((t) => !t)}
+          />
+        )}
+        {vista === "operazioni" && operazioni.length > PRIME && (
+          <AltriBottone
+            aperto={tutti}
+            apri={`Mostra tutte le ${operazioni.length}`}
+            chiudi={`Mostra le prime ${PRIME}`}
+            onClick={() => setTutti((t) => !t)}
+          />
         )}
       </CardContent>
     </Card>

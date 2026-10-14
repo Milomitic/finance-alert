@@ -60,7 +60,8 @@ describe("la scheda dei fondi che detengono il titolo", () => {
       historical: [],
     };
     const { container } = monta();
-    const [prima, seconda] = righe(container, "detentori");
+    // Per valore: Dodge & Cox ($4.55B) prima di Dorsey ($132M).
+    const [seconda, prima] = righe(container, "detentori");
     // Un solo livello: i cinque campi sono figli diretti della stessa griglia.
     expect(prima.children).toHaveLength(5);
     expect(within(prima).getByRole("link", { name: "Dorsey Asset Management" })).toBeInTheDocument();
@@ -75,24 +76,39 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(prima.className).toContain(colonne);
     // Il piu' pesante riempie la barra, l'altro in proporzione.
     const barre = [...container.querySelectorAll('span[class~="bg-primary/80"]')].map((b) => (b as HTMLElement).style.width);
-    expect(barre[0]).toBe("100%");
-    expect(parseFloat(barre[1])).toBeCloseTo((2.4 / 8.5) * 100, 1);
+    expect(barre[1]).toBe("100%");
+    expect(parseFloat(barre[0])).toBeCloseTo((2.4 / 8.5) * 100, 1);
   });
 
-  it("per valore al click, e i primi quindici con il resto a richiesta", async () => {
+  it("sempre per valore, e subito solo le posizioni da 10 milioni in su", async () => {
     dati = {
       ticker: "AAPL",
-      holders: Array.from({ length: 18 }, (_, i) => fondo(i + 1, `Fondo ${i + 1}`, { portfolio_pct: 18 - i, value_usd: (i + 1) * 1e6 })),
+      holders: [
+        fondo(1, "Piccolo", { portfolio_pct: 30, value_usd: 4e6 }),
+        fondo(2, "Grande", { portfolio_pct: 1, value_usd: 2e9 }),
+        fondo(3, "Medio", { portfolio_pct: 5, value_usd: 10e6 }),
+        fondo(4, "Minimo", { portfolio_pct: 0.1, value_usd: 1e5 }),
+      ],
       historical: [],
     };
     const { container } = monta();
     const nomi = () => righe(container, "detentori").map((li) => li.querySelector("a")?.textContent);
-    expect(nomi()).toHaveLength(15);
-    expect(nomi()[0]).toBe("Fondo 1");
-    await userEvent.click(screen.getByRole("button", { name: "Valore" }));
-    expect(nomi()[0]).toBe("Fondo 18");
-    await userEvent.click(screen.getByRole("button", { name: "Mostra tutti i 18" }));
-    expect(nomi()).toHaveLength(18);
+    expect(nomi()).toEqual(["Grande", "Medio"]);
+    // Niente piu' scelta dell'ordinamento.
+    expect(screen.queryByRole("button", { name: "Peso" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Mostra altri 2 (sotto $10M)" }));
+    expect(nomi()).toEqual(["Grande", "Medio", "Piccolo", "Minimo"]);
+    // Il riepilogo conta tutti, mostrati o no.
+    expect(screen.getByText("Fondi").nextSibling?.textContent).toBe("4");
+  });
+
+  it("le due viste hanno la stessa riga", async () => {
+    dati = { ticker: "AAPL", holders: [fondo(1, "Dorsey Asset Management", { value_usd: 5e8 })], historical: [] };
+    const { container } = monta();
+    const riga = (v: "detentori" | "operazioni") => righe(container, v)[0].className.replace(/grid-cols-\S+|sm:grid-cols-\S+|min-w-\S+|md:min-w-0/g, "").split(/\s+/).filter(Boolean).join(" ");
+    const detentori = riga("detentori");
+    await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
+    expect(riga("operazioni")).toBe(detentori);
   });
 
   it("le ultime operazioni: il verbo e la data, uscite comprese, dalla piu' recente", async () => {

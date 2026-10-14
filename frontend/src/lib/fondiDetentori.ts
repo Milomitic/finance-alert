@@ -84,3 +84,19 @@ export function ordinaPerData(fondi: readonly TickerHolder[]): TickerHolder[] {
     (a, b) => b.period_end_date.localeCompare(a.period_end_date) || (b.value_usd ?? -1) - (a.value_usd ?? -1),
   );
 }
+
+/** Sotto questa soglia una posizione e' un dettaglio: la scheda le mostra a
+ *  richiesta. */
+export const SOGLIA_PRINCIPALI_USD = 10e6;
+
+/** Le posizioni da mostrare subito e quelle a richiesta. Se nessuna arriva
+ *  alla soglia si mostrano tutte: una lista vuota con «mostra altri» sotto
+ *  nasconderebbe proprio quello che c'e'. */
+export function separaPerValore(
+  fondi: readonly TickerHolder[],
+  soglia = SOGLIA_PRINCIPALI_USD,
+): { principali: TickerHolder[]; altri: TickerHolder[] } {
+  const principali = fondi.filter((h) => (h.value_usd ?? 0) >= soglia);
+  if (principali.length === 0) return { principali: [...fondi], altri: [] };
+  return { principali, altri: fondi.filter((h) => (h.value_usd ?? 0) < soglia) };
+}
