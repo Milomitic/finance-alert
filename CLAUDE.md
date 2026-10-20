@@ -1079,6 +1079,24 @@ con orario. Entrambi su righe COPERTE dai test. Gli altri due sono equivalenti e
 stanno in `EQUIVALENTI` con la ragione scritta — **una lista di sopravvissuti
 senza spiegazione e' indistinguibile da una lista di difetti.**
 
+## ⚠️ «L'app non si apre» da casa = l'IP pubblico e' cambiato (2026-10-20)
+
+La 443 (e la 6443) sono aperte nella NSG di OCI SOLO verso `allowlist_cidrs`
+in `infra/terraform/terraform.tfvars`, un /32 dell'IP di casa; la 80 e la 22
+no. Quando l'operatore cambia l'IP, OCI SCARTA i pacchetti senza rispondere:
+il browser resta appeso, che si legge come «app lenta» e non come «bloccata».
+Il server intanto e' sano (pod, health a 0,06 s, certificato valido) e SSH
+funziona, quindi ogni controllo dal nodo dice che va tutto bene.
+
+Diagnosi in un minuto: dal nodo `curl -sk https://10.0.10.165/api/health`
+risponde, dall'IP pubblico no; `curl -s https://api.ipify.org` in locale
+contro la voce di `allowlist_cidrs`. ⚠️ `nslookup` sulla rete WindTre stampa
+`127.0.0.2` anche per google.com: e' il suffisso del router, non un blocco DNS.
+
+Correzione: sostituire il /32 nel tfvars, poi Terraform in container (Docker
+Desktop va avviato, ~30 s) con `-target` sulle sole regole `https_ingress` e
+`api_ingress`: piano «2 to add, 2 to destroy», un secondo, nessun riavvio.
+
 ## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
 
 It reads like elementary hygiene and it **locks you out of the cluster**. Cost
