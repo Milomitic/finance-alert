@@ -68,12 +68,18 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           "group/cell relative flex min-h-[8.5rem] flex-col items-stretch gap-1.5 border-r border-b p-1.5 text-left",
           // Subtle background: weekends get a faint tint so the work-week
           // rhythm is legible even on event-free months
-          day.isWeekend && day.inMonth
-            ? "bg-muted/30 dark:bg-muted/15"
-            : "bg-card dark:bg-card",
           // Out-of-month days are rendered for grid stability but dialed
-          // way down so the active month dominates visually
-          !day.inMonth && "opacity-40",
+          // down so the active month dominates visually. ⚠️ With a tinted
+          // BACKGROUND, not `opacity-40` on the whole cell: that took the
+          // day number to ~2:1 against the 4.5:1 text needs, and the cell is
+          // a button. In November 2026 the grid opens on six October days,
+          // and the a11y gate went from 3 to 6 contrast violations on a
+          // commit that never touched the calendar.
+          !day.inMonth
+            ? "bg-muted/40 dark:bg-muted/10"
+            : day.isWeekend
+              ? "bg-muted/30 dark:bg-muted/15"
+              : "bg-card dark:bg-card",
           // Selected (clicked) state — different from today; uses a solid
           // ring so it's distinguishable when both apply at once
           isSelected &&
