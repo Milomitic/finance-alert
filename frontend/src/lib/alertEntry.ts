@@ -39,3 +39,18 @@ export function priceHasMoved(alert: AlertConPrezzi, soglia = 0.005): boolean {
   if (!Number.isFinite(alert.trigger_price) || alert.trigger_price <= 0) return false;
   return Math.abs(alert.trigger_price - ingresso) / ingresso > soglia;
 }
+
+/** Il P/L% di chi avesse seguito il segnale dal suo ingresso fino al prezzo di
+ *  ADESSO: un segnale ribassista si legge come una posizione corta, quindi
+ *  guadagna quando il prezzo scende. Null senza un prezzo attuale valido —
+ *  mai uno zero, che si leggerebbe «in pari». */
+export function rendimentoDalSegnale(
+  alert: AlertConPrezzi,
+  prezzoAttuale: number | null | undefined,
+): number | null {
+  if (prezzoAttuale == null || !Number.isFinite(prezzoAttuale) || prezzoAttuale <= 0) return null;
+  const ingresso = entryPrice(alert);
+  if (!Number.isFinite(ingresso) || ingresso <= 0) return null;
+  const variazione = ((prezzoAttuale - ingresso) / ingresso) * 100;
+  return alert.snapshot?.["tone"] === "bear" ? -variazione : variazione;
+}

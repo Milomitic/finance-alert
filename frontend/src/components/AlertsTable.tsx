@@ -31,7 +31,10 @@ import {
 import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, getAlertMeta, isSignalKind, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { ESITO_META, formatR, raccontaPiano, stopTroppoStretto } from "@/lib/planOutcome";
 import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
+import { entryPrice, rendimentoDalSegnale } from "@/lib/alertEntry";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
 
 /** Toggleable columns for the non-embedded alerts table.
  *  Checkbox + Titolo are always-on (identity + selection).
@@ -108,6 +111,9 @@ interface Props {
    *  hover-visible icon appears at the row end; clicking it toggles the
    *  archived state without opening the detail dialog. */
   onArchiveToggle?: (alert: Alert) => void;
+  /** Il prezzo di ADESSO del titolo (scheda del titolo, embedded): con questo
+   *  la tabella mostra Prezzo e P/L% al posto di Prob. e Direzione. */
+  prezzoAttuale?: number | null;
 }
 
 /** Le intestazioni della tabella, piu' piccole del corpo (2026-09-22,
@@ -241,6 +247,7 @@ export function AlertsTable({
   sortDir = "desc",
   onSort,
   onArchiveToggle,
+  prezzoAttuale = null,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
 
@@ -273,8 +280,12 @@ export function AlertsTable({
 
   // Per-column visibility resolved ONCE so the header and body stay in
   // lockstep. Embedded mode (the per-ticker history card) shows a fixed
-  // compact set — Rilevato | Regola | Orizzonte | Forza | Prob. | Direzione |
+  // compact set — Segnale | Regola | Orizzonte | Forza | Prezzo | P/L% |
   // Piano — while the full alerts page honours the column-visibility menu.
+  // Prezzo e P/L% hanno preso il posto di Prob. e Direzione il 2026-11-03
+  // (richiesta dell'utente): sulla scheda di UN titolo la domanda e' «a che
+  // prezzo e' nato e dove sta adesso», non la percentuale storica del detector,
+  // che e' la stessa per ogni segnale dello stesso tipo.
   // ⚠️ No Tono column there: the Regola chip already wears the tone's colour
   // and icon, so «BULLISH» beside it was the same fact twice, in the card
   // where horizontal room is scarcest. (Previous embedded
@@ -290,8 +301,10 @@ export function AlertsTable({
   const showNatura = !embedded && isVisible("natura");
   const showOrizzonte = embedded || isVisible("orizzonte");
   const showForza = embedded || isVisible("forza");
-  const showProbabilita = embedded || isVisible("probabilita");
-  const showEsito = embedded || isVisible("esito");
+  const showProbabilita = !embedded && isVisible("probabilita");
+  const showEsito = !embedded && isVisible("esito");
+  const showPrezzo = embedded;
+  const showRendimento = embedded;
   const showPiano = embedded || isVisible("piano");
   // Archive action column: always-on when the callback is wired (full page),
   // never in embedded mode — like the checkbox, it's an action, not data,
@@ -306,7 +319,7 @@ export function AlertsTable({
   const colSpan = [
     showCheckbox, showDataSegnale, showTitolo, showRegola,
     showNatura, showOrizzonte, showForza, showProbabilita,
-    showEsito, showPiano, showArchive,
+    showPrezzo, showRendimento, showEsito, showPiano, showArchive,
   ].filter(Boolean).length;
 
   // Corpo a 0.875rem (text-sm), intestazioni PIU' PICCOLE (`INTESTAZIONE`):
@@ -458,6 +471,22 @@ export function AlertsTable({
           {showProbabilita && (
             <TableHead className={cn(TESTA, "text-right")} hint={PROBABILITA_TOOLTIP}>
               Prob.
+            </TableHead>
+          )}
+          {showPrezzo && (
+            <TableHead
+              className={cn(TESTA, "text-right")}
+              hint="Il prezzo d'ingresso del segnale: la chiusura del giorno in cui è comparso, su cui poggia anche il piano."
+            >
+              Prezzo
+            </TableHead>
+          )}
+          {showRendimento && (
+            <TableHead
+              className={cn(TESTA, "text-right")}
+              hint="Quanto guadagnerebbe o perderebbe ADESSO chi avesse seguito il segnale dal suo ingresso. Un segnale ribassista si legge come una posizione corta: guadagna se il prezzo scende."
+            >
+              P/L%
             </TableHead>
           )}
           {showEsito && (
@@ -707,6 +736,26 @@ export function AlertsTable({
                         </div>
                       )}
                     </div>
+                  );
+                })()}
+              </TableCell>
+            )}
+            {showPrezzo && (
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(entryPrice(a), a.currency)}
+              </TableCell>
+            )}
+            {showRendimento && (
+              <TableCell className="text-right">
+                {(() => {
+                  const pl = rendimentoDalSegnale(a, prezzoAttuale);
+                  if (pl == null) return <span className="text-muted-foreground">—</span>;
+                  const corpo = Math.abs(pl).toFixed(1);
+                  const tono = Number(corpo) === 0 ? "fermo" : pl > 0 ? "su" : "giu";
+                  return (
+                    <span className={cn("font-semibold tabular-nums", TONO_VARIAZIONE[tono])}>
+                      {tono === "fermo" ? "0.0%" : `${pl > 0 ? "+" : "−"}${corpo}%`}
+                    </span>
                   );
                 })()}
               </TableCell>

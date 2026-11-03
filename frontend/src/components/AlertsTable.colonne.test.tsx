@@ -179,3 +179,42 @@ describe("AlertsTable — la data", () => {
       .not.toContain("Rilevato");
   });
 });
+
+describe("AlertsTable — la scheda del titolo (embedded)", () => {
+  function montaConPrezzo(prezzo: number | null, righe: Alert[]) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <AlertsTable
+            alerts={righe} selectedIds={new Set()} onSelect={() => {}} onSelectAll={() => {}}
+            onRowClick={() => {}} q="" onQueryChange={() => {}} embedded prezzoAttuale={prezzo}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    ).container;
+  }
+
+  it("Prezzo e P/L% al posto di Prob. e Direzione", () => {
+    const c = montaConPrezzo(374, [alert({ snapshot: { tone: "bull", strength: 81, first_price: 340 } })]);
+    const intestazioni = Array.from(c.querySelectorAll("th")).map((th) => th.textContent?.trim());
+    expect(intestazioni).toContain("Prezzo");
+    expect(intestazioni).toContain("P/L%");
+    expect(intestazioni).not.toContain("Prob.");
+    expect(intestazioni).not.toContain("Direzione");
+    // Le celle stanno sotto le loro intestazioni: stesso numero di colonne.
+    expect(c.querySelectorAll("tbody tr:first-child td")).toHaveLength(intestazioni.length);
+    expect(screen.getByText("$340.00")).toBeInTheDocument();
+    expect(screen.getByText("+10.0%").className).toContain("emerald");
+  });
+
+  it("un segnale ribassista guadagna quando il prezzo scende", () => {
+    montaConPrezzo(306, [alert({ snapshot: { tone: "bear", strength: 70, first_price: 340 } })]);
+    expect(screen.getByText("+10.0%").className).toContain("emerald");
+  });
+
+  it("senza quotazione il P/L% e' un trattino, non uno zero", () => {
+    const c = montaConPrezzo(null, [alert()]);
+    expect(c.textContent).not.toContain("0.0%");
+  });
+});

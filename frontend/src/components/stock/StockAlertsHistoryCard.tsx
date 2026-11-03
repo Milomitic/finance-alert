@@ -12,6 +12,7 @@ import { CardRefreshButton } from "@/components/stock/CardRefreshButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useScanStock } from "@/hooks/useAlertMutations";
+import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { getAlertMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 
@@ -109,6 +110,12 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
   // prima invalidava solo il dettaglio, e lo storico completo di questa stessa
   // card restava vecchio (FA-072).
   const scan = useScanStock(ticker);
+  // Il prezzo di adesso per la colonna P/L%: la stessa quotazione della testata
+  // (react-query la condivide, nessuna richiesta in piu'). Una quotazione in
+  // errore non diventa un prezzo: la colonna mostra «—».
+  const quota = useLiveQuote(ticker);
+  const prezzoAttuale =
+    quota.data && quota.data.price != null && quota.data.error == null ? quota.data.price : null;
 
   // Sort by triggered_at desc — backend should already order, but defensive.
   const sorted = useMemo(
@@ -326,6 +333,7 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                 onRowClick={setOpen}
                 q=""
                 onQueryChange={noopSelect}
+                prezzoAttuale={prezzoAttuale}
               />
             </div>
           )}
