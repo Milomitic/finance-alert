@@ -679,15 +679,27 @@ export function StockScoreCard({ ticker }: Props) {
   if (isLoading) {
     return (
       <CardShell>
-        <div className="space-y-3">
-          <div className="h-[110px] rounded bg-muted/40 animate-pulse" />
-          <div className="h-5 w-24 mx-auto rounded bg-muted/40 animate-pulse" />
-          <div className="space-y-2 mt-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-4 w-full rounded bg-muted/30 animate-pulse"
-              />
+        {/* ⚠️ Lo scheletro rispecchia la STRUTTURA del contenuto — gauge con
+            le due righe di settore, fascia di rischio e grafico, poi i cinque
+            pilastri su due colonne — invece di blocchi a occhio. Il vecchio
+            era 81px piu' alto del contenuto: all'arrivo dei dati la scheda si
+            accorciava, la riga in alto della pagina con lei, e il gate di CI
+            misurava CLS 0,389 (2026-11-03). */}
+        <div aria-busy="true" aria-label="Caricamento dello Stock score">
+          <div className="grid grid-cols-2 items-center gap-3">
+            <div className="flex min-w-0 flex-col items-center gap-1">
+              <div className="h-[62px] w-24 rounded-t-full bg-muted/40 animate-pulse" />
+              <div className="h-4 w-24 rounded bg-muted/30 animate-pulse" />
+              <div className="h-4 w-28 rounded bg-muted/30 animate-pulse" />
+            </div>
+            <div className="flex min-w-0 flex-col items-start gap-2">
+              <div className="h-5 w-24 rounded bg-muted/40 animate-pulse" />
+              <div className="h-10 w-full rounded bg-muted/30 animate-pulse" />
+            </div>
+          </div>
+          <div className="mt-2 border-t border-border/40 pt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5">
+            {PILLAR_ORDER.map((p) => (
+              <div key={p} className="h-5 rounded bg-muted/30 animate-pulse" />
             ))}
           </div>
         </div>

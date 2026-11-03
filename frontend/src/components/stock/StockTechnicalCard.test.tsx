@@ -12,8 +12,11 @@ const BASE = {
   sector_rank: null as number | null, sector_peers: null as number | null,
 };
 let dati = { ...BASE };
+let caricamento = false;
 vi.mock("@/hooks/useStockTechnical", () => ({
-  useStockTechnical: () => ({ isLoading: false, noScoreYet: false, data: dati }),
+  useStockTechnical: () => (caricamento
+    ? { isLoading: true, noScoreYet: false, data: undefined }
+    : { isLoading: false, noScoreYet: false, data: dati }),
 }));
 
 function monta() {
@@ -68,5 +71,33 @@ describe("StockTechnicalCard", () => {
     expect(barra("73")).toContain(scoreBgColor(73));
     expect(barra("100")).toContain(scoreBgColor(100));
     expect(scoreBgColor(73)).not.toBe(scoreBgColor(100));
+  });
+});
+
+describe("StockTechnicalCard — non cambia altezza all'arrivo dei dati", () => {
+  // jsdom non fa layout: si confronta la STRUTTURA che decide l'altezza (le
+  // righe), come il censimento di mobileLayout. Il gate e2e misura il CLS vero.
+  const righe = (c: HTMLElement) =>
+    c.querySelectorAll('[class~="grid-cols-[6.5rem_minmax(0,1fr)_2.25rem]"]').length;
+
+  it("in caricamento le stesse cinque dimensioni e lo stesso blocco del punteggio", () => {
+    caricamento = true;
+    const { container: prima, unmount } = monta();
+    expect(righe(prima)).toBe(5);
+    expect(screen.getByText("/ 100")).toBeInTheDocument();
+    expect(screen.queryByText(/Caricamento\.\.\./)).toBeNull();
+    unmount();
+    caricamento = false;
+    dati = { ...BASE };
+    const { container: dopo } = monta();
+    expect(righe(dopo)).toBe(5);
+  });
+
+  it("la riga del rango c'e' anche senza un confronto di settore", () => {
+    caricamento = false;
+    dati = { ...BASE, sector_rank: null, sector_peers: null };
+    monta();
+    const punteggio = screen.getByText("/ 100").parentElement!;
+    expect(punteggio.nextElementSibling).not.toBeNull();
   });
 });

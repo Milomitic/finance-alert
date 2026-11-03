@@ -62,7 +62,27 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
             retrying={isRefreshing}
           />
         ) : isLoading ? (
-          <div className="text-xs text-muted-foreground italic">Caricamento...</div>
+          /* ⚠️ La STESSA struttura del contenuto, con i valori a «—»: una
+              riga «Caricamento...» alta 16px diventava una scheda di ~180px
+              all'arrivo dei dati, e la riga in alto della pagina si allungava
+              con lei — CLS 0,389 nel gate di CI il 2026-11-03, dove il
+              punteggio arriva dopo il primo disegno. */
+          <div aria-busy="true" aria-label="Caricamento della valutazione tecnica">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tabular-nums text-muted-foreground/50">—</span>
+              <span className="text-xs text-muted-foreground">/ 100</span>
+            </div>
+            <div className="text-[0.7059rem]" aria-hidden>{" "}</div>
+            <div className="mt-2.5 space-y-0.5">
+              {DIMS.map((d) => (
+                <div key={d.key} className={RIGA_PUNTEGGIO}>
+                  <span className={ETICHETTA_PUNTEGGIO}>{d.label}</span>
+                  <div className={cn(FONDO_PUNTEGGIO, "animate-pulse")} />
+                  <span className={cn(VALORE_PUNTEGGIO, "text-muted-foreground")}>—</span>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : noScoreYet || !data ? (
           <div className="text-xs text-muted-foreground italic">Punteggio tecnico non ancora calcolato.</div>
         ) : (
@@ -95,6 +115,11 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
                   percentile. Questo dice un'altra cosa — un titolo puo' essere
                   anonimo nell'universo e il piu' forte di un settore debole.
                   Con un solo pari non e' una classifica e non la si mostra. */}
+              {/* La riga c'e' sempre, vuota senza un confronto: comparire dopo
+                  sposterebbe di una riga tutto cio' che sta sotto. */}
+              {!(data.sector_rank != null && data.sector_peers != null && data.sector_peers > 1) && (
+                <div className="text-[0.7059rem]" aria-hidden>{" "}</div>
+              )}
               {data.sector_rank != null &&
                 data.sector_peers != null &&
                 data.sector_peers > 1 && (
