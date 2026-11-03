@@ -625,7 +625,10 @@ function CardShell({
   headerRight?: React.ReactNode;
 }) {
   return (
-    <Card>
+    /* Altezza minima comune a scheletro, contenuto e stati vuoti: l'altezza
+       naturale cambia di qualche pixel coi dati e coi font, e anche 4px qui
+       spostano tutta la pagina sotto (gate CLS, 2026-11-03). */
+    <Card className="min-h-[16.5rem]">
       <CardContent className="p-3">
         <SectionTitle
           icon={Sparkles}

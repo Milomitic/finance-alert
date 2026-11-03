@@ -35,7 +35,8 @@ export function StockTechnicalCard({ ticker }: { ticker: string | undefined }) {
     mutationFn: () => scores.recomputeTechnicalForStock(ticker!),
   });
   return (
-    <Card>
+    /* Altezza minima comune a caricamento e contenuto: vedi StockScoreCard. */
+    <Card className="min-h-[15.75rem]">
       <CardContent className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <span className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold">
