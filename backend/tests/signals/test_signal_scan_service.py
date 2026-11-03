@@ -44,6 +44,10 @@ def test_stale_signal_skipped_by_recency_guard(db, monkeypatch):
 def test_recent_signal_kept_with_large_max_age(db, monkeypatch):
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_min_confidence", 0)
     monkeypatch.setattr("app.signals.signal_scan_service.settings.signal_max_age_days", 365)
+    # Questo test verifica il rispetto di `signal_max_age_days`: la quota
+    # dell'orizzonte (2026-11-03) fermerebbe da sola un volume_breakout a 10
+    # sedute (limite 8 su 21), quindi qui e' spenta.
+    monkeypatch.setattr("app.signals.signal_scan_service.QUOTA_ORIZZONTE_TRASCORSA", 1.0)
     s = Stock(ticker="FRESH_BO", exchange="NASDAQ", name="Fresh", country="US")
     db.add(s); db.flush()
     evaluate_signals(db, s, _confirmed_then_stale_df())

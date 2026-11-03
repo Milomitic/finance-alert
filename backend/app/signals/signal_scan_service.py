@@ -75,6 +75,40 @@ def _follow_through_ok(m, ohlcv: pd.DataFrame, idx_by_date: dict[str, int]) -> b
 
 _MAX_AGE_RELAX_CAP = 14  # never relax the recency window beyond this many days
 
+#: Quota dell'orizzonte che puo' essere gia' trascorsa quando un segnale nasce
+#: (2026-11-03). La finestra di recenza (7 giorni di calendario, fino a 14 dopo
+#: una scansione saltata) e' la stessa per tutti i detector, quindi un segnale
+#: a 5 sedute poteva nascere al quinto giorno: con l'orizzonte gia' consumato.
+#: Misurato su 2.206 candle_reversal vivi: comparsi 4+ giorni dopo la candela
+#: rendevano -1,46% a 5 sedute al netto del mercato (t -4,1 su 16 finestre),
+#: quelli tempestivi -0,24%. Il meccanismo e' nel detector: prende l'ULTIMA
+#: candela della finestra e scatta quando il prezzo di OGGI torna al livello,
+#: cioe' quando la candela non ha prodotto l'inversione.
+#: Al 40% vale 2 sedute per i detector a 5, 8 per quelli a 21 e 25 per quelli a
+#: 63. Con la finestra normale (7 giorni) morde sui brevi; dopo una scansione
+#: saltata la finestra si allarga fino a 14 giorni, e li' ferma anche un segnale
+#: a 21 sedute recuperato con piu' di 8 sedute di ritardo — di proposito.
+QUOTA_ORIZZONTE_TRASCORSA = 0.4
+
+
+def _sedute_trascorse(sig_date: date | None, idx_by_date: dict[str, int], n_barre: int) -> int | None:
+    """Quante barre separano la barra del segnale dall'ultima. None se la barra
+    non e' nella serie (una data senza barra non e' misurabile, e non si scarta
+    per questo)."""
+    if sig_date is None:
+        return None
+    i = idx_by_date.get(sig_date.isoformat())
+    return None if i is None else n_barre - 1 - i
+
+
+def troppo_tardi(detector: str, sedute: int | None) -> bool:
+    """True quando dalla barra del segnale e' gia' trascorsa piu' del
+    `QUOTA_ORIZZONTE_TRASCORSA` del suo orizzonte, contato in sedute."""
+    if sedute is None:
+        return False
+    from app.services.signal_drift_service import _horizon_days
+    return sedute > int(_horizon_days(detector) * QUOTA_ORIZZONTE_TRASCORSA)
+
 
 def _ultimi_scartati(db: Session, stock_id: int) -> dict[tuple[str, str], date]:
     """L'ultima data di segnale registrata fra gli scartati, per (detector, verso)."""
@@ -278,6 +312,12 @@ def evaluate_signals(
         # scan would surface months-old signals as if fresh).
         recente = not (sig_date is not None and last_bar_date is not None
                        and (last_bar_date - sig_date).days > age_limit)
+        # ...e non oltre la quota del SUO orizzonte: un segnale a 5 sedute che
+        # nasce alla quarta non lascia niente da seguire. Vedi
+        # `QUOTA_ORIZZONTE_TRASCORSA`. Come la recenza, non e' un cancello di
+        # qualita': il match non entra fra gli scartati.
+        recente = recente and not troppo_tardi(
+            m.name, _sedute_trascorse(sig_date, idx_by_date, len(ohlcv)))
         if not (passa_forza and passa_trend and passa_follow):
             # ⚠️ Solo i RECENTI: un match vecchio non e' la decisione di un
             # cancello di qualita', e' una rilevazione che lo scan non

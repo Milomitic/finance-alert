@@ -85,3 +85,45 @@ def test_follow_through_drops_fakeout(db, monkeypatch):
     monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
     s = _stock(db, "FAK")
     assert svc.evaluate_signals(db, s, df) == 0  # fakeout dropped
+
+
+def test_un_segnale_a_5_sedute_non_nasce_a_orizzonte_consumato(db, monkeypatch):
+    """candle_reversal (orizzonte 5): fino a 2 sedute di ritardo nasce, a 3 no.
+    Il 2026-11-03 i tardivi rendevano -1,46% contro -0,24% dei tempestivi."""
+    monkeypatch.setattr(svc.settings, "signal_min_confidence", 0)
+    monkeypatch.setattr(svc.settings, "signal_require_follow_through", False)
+    monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", False)
+    df = _df([100] * 40)
+    nati = []
+    for ritardo in (0, 2, 3, 5):
+        m = _match(df["date"].iloc[-1 - ritardo], name="candle_reversal")
+        monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, m=m, **k: ([m], []))
+        nati.append(svc.evaluate_signals(db, _stock(db, f"CR{ritardo}"), df))
+        db.commit()
+    assert nati == [1, 1, 0, 0]
+
+
+def test_la_quota_non_tocca_i_detector_a_21_sedute_nella_finestra_di_recenza(db, monkeypatch):
+    """Le divergenze nascono per costruzione qualche seduta dopo il pivot: a 21
+    sedute il limite e' 8, oltre la finestra di recenza di 7 giorni."""
+    monkeypatch.setattr(svc.settings, "signal_min_confidence", 0)
+    monkeypatch.setattr(svc.settings, "signal_require_follow_through", False)
+    monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", False)
+    df = _df([100] * 40)
+    m = _match(df["date"].iloc[-6], name="macd_divergence")
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
+    assert svc.evaluate_signals(db, _stock(db, "DIV"), df) == 1
+
+
+def test_un_tardivo_non_finisce_fra_gli_scartati(db, monkeypatch):
+    """Come la recenza, non e' un cancello di qualita'."""
+    from app.models import SignalCandidate
+    monkeypatch.setattr(svc.settings, "signal_min_confidence", 99)   # Forza bocciata
+    monkeypatch.setattr(svc.settings, "signal_require_follow_through", False)
+    monkeypatch.setattr(svc.settings, "signal_require_trend_alignment", False)
+    df = _df([100] * 40)
+    m = _match(df["date"].iloc[-4], name="candle_reversal")
+    monkeypatch.setattr(svc, "detect_signals_and_setups", lambda *a, **k: ([m], []))
+    svc.evaluate_signals(db, _stock(db, "TRD"), df)
+    db.commit()
+    assert db.query(SignalCandidate).count() == 0

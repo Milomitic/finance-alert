@@ -3461,6 +3461,18 @@ cross-lens leakage; don't re-introduce it):
 - **`adx_confirmation` does not emit** (`registry.NON_EMESSI`, 2026-09-24):
   anti-skill of direction (q 0.02). It stays in `DETECTORS` so replays still
   measure it, and its `adx_trend` event still confirms other detectors' chains.
+- **A signal is not born once 40% of its horizon is gone** (2026-11-03,
+  `signal_scan_service.QUOTA_ORIZZONTE_TRASCORSA`, horizon from
+  `signal_drift_service._horizon_days`). The 7-day recency window is the same
+  for every detector, so a 5-session signal could appear on its fifth day.
+  Measured on 2,206 live candle_reversal: born 4+ days after the candle
+  -1.46% at 5 sessions market-neutral (t -4.1, 16 windows) vs -0.24% prompt.
+  Mechanism: the detector takes the LAST candle in the window and fires when
+  TODAY's price is back at the level, i.e. when the candle failed. Limits: 2
+  sessions at horizon 5, 8 at 21, 25 at 63 — so with the normal window it bites
+  only the short detectors, and after a scan gap (window relaxed up to 14 days)
+  also a 21-session signal recovered more than 8 sessions late. Like recency it
+  is not a quality gate: late matches do not enter `signal_candidates`.
 
 ### Calibration data — read-only studies, regenerate when wanted
 - `python -m app.scripts.signal_factor_outcomes` — per-FACTOR forward-outcome study.
