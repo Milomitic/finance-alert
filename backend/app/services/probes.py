@@ -126,7 +126,16 @@ def probe_yfinance_market_cap() -> None:
 
 
 def probe_yfinance_news() -> None:
-    """News list shape probe — `Ticker.news` is a fast endpoint."""
+    """News list shape probe — `Ticker.news` is a fast endpoint.
+
+    Reports to the breaker's NEWS lane too, so it is a recovery detector that
+    works with nobody browsing: while the lane cools down the probe makes no
+    request at all, and once the cooldown lifts it is the half-open call whose
+    success reopens news for everyone."""
+    from app.services import yfinance_health
+
+    if yfinance_health.is_open(yfinance_health.LANE_NEWS):
+        return
     try:
         import yfinance as yf
         news = yf.Ticker(_PROBE_TICKER).news or []
@@ -137,6 +146,12 @@ def probe_yfinance_news() -> None:
         )
     except Exception as exc:  # noqa: BLE001
         _record("yfinance", "news", False, repr(exc))
+        yfinance_health.record_failure(f"probe news: {exc!r}"[:160], lane=yfinance_health.LANE_NEWS)
+        return
+    if ok:
+        yfinance_health.record_success(yfinance_health.LANE_NEWS)
+    else:
+        yfinance_health.record_failure("probe news: expected a list", lane=yfinance_health.LANE_NEWS)
 
 
 def probe_yfinance_ohlcv() -> None:

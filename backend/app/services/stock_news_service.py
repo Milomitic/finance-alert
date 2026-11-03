@@ -120,29 +120,39 @@ def get_news(
             logger.warning(f"[news] L2 read failed for {ticker}: {exc}")
 
     # Both layers missed → upstream fetch
-    from app.services import data_source_metrics
-    try:
-        import yfinance as yf
-        raw_items = yf.Ticker(ticker).news or []
-        data_source_metrics.record_success("yfinance", "news")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"[news] yfinance fetch failed for {ticker}: {exc}")
-        data_source_metrics.record_failure(
-            "yfinance", "news", reason=str(exc)[:200]
-        )
-        if force_refresh:
-            # User-initiated forced refresh: surface the failure so the card can
-            # render the error text instead of silently caching an empty list.
-            raise UpstreamUnavailable(
-                str(exc)[:200], source="yfinance", op="news"
-            ) from exc
-        # Cache empty result in L1 only to avoid hammering on failure.
-        # Don't persist failures to L2 — a transient yfinance outage shouldn't
-        # poison the cache for an hour across restarts.
-        _CACHE[ticker] = (now, [])
-        return []
-    normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
-    normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
+    from app.services import data_source_metrics, yfinance_health
+
+    # ⚠️ The news LANE of the yfinance breaker (2026-11-03). While Yahoo's news
+    # endpoint is down the lane is open and yfinance is not called at all —
+    # before it, the score recompute sent ~1000 doomed requests per scan. Every
+    # five minutes `is_open` lets ONE request through as a probe: success
+    # closes the lane and calls resume, failure re-opens it.
+    #
+    # And a failure no longer ends the chain: it used to `return []` right
+    # here, so a Yahoo outage left every card empty while Finnhub and the RSS
+    # feed below were answering. Now it falls through to them.
+    normalized: list[dict[str, Any]] = []
+    yf_errore: str | None = None
+    if yfinance_health.is_open(yfinance_health.LANE_NEWS):
+        yf_errore = "notizie yfinance in pausa: la fonte e' giu', riprovo fra poco"
+        logger.debug(f"[news] yfinance news lane open — skipping {ticker}")
+    else:
+        try:
+            import yfinance as yf
+            raw_items = yf.Ticker(ticker).news or []
+            data_source_metrics.record_success("yfinance", "news")
+            yfinance_health.record_success(yfinance_health.LANE_NEWS)
+            normalized = [n for raw in raw_items if (n := _normalize_yf_item(raw))]
+            normalized.sort(key=lambda n: n.get("published_at") or "", reverse=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[news] yfinance fetch failed for {ticker}: {exc}")
+            data_source_metrics.record_failure(
+                "yfinance", "news", reason=str(exc)[:200]
+            )
+            yfinance_health.record_failure(
+                f"news {ticker}: {str(exc)[:120]}", lane=yfinance_health.LANE_NEWS
+            )
+            yf_errore = str(exc)[:200]
 
     if not normalized:
         # yfinance returned 0 usable headlines → try fallbacks in
@@ -239,6 +249,17 @@ def get_news(
                 ]
         except Exception as exc:  # noqa: BLE001 — fallback can fail, that's OK
             logger.warning(f"[news] marketaux fallback failed for {ticker}: {exc}")
+
+    if not normalized and yf_errore is not None:
+        if force_refresh:
+            # User-initiated forced refresh: surface the failure so the card can
+            # render the error text instead of silently caching an empty list.
+            raise UpstreamUnavailable(yf_errore, source="yfinance", op="news")
+        # Cache empty result in L1 only to avoid hammering on failure.
+        # Don't persist failures to L2 — a transient yfinance outage shouldn't
+        # poison the cache for an hour across restarts.
+        _CACHE[ticker] = (now, [])
+        return []
 
     _CACHE[ticker] = (now, normalized)
     # Persist to L2. Non-fatal — L1 still serves consumers if the DB write fails.

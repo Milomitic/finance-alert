@@ -37,6 +37,13 @@ The lanes therefore reflect COST OF LOSS, not just traffic:
 
 Keep the noisy, cheap-to-lose traffic OFF the lane that carries data you
 cannot re-derive.
+
+- LANE_NEWS — `Ticker.news` (2026-11-03). Yahoo's news endpoint can go down
+  on its own («YAHOO! FINANCE IS CURRENTLY DOWN!») while quotes and bars keep
+  working: on 2026-11-02 it failed 971 times in ninety minutes, mostly from
+  the score recompute asking news for every stock. A lane of its own stops
+  that flood without blocking anything else, and the half-open probe below is
+  what notices when it comes back.
 """
 import os
 import time
@@ -56,7 +63,8 @@ T = TypeVar("T")
 LANE_DEFAULT = "default"
 LANE_QUOTES = "quotes"
 LANE_OHLCV = "ohlcv"
-KNOWN_LANES = (LANE_DEFAULT, LANE_QUOTES, LANE_OHLCV)
+LANE_NEWS = "news"
+KNOWN_LANES = (LANE_DEFAULT, LANE_QUOTES, LANE_OHLCV, LANE_NEWS)
 
 # Persist the yfinance breaker's open state across restarts (the 4 fallback
 # breakers already do this via breaker_state). Reuses the same JSON store under
