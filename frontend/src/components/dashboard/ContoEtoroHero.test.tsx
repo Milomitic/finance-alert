@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EtoroAndamento, EtoroVivo } from "@/api/etoro";
 import { axeViolations, describeViolations } from "@/test/axe";
@@ -44,6 +44,12 @@ function monta(v: EtoroVivo = VIVO) {
 }
 
 beforeEach(() => {
+  // L'orologio fermo al giorno in cui i dati della fixture sono stati letti: il
+  // grafico «1M» filtra la serie rispetto a OGGI, e dal 6 novembre 2026 i punti
+  // di settembre e ottobre cadevano fuori dalla finestra (CI rossa su un commit
+  // che non toccava il frontend). Solo `Date`: i timer di react-query restano veri.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-06T10:03:00Z"));
   andamento = {
     configurato: true,
     giorni: [
@@ -54,6 +60,10 @@ beforeEach(() => {
     periodi: [{ chiave: "1M", dal: "2026-09-05", valore_iniziale: 7900, valore_finale: 8255.93, variazione: 355.93,
       generato: 300, realizzato: 50, flussi: 55.93, generato_pct: 3.8 }],
   };
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("ContoEtoroHero", () => {
