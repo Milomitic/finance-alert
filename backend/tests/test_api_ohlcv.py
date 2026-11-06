@@ -68,3 +68,42 @@ def test_ohlcv_unknown_ticker_returns_empty(client: TestClient) -> None:
     r = client.get("/api/stocks/NOPE/ohlcv")
     assert r.status_code == 200
     assert r.json() == []
+
+
+def _semina_lunga(db: Session, ticker: str, n: int) -> None:
+    """n barre giornaliere consecutive a partire dal 2010-01-01."""
+    from datetime import timedelta
+    s = Stock(ticker=ticker, exchange="NASDAQ", name=ticker, country="US")
+    db.add(s)
+    db.flush()
+    for i in range(n):
+        db.add(OhlcvDaily(stock_id=s.id, date=date(2010, 1, 1) + timedelta(days=i),
+                          open=10, high=11, low=9, close=10 + i, volume=5))
+    db.commit()
+
+
+def test_ohlcv_con_dal_supera_il_tetto_delle_400_barre(client: TestClient, db: Session) -> None:
+    """Con `dal` la finestra e' un intervallo di DATE, non le ultime N barre:
+    dieci anni di storia sono ~2.500 barre, e il tetto del grafico (400) li
+    taglierebbe in silenzio."""
+    _semina_lunga(db, "LUN", 1000)
+    r = client.get("/api/stocks/LUN/ohlcv?dal=2010-01-01")
+    assert r.status_code == 200
+    bars = r.json()
+    assert len(bars) == 1000
+    assert bars[0]["date"] == "2010-01-01"
+    assert bars[0]["date"] < bars[-1]["date"]
+
+
+def test_ohlcv_dal_e_al_sono_inclusivi(client: TestClient, db: Session) -> None:
+    _semina_lunga(db, "INT", 30)
+    bars = client.get("/api/stocks/INT/ohlcv?dal=2010-01-05&al=2010-01-10").json()
+    assert [b["date"] for b in bars] == [f"2010-01-{d:02d}" for d in range(5, 11)]
+
+
+def test_ohlcv_solo_al_resta_l_ultima_finestra_fino_a_quella_data(client: TestClient, db: Session) -> None:
+    """`al` senza `dal`: le ultime `bars` barre FINO a quella data."""
+    _semina_lunga(db, "FIN", 30)
+    bars = client.get("/api/stocks/FIN/ohlcv?bars=10&al=2010-01-20").json()
+    assert len(bars) == 10
+    assert (bars[0]["date"], bars[-1]["date"]) == ("2010-01-11", "2010-01-20")

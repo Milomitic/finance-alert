@@ -51,11 +51,12 @@ def leggi_token(percorso: Path = FILE_TOKEN) -> str:
     return token
 
 
-def chiama(percorso: str, parametri: dict[str, Any] | None = None, *, client: httpx.Client | None = None) -> Any:
+def chiama(percorso: str, parametri: dict[str, Any] | None = None, *, client: httpx.Client | None = None,
+           timeout: float = 30.0) -> Any:
     """GET sull'API, con gli errori tradotti in frasi utili."""
     parametri = {k: v for k, v in (parametri or {}).items() if v is not None}
     proprio = client is None
-    c = client or httpx.Client(base_url=URL, timeout=30.0,
+    c = client or httpx.Client(base_url=URL, timeout=timeout,
                                headers={"Authorization": f"Bearer {leggi_token()}"})
     try:
         r = c.get(percorso, params=parametri)
@@ -209,6 +210,80 @@ def prestazioni_detector() -> Any:
 def esiti_piani() -> Any:
     """Gli esiti dei piani (stop contro target, in multipli di R) per detector."""
     return sfoltisci(chiama("/api/platform/plan-performance"))
+
+
+#: I simboli non-azionari che l'app sa servire (`LIVE_ASSET_DEFINITIONS` in
+#: backend/app/api/market.py, piu' i futures sugli indici). Il backend rifiuta
+#: gli altri di proposito: qui servono solo a dire cosa chiedere.
+SIMBOLI_MERCATO = (
+    "^GSPC (S&P 500), ^IXIC (Nasdaq Composite), ^DJI (Dow Jones), ^VIX, ^N225 (Nikkei), "
+    "^STOXX50E (Euro Stoxx 50), FTSEMIB.MI, ^HSI (Hang Seng), 000300.SS (CSI 300), "
+    "GC=F (oro), SI=F (argento), CL=F (WTI), NG=F (gas), BTC-USD, ETH-USD, "
+    "futures sugli indici ES=F, NQ=F, YM=F, NKD=F"
+)
+COLONNE_STORICO = ("data", "apertura", "massimo", "minimo", "chiusura", "volume")
+#: Dieci anni di analisi piu' uno per scaldare una media a 200 sedute.
+ANNI_DEFAULT = 11
+
+
+def _riga(b: dict[str, Any], solo_chiusure: bool) -> list[Any]:
+    d = str(b["date"])[:10]
+    if solo_chiusure:
+        return [d, round(float(b["close"]), 4)]
+    return [d, *(round(float(b[k]), 4) for k in ("open", "high", "low", "close")), b.get("volume")]
+
+
+def leggi_storico(simbolo: str, dal: str | None = None, al: str | None = None,
+                  solo_chiusure: bool = False) -> dict[str, Any]:
+    """Il corpo di `storico`, separato perche' i test lo chiamino senza MCP.
+
+    Prima il catalogo (azioni, nel database dell'app), poi i mercati: il
+    catalogo risponde una lista VUOTA a un simbolo che non conosce, e
+    l'endpoint dei mercati rende tutta la storia, quindi l'intervallo di date
+    si applica qui."""
+    s = simbolo.strip().upper()
+    oggi = date.today()
+    dal = dal or date(oggi.year - ANNI_DEFAULT, oggi.month, 1).isoformat()
+    barre = chiama(f"/api/stocks/{s}/ohlcv", {"dal": dal, "al": al}, timeout=60.0)
+    fonte = "catalogo (database dell'app)"
+    if not barre:
+        try:
+            d = chiama(f"/api/markets/{s}/detail", {"range": "1d"}, timeout=120.0)
+        except ErroreApp as e:
+            raise ErroreApp(
+                f"{s} non e' un titolo del catalogo ne' un mercato servito dall'app. "
+                f"Mercati disponibili: {SIMBOLI_MERCATO}. ({e})"
+            ) from e
+        barre = [b for b in d.get("bars") or []
+                 if str(b["date"])[:10] >= dal and (al is None or str(b["date"])[:10] <= al)]
+        fonte = "mercati (yfinance, storia completa)"
+    righe = [_riga(b, solo_chiusure) for b in barre]
+    return {
+        "simbolo": s, "fonte": fonte, "barre": len(righe),
+        "dal": righe[0][0] if righe else None, "al": righe[-1][0] if righe else None,
+        "colonne": ["data", "chiusura"] if solo_chiusure else list(COLONNE_STORICO),
+        "righe": righe,
+    }
+
+
+@mcp.tool(annotations=SOLA_LETTURA)
+def storico(simbolo: str, dal: str | None = None, al: str | None = None,
+            solo_chiusure: bool = False) -> dict[str, Any]:
+    """Serie storica GIORNALIERA di un titolo o di un mercato, per statistiche sul passato.
+
+    simbolo: un ticker del catalogo (AAPL, UCG.MI, 0700.HK...: ~10 anni nel
+    database dell'app) oppure un mercato: ^GSPC, ^IXIC, ^DJI, ^VIX, ^N225,
+    ^STOXX50E, FTSEMIB.MI, ^HSI, 000300.SS, GC=F, SI=F, CL=F, NG=F, BTC-USD,
+    ETH-USD, ES=F, NQ=F, YM=F, NKD=F (storia completa: il Nasdaq dal 1971).
+    dal / al: date ISO, incluse. Senza `dal`: gli ultimi ~11 anni, cioe' dieci
+    di analisi piu' le sedute che scaldano una media a 200 giorni.
+    solo_chiusure: solo data e chiusura, risposta piu' leggera.
+
+    Le serie lunghe sono migliaia di righe: elaborarle con codice (Python) sul
+    file in cui il client salva la risposta, non a occhio. Medie mobili e ogni
+    altra statistica si calcolano su queste barre.
+    """
+    return leggi_storico(simbolo, dal, al, solo_chiusure)
 
 
 if __name__ == "__main__":

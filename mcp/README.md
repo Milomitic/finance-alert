@@ -18,6 +18,16 @@ in rete.
 | `calendario` | macro e trimestrali dei prossimi giorni |
 | `prestazioni_detector` | esiti dei segnali al netto del mercato, con i campioni |
 | `esiti_piani` | esiti dei piani (stop contro target) in multipli di R |
+| `storico` | barre giornaliere di un titolo (~10 anni, dal database) o di un mercato (indici, materie prime, crypto: storia completa), per statistiche sul passato |
+
+`storico` restituisce migliaia di righe in forma a colonne: il client le salva
+su file, e le statistiche (medie mobili, rendimenti, conteggi) si calcolano con
+codice su quel file. Per i titoli usa `GET /api/stocks/{t}/ohlcv?dal=&al=`
+(senza `dal` quell'endpoint resta la finestra di 400 barre del grafico); per i
+mercati `GET /api/markets/{s}/detail?range=1d`, che rende tutta la storia
+(~8 MB per il Nasdaq) e viene tagliata qui. I mercati sono SOLO quelli
+dell'elenco curato in `backend/app/api/market.py`: il backend rifiuta gli altri
+di proposito.
 
 ## Sicurezza
 

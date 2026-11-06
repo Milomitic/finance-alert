@@ -1,4 +1,5 @@
 """Stock router."""
+import datetime as dt
 from datetime import UTC
 from typing import Annotated
 
@@ -488,27 +489,48 @@ def get_stock_detail(
     )
 
 
+#: Tetto di un intervallo di date: ~24 anni di sedute, oltre la storia che il
+#: catalogo conserva (10 anni). Esiste solo perche' nessuna risposta sia
+#: illimitata.
+_MAX_BARRE_INTERVALLO = 6000
+
+
 @router.get("/{ticker}/ohlcv", response_model=list[OhlcvBarOut])
 def get_ohlcv_window(
     ticker: str,
     bars: int = 120,
+    dal: dt.date | None = None,
+    al: dt.date | None = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> list[OhlcvBarOut]:
-    """Recent daily OHLCV window for the annotated signal chart. Tolerates the
-    catalog's duplicate-ticker rows (picks any matching stock); returns an
-    empty list when the ticker is unknown or has no bars."""
-    bars = max(10, min(bars, 400))
+    """Daily OHLCV for a catalogue stock. Tolerates the catalog's
+    duplicate-ticker rows (picks any matching stock); returns an empty list
+    when the ticker is unknown or has no bars.
+
+    Two shapes. Without `dal`: the last `bars` bars (10..400) up to `al` or
+    today — the annotated signal chart. With `dal`: every bar in
+    [`dal`, `al`], both inclusive, up to `_MAX_BARRE_INTERVALLO` — the
+    historical questions asked through the MCP server, where ten years are
+    ~2,500 bars and the chart's 400 cap would truncate them silently."""
     stock = db.execute(
         select(Stock).where(Stock.ticker == ticker).limit(1)
     ).scalars().first()
     if stock is None:
         return []
-    rows = db.execute(
-        select(OhlcvDaily).where(OhlcvDaily.stock_id == stock.id)
-        .order_by(OhlcvDaily.date.desc()).limit(bars)
-    ).scalars().all()
-    rows = list(reversed(rows))  # ascending for the chart
+    q = select(OhlcvDaily).where(OhlcvDaily.stock_id == stock.id)
+    if al is not None:
+        q = q.where(OhlcvDaily.date <= al)
+    if dal is not None:
+        rows = db.execute(
+            q.where(OhlcvDaily.date >= dal)
+            .order_by(OhlcvDaily.date.asc()).limit(_MAX_BARRE_INTERVALLO)
+        ).scalars().all()
+    else:
+        rows = db.execute(
+            q.order_by(OhlcvDaily.date.desc()).limit(max(10, min(bars, 400)))
+        ).scalars().all()
+        rows = list(reversed(rows))  # ascending for the chart
     return [
         OhlcvBarOut(
             date=str(b.date), open=float(b.open), high=float(b.high),

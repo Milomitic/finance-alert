@@ -1115,6 +1115,14 @@ ambiente e lockfile propri, fuori da quelli del backend.
   (`read_only_hint`), con l'alias camelCase solo in rete. Il test sugli
   strumenti verifica entrambi.
 - ⚠️ Se ogni chiamata scade, e' l'allowlist della 443 (sezione sotto).
+- **Domande statistiche sul passato** («quante volte il Nasdaq...», «come si e'
+  comportato X dopo...»): strumento `storico`, poi il calcolo in Python sul file
+  in cui il client salva la risposta. Titoli ~10 anni dal database, mercati
+  (indici, oro, petrolio, crypto) con la storia completa. Fuori da una
+  sessione MCP lo stesso codice si chiama da `cd mcp && uv run python` con
+  `finance_alert_mcp.leggi_storico(...)`. Fissare le definizioni (quale media,
+  cosa e' un evento, contro quale base) e dirle nella risposta: e' li' che un
+  conteggio cambia di molto.
 
 ## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
 

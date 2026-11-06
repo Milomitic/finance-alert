@@ -70,3 +70,65 @@ def test_ogni_strumento_e_dichiarato_di_sola_lettura() -> None:
         # E in rete esce col nome del protocollo, che e' quello che il client legge.
         assert s.annotations.model_dump(by_alias=True, exclude_none=True)["readOnlyHint"] is True
         assert s.annotations.destructive_hint is False
+
+
+def _barra(d: str, c: float) -> dict:
+    return {"date": d, "open": c, "high": c + 1, "low": c - 1, "close": c, "volume": 10}
+
+
+def test_storico_di_un_titolo_viene_dal_catalogo_con_l_intervallo(monkeypatch) -> None:
+    chiamate = []
+
+    def finto(percorso, parametri=None, **kw):
+        chiamate.append((percorso, parametri))
+        return [_barra("2020-01-02", 10.123456), _barra("2020-01-03", 11)]
+
+    monkeypatch.setattr(srv, "chiama", finto)
+    r = srv.leggi_storico("aapl", dal="2020-01-01", al="2020-12-31")
+    assert chiamate == [("/api/stocks/AAPL/ohlcv", {"dal": "2020-01-01", "al": "2020-12-31"})]
+    assert r["fonte"].startswith("catalogo")
+    assert (r["barre"], r["dal"], r["al"]) == (2, "2020-01-02", "2020-01-03")
+    assert r["colonne"] == ["data", "apertura", "massimo", "minimo", "chiusura", "volume"]
+    assert r["righe"][0] == ["2020-01-02", 10.1235, 11.1235, 9.1235, 10.1235, 10]
+
+
+def test_storico_di_un_indice_ripiega_sui_mercati_e_taglia_alle_date(monkeypatch) -> None:
+    """Il catalogo risponde vuoto per ^IXIC; i mercati rendono TUTTA la
+    storia, quindi l'intervallo si applica nel server MCP."""
+    def finto(percorso, parametri=None, **kw):
+        if percorso.startswith("/api/stocks/"):
+            return []
+        assert (percorso, parametri) == ("/api/markets/^IXIC/detail", {"range": "1d"})
+        return {"bars": [_barra("1999-12-31", 1), _barra("2016-01-04", 2),
+                         _barra("2016-01-05", 3), _barra("2026-01-02", 4)]}
+
+    monkeypatch.setattr(srv, "chiama", finto)
+    r = srv.leggi_storico("^ixic", dal="2016-01-01", al="2025-12-31", solo_chiusure=True)
+    assert r["fonte"].startswith("mercati")
+    assert r["colonne"] == ["data", "chiusura"]
+    assert r["righe"] == [["2016-01-04", 2.0], ["2016-01-05", 3.0]]
+
+
+def test_storico_senza_dal_copre_dieci_anni_piu_il_riscaldamento(monkeypatch) -> None:
+    visti = {}
+
+    def finto(percorso, parametri=None, **kw):
+        visti.update(parametri or {})
+        return [_barra("2020-01-02", 1)]
+
+    monkeypatch.setattr(srv, "chiama", finto)
+    srv.leggi_storico("AAPL")
+    oggi = srv.date.today()
+    dieci_anni_fa = srv.date(oggi.year - 10, oggi.month, 1).isoformat()
+    assert visti["dal"] < dieci_anni_fa
+
+
+def test_storico_di_un_simbolo_sconosciuto_elenca_i_mercati(monkeypatch) -> None:
+    def finto(percorso, parametri=None, **kw):
+        if percorso.startswith("/api/stocks/"):
+            return []
+        raise srv.ErroreApp("Non trovato")
+
+    monkeypatch.setattr(srv, "chiama", finto)
+    with pytest.raises(srv.ErroreApp, match=r"\^IXIC"):
+        srv.leggi_storico("XYZ")
