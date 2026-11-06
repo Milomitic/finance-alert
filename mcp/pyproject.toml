@@ -1,0 +1,12 @@
+[project]
+name = "finance-alert-mcp"
+version = "0.1.0"
+description = "Server MCP locale, di sola lettura, sull'API di produzione di Finance Alert"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]

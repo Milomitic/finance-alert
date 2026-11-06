@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "finance-alert": {
+      "command": "uv",
+      "args": ["run", "--directory", "mcp", "python", "finance_alert_mcp.py"]
+    }
+  }
+}

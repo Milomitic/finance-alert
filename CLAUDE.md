@@ -1097,6 +1097,25 @@ Correzione: sostituire il /32 nel tfvars, poi Terraform in container (Docker
 Desktop va avviato, ~30 s) con `-target` sulle sole regole `https_ingress` e
 `api_ingress`: piano «2 to add, 2 to destroy», un secondo, nessun riavvio.
 
+## Server MCP locale, in sola lettura (2026-11-06)
+
+`mcp/` e' un server MCP che gira sul PC dell'utente (stdio) e legge l'API di
+produzione con un token. Claude Code lo trova da `.mcp.json`. Dettagli e
+strumenti in `mcp/README.md`; i test si lanciano con `cd mcp && uv run pytest`,
+ambiente e lockfile propri, fuori da quelli del backend.
+
+- **Sola lettura per costruzione, sul server:** `api/deps._utente_da_token`
+  accetta `Authorization: Bearer` solo su GET/HEAD e risponde 403 al resto,
+  anche col token giusto. In produzione c'e' solo l'impronta
+  (`MCP_TOKEN_SHA256` nel Secret, `optional` nello StatefulSet); il token in
+  chiaro sta in `~/.finance-alert/mcp-token` sul PC. Revoca: togliere la chiave
+  dal Secret e riavviare il pod.
+- ⚠️ `mcp` 2.x ha rinominato `FastMCP` in `MCPServer`
+  (`mcp.server.mcpserver`) e i campi di `ToolAnnotations` sono snake_case
+  (`read_only_hint`), con l'alias camelCase solo in rete. Il test sugli
+  strumenti verifica entrambi.
+- ⚠️ Se ogni chiamata scade, e' l'allowlist della 443 (sezione sotto).
+
 ## ⚠️ Do NOT `chmod 600` the node's kubeconfig (2026-09-09)
 
 It reads like elementary hygiene and it **locks you out of the cluster**. Cost
