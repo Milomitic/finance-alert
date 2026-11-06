@@ -178,6 +178,9 @@ BERSAGLI: dict[str, list[str]] = {
     "app/core/security.py": [
         "tests/test_security.py",
         "tests/test_api_auth.py",
+        # Token di sola lettura del server MCP (2026-11-06): crea l'utente con
+        # `hash_password`, quindi esegue il modulo.
+        "tests/test_token_mcp.py",
         "tests/test_session_revocation_persistence.py",
         # Scritto DOPO la prima passata, che su questo modulo uccideva 0 su 9:
         # copre i rami di RIFIUTO (hash malformato, username vuoto/lungo/non

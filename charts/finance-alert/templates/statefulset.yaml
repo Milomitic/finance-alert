@@ -131,6 +131,15 @@ spec:
                   name: {{ include "finance-alert.secretName" . }}
                   key: FRED_API_KEY
                   optional: true
+            # Server MCP locale (2026-11-06): l'IMPRONTA SHA-256 del token di
+            # sola lettura, mai il token. Assente = token spento, ed e' il
+            # default giusto: optional, il pod parte comunque.
+            - name: MCP_TOKEN_SHA256
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "finance-alert.secretName" . }}
+                  key: MCP_TOKEN_SHA256
+                  optional: true
             # Telegram — the digest, the per-signal push and the health
             # transition alerts all need BOTH of these. Third time this exact
             # trap has been found in this file: a capability shipped in the app,

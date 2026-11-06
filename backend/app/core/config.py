@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # the real hostname.
     allowed_hosts: str = "*"
     admin_username: str = "admin"
+    # Token di SOLA LETTURA per il server MCP locale (2026-11-06): l'impronta
+    # SHA-256 esadecimale del token, mai il token. Vuota = spento. Il token in
+    # chiaro sta solo sul PC dell'utente; vedi `api/deps._utente_da_token`.
+    mcp_token_sha256: str = ""
     admin_password_hash: str = ""
     # Throttling login (B4-11, light): dopo N fallimenti consecutivi per uno
     # username il login risponde 429 + Retry-After finché non passano

@@ -1,4 +1,6 @@
 """FastAPI dependencies: DB session, current user."""
+import hashlib
+import hmac
 from collections.abc import Iterator
 
 from fastapi import Depends, HTTPException, Request, status
@@ -27,6 +29,10 @@ def get_current_user(
     # Release the authentication connection before sending an SSE response.
     token = request.cookies.get(settings.session_cookie_name)
     if not token:
+        utente = _utente_da_token(request, db)
+        if utente is not None:
+            db.close()
+            return utente
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     try:
         username = read_session_token(token)
@@ -45,6 +51,39 @@ def get_current_user(
     db.close()
     presence.segna_attivita()
     return user
+
+
+#: I soli metodi che il token del server MCP puo' usare: e' di sola lettura per
+#: costruzione, non per convenzione di chi lo usa.
+_METODI_LETTURA = frozenset({"GET", "HEAD"})
+
+
+def _utente_da_token(request: Request, db: Session) -> User | None:
+    """L'utente amministratore, se la richiesta porta il token di sola lettura
+    del server MCP locale (`Authorization: Bearer ...`). None se non lo porta.
+
+    Tre scelte che non sono dettagli:
+    - in produzione sta solo l'IMPRONTA (`mcp_token_sha256`): chi legge il
+      Secret o la configurazione non ottiene un token usabile;
+    - il confronto e' a tempo costante (`hmac.compare_digest`);
+    - qualunque metodo diverso da GET/HEAD e' rifiutato con 403 anche col token
+      giusto, cosi' una chiamata che scrive non passa nemmeno per sbaglio.
+    Non segna la presenza: non e' una persona che usa l'app."""
+    intestazione = request.headers.get("authorization", "")
+    if not intestazione.lower().startswith("bearer "):
+        return None
+    atteso = settings.mcp_token_sha256.strip().lower()
+    if not atteso:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token non abilitato")
+    impronta = hashlib.sha256(intestazione[7:].strip().encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(impronta, atteso):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if request.method not in _METODI_LETTURA:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token di sola lettura")
+    utente = db.execute(select(User).where(User.username == settings.admin_username)).scalar_one_or_none()
+    if utente is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return utente
 
 
 def _has_body(request: Request) -> bool:
