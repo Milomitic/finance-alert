@@ -1,8 +1,8 @@
 # Piano di implementazione — evolutive 2026-11
 
 Mette in ordine tutte le voci di `docs/analisi-evolutiva-2026-11-13.md` e le
-proposte sui motori di segnali ed esiti del 2026-11-13. Trentuno voci in sette
-filoni, da FA-132 a FA-162.
+proposte sui motori di segnali ed esiti del 2026-11-13. Trenta voci in sette
+filoni, da FA-133 a FA-162, più FA-129 che è già aperta.
 
 ## Come leggere il piano
 
@@ -25,7 +25,7 @@ Stime in giorni di lavoro di una sessione; sono ordini di grandezza.
 | Fase | Voci | Perché in quest'ordine |
 |---|---|---|
 | 0 | FA-129 | il database si ferma fra pochi giorni |
-| 1 | FA-132, 138, 139, 140, 150 | substrato che accumula dati: ogni giorno di ritardo è un giorno non misurabile |
+| 1 | FA-138, 139, 140, 150 | substrato che accumula dati: ogni giorno di ritardo è un giorno non misurabile |
 | 2 | FA-133, 134, 135, 136 | l'app che si usa: accesso, velocità, segnali dove servono |
 | 3 | FA-143, 144, 145, 146, 147, 148 | rischio delle posizioni, la capability principale |
 | 4 | FA-141, 142, 151, 152, 153 | resto dei motori |
@@ -33,7 +33,7 @@ Stime in giorni di lavoro di una sessione; sono ordini di grandezza.
 | 6 | FA-157, 158, 159, 160, 161 | struttura e assistente |
 | — | FA-162 | decisione dell'utente, nessun lavoro finché non c'è |
 
-La fase 1 viene prima del prodotto di proposito: FA-132, 138 e 150 scrivono
+La fase 1 viene prima del prodotto di proposito: FA-138, 139 e 150 scrivono
 dati che non si ricostruiscono all'indietro (o solo in parte), e la lettura di
 marzo 2027 dipende da quanti mesi avranno accumulato.
 
@@ -519,5 +519,5 @@ tabella è vuota).
 
 ## Totale
 
-Circa 55 giorni di lavoro: fase 1 otto, fase 2 sei, fase 3 dieci e mezzo,
+Circa 52 giorni di lavoro: fase 1 sei e mezzo, fase 2 sei, fase 3 dieci e mezzo,
 fase 4 sette e mezzo, fase 5 nove, fase 6 tredici.
