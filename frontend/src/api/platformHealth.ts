@@ -327,6 +327,33 @@ export type DetectorPerfCell = {
    *  edge/coinflip/negative, which keys on a point estimate with no sample
    *  behind it — same word, different bar would be worse than no word. */
   skill_verdict: "above" | "below" | "inconclusive" | null;
+  /** Lo stesso tasso market-neutral con ogni GIORNO a peso uguale (FA-140):
+   *  un giorno con trecento segnali e' il mercato di quel giorno visto
+   *  trecento volte. Null sulle celle del replay. */
+  mkt_neutral_hit_rate_per_giorno?: number | null;
+  giorni?: number | null;
+};
+
+/** Un detector a UN orizzonte (FA-138), contro la mediana dell'universo e
+ *  contro la mediana di cinque titoli dello stesso giorno e della stessa
+ *  fascia di volatilita' (FA-139). Sotto ipotesi nulla il colpo sul
+ *  controllo vale 50% esatti. Il verdetto c'e' solo all'orizzonte proprio. */
+export type OrizzonteCell = {
+  orizzonte: number;
+  proprio: boolean;
+  n: number;
+  effective_n: number;
+  giorni: number;
+  colpo_mediana: number | null;
+  colpo_mediana_ci_low: number | null;
+  colpo_mediana_ci_high: number | null;
+  colpo_controllo: number | null;
+  colpo_controllo_ci_low: number | null;
+  colpo_controllo_ci_high: number | null;
+  colpo_controllo_per_giorno: number | null;
+  eccesso_controllo_medio: number | null;
+  verdetto: "above" | "below" | "inconclusive" | null;
+  low_confidence: boolean;
 };
 
 /** One detector's totals + the three orthogonal breakdowns. */
@@ -336,6 +363,7 @@ export type DetectorPerfRow = {
   by_regime: DetectorPerfCell[]; // bull / bear / flat / n-d
   by_tone: DetectorPerfCell[]; // bull / bear
   by_strength: DetectorPerfCell[]; // <60 / 60-74 / >=75 / n-d
+  per_orizzonte?: OrizzonteCell[];
 };
 
 /** Coverage honesty header: the warehouse is young and partial — the UI must

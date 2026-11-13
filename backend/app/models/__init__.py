@@ -2,6 +2,7 @@
 from app.models.alert import Alert
 from app.models.archivio_non_prezzo import ArchivioNonPrezzo
 from app.models.catalog_log import CatalogRefreshLog
+from app.models.esito_orizzonte import EsitoOrizzonte
 from app.models.etoro import (
     EtoroCatalogo,
     EtoroConto,
@@ -72,6 +73,7 @@ __all__ = [
     "PlanOutcome",
     "SignalOutcome",
     "SignalCandidate",
+    "EsitoOrizzonte",
     "ModelloOmbra",
     "ArchivioNonPrezzo",
     "ScoreHistory",

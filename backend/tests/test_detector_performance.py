@@ -465,6 +465,8 @@ def test_detector_performance_endpoint_returns_replay_segment(
         "avg_fwd_return", "low_confidence",
         "effective_n", "horizon_days",
         "skill_ci_low", "skill_ci_high", "skill_verdict",
+        # FA-140: lo stesso tasso con ogni giorno a peso uguale.
+        "mkt_neutral_hit_rate_per_giorno", "giorni",
     }
 
 
@@ -481,12 +483,16 @@ def test_detector_performance_endpoint_returns_cube(client: TestClient, db: Sess
     row = body["detectors"][0]
     assert set(row.keys()) == {
         "detector", "total", "by_regime", "by_tone", "by_strength",
+        # FA-138: lo stesso detector a 1, 5, 21 e 63 sedute.
+        "per_orizzonte",
     }
     assert set(row["total"].keys()) == {
         "key", "n", "abs_hit_rate", "mkt_neutral_hit_rate",
         "avg_fwd_return", "low_confidence",
         "effective_n", "horizon_days",
         "skill_ci_low", "skill_ci_high", "skill_verdict",
+        # FA-140: lo stesso tasso con ogni giorno a peso uguale.
+        "mkt_neutral_hit_rate_per_giorno", "giorni",
     }
     regimes = {c["key"]: c for c in row["by_regime"]}
     assert regimes["n/d"]["n"] == 1

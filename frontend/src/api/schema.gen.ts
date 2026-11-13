@@ -334,6 +334,8 @@ export interface DetectorPerfCellOut {
   skill_ci_low?: number | null;
   skill_ci_high?: number | null;
   skill_verdict?: string | null;
+  mkt_neutral_hit_rate_per_giorno?: number | null;
+  giorni?: number | null;
 }
 
 export interface DetectorPerfMetaOut {
@@ -354,6 +356,7 @@ export interface DetectorPerfRowOut {
   by_regime: DetectorPerfCellOut[];
   by_tone: DetectorPerfCellOut[];
   by_strength: DetectorPerfCellOut[];
+  per_orizzonte?: OrizzonteCellOut[];
 }
 
 export interface DetectorPerformanceOut {
@@ -1267,6 +1270,24 @@ export interface NovitaTitoloOut {
 export interface OhlcvFreshnessOut {
   max_date?: string | null;
   stocks_at_max?: number;
+}
+
+export interface OrizzonteCellOut {
+  orizzonte: number;
+  proprio: boolean;
+  n: number;
+  effective_n: number;
+  giorni: number;
+  colpo_mediana?: number | null;
+  colpo_mediana_ci_low?: number | null;
+  colpo_mediana_ci_high?: number | null;
+  colpo_controllo?: number | null;
+  colpo_controllo_ci_low?: number | null;
+  colpo_controllo_ci_high?: number | null;
+  colpo_controllo_per_giorno?: number | null;
+  eccesso_controllo_medio?: number | null;
+  verdetto?: string | null;
+  low_confidence: boolean;
 }
 
 export interface PaginaIn {

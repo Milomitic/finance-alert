@@ -5,6 +5,7 @@ import type {
   DetectorPerfCell,
   DetectorPerfMeta,
   DetectorPerfRow,
+  OrizzonteCell,
 } from "@/api/platformHealth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -215,6 +216,7 @@ function DetectorRow({ row }: { row: DetectorPerfRow }) {
           )}
         >
           {pct(t.mkt_neutral_hit_rate)}
+          <PerGiorno cell={t} />
         </td>
         <td className={cn("text-right px-3 py-2 font-semibold", retTone(t.avg_fwd_return))}>
           {ret(t.avg_fwd_return)}
@@ -226,6 +228,9 @@ function DetectorRow({ row }: { row: DetectorPerfRow }) {
       {expanded && (
         <tr className="border-b border-border/40 bg-muted/20">
           <td colSpan={6} className="px-3 py-3">
+            {row.per_orizzonte && row.per_orizzonte.length > 0 && (
+              <OrizzontiTable cells={row.per_orizzonte} />
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <BreakdownTable
                 title="Regime al segnale"
@@ -328,6 +333,97 @@ function BreakdownTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* Il tasso con ogni giorno a peso uguale (FA-140), solo quando si scosta dal
+ * tasso per riga di oltre 3 punti: e' il segno che pochi giorni affollati
+ * stanno decidendo il numero. Sotto quella soglia sarebbe una cifra in piu'
+ * che dice la stessa cosa. */
+function PerGiorno({ cell }: { cell: DetectorPerfCell }) {
+  const pg = cell.mkt_neutral_hit_rate_per_giorno;
+  const riga = cell.mkt_neutral_hit_rate;
+  if (pg == null || riga == null || Math.abs(pg - riga) <= 3) return null;
+  return (
+    <span
+      className="block text-[0.6765rem] font-normal text-muted-foreground"
+      title={`Con ogni giorno a peso uguale, su ${cell.giorni ?? "?"} giorni. Il tasso sopra pesa ogni segnale: un giorno con molti segnali conta quanto molti giorni.`}
+    >
+      {pg.toFixed(0)}% per giorno
+    </span>
+  );
+}
+
+/* Lo stesso detector a 1, 5, 21 e 63 sedute (FA-138), contro due
+ * riferimenti. «Mercato» e' la mediana dell'universo, come nel resto della
+ * tabella; «Controllo» la mediana di cinque titoli dello stesso giorno e
+ * della stessa fascia di volatilita' (FA-139), dove senza alcuna capacita'
+ * il colpo vale 50% esatti.
+ *
+ * Il colore e la parola del verdetto stanno SOLO sulla riga dell'orizzonte
+ * proprio: quattro orizzonti sono quattro confronti, e colorare il migliore
+ * dei quattro sarebbe scegliere il risultato dopo averlo visto. */
+function OrizzontiTable({ cells }: { cells: OrizzonteCell[] }) {
+  return (
+    <div className="mb-4">
+      <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+        Per orizzonte, contro mercato e controllo
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs tabular-nums">
+          <thead className="text-muted-foreground border-b">
+            <tr>
+              <th className="text-left px-2 py-1 font-semibold">Orizzonte</th>
+              <th className="text-right px-2 py-1 font-semibold">N</th>
+              <th className="text-right px-2 py-1 font-semibold">Mercato</th>
+              <th className="text-right px-2 py-1 font-semibold">Controllo</th>
+              <th className="text-right px-2 py-1 font-semibold">Eccesso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cells.map((c) => (
+              <tr
+                key={c.orizzonte}
+                className={cn(
+                  "border-b border-border/40",
+                  !c.proprio && "text-muted-foreground",
+                )}
+              >
+                <td className="px-2 py-1 whitespace-nowrap">
+                  {c.orizzonte} {c.orizzonte === 1 ? "seduta" : "sedute"}
+                  {c.proprio && (
+                    <span className="ml-1.5 px-1 py-px rounded text-[0.6471rem] uppercase tracking-wider font-semibold bg-muted text-foreground">
+                      proprio
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {c.n}
+                  <span className="block text-[0.6471rem] text-muted-foreground">
+                    {c.effective_n} fin. · {c.giorni} gg
+                  </span>
+                </td>
+                <td className="px-2 py-1 text-right">{pct(c.colpo_mediana)}</td>
+                <td
+                  className={cn(
+                    "px-2 py-1 text-right font-semibold",
+                    c.proprio && cellTone({ skill_verdict: c.verdetto }),
+                  )}
+                >
+                  {pct(c.colpo_controllo)}
+                  {c.colpo_controllo_ci_low != null && c.colpo_controllo_ci_high != null && (
+                    <span className="block text-[0.6471rem] font-normal text-muted-foreground">
+                      {c.colpo_controllo_ci_low.toFixed(0)}–{c.colpo_controllo_ci_high.toFixed(0)}
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 py-1 text-right">{ret(c.eccesso_controllo_medio)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

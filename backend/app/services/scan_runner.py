@@ -532,6 +532,15 @@ def run_tracked_scan(
         except Exception as cand_exc:  # noqa: BLE001
             db.rollback()
             logger.warning(f"[scan_runner] candidate outcome maturation failed (non-fatal): {cand_exc}")
+        # Ogni alert anche a 1, 5, 21 e 63 sedute, col controllo abbinato
+        # (FA-138, FA-139). Separato: un suo guasto non deve costare le
+        # maturazioni sopra, che alimentano cio' che l'utente vede oggi.
+        try:
+            from app.services import esiti_orizzonti_service
+            esiti_orizzonti_service.matura(db)
+        except Exception as orz_exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning(f"[scan_runner] horizon outcome maturation failed (non-fatal): {orz_exc}")
         # La gara fra stop e target dei piani. Separata dalle due sopra, e
         # ⚠️ non e' una precauzione generica: un esito di piano si risolve
         # quando il prezzo TOCCA una gamba, cioe' di regola PRIMA che

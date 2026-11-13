@@ -366,6 +366,31 @@ class DetectorPerfCellOut(BaseModel):
     # "inconclusive". Distinct from calibration_map's edge/coinflip/negative,
     # which keys on a point estimate with no sample behind it.
     skill_verdict: str | None = None
+    # Il tasso market-neutral con ogni giorno a peso uguale, e quanti giorni
+    # (FA-140). None sulle celle del replay, che non conservano le date.
+    mkt_neutral_hit_rate_per_giorno: float | None = None
+    giorni: int | None = None
+
+
+class OrizzonteCellOut(BaseModel):
+    """Un detector misurato a UN orizzonte, contro la mediana dell'universo e
+    contro cinque controlli della stessa fascia di volatilita' (FA-138/139).
+    Percentuali 0..100; il verdetto solo all'orizzonte proprio del detector."""
+    orizzonte: int
+    proprio: bool
+    n: int
+    effective_n: int
+    giorni: int
+    colpo_mediana: float | None = None
+    colpo_mediana_ci_low: float | None = None
+    colpo_mediana_ci_high: float | None = None
+    colpo_controllo: float | None = None
+    colpo_controllo_ci_low: float | None = None
+    colpo_controllo_ci_high: float | None = None
+    colpo_controllo_per_giorno: float | None = None
+    eccesso_controllo_medio: float | None = None
+    verdetto: str | None = None
+    low_confidence: bool
 
 
 class DetectorPerfRowOut(BaseModel):
@@ -375,6 +400,7 @@ class DetectorPerfRowOut(BaseModel):
     by_regime: list[DetectorPerfCellOut]     # bull / bear / flat / n-d (null regime)
     by_tone: list[DetectorPerfCellOut]       # bull / bear
     by_strength: list[DetectorPerfCellOut]   # <60 / 60-74 / >=75 / n-d (null strength)
+    per_orizzonte: list[OrizzonteCellOut] = []
 
 
 class DetectorPerfMetaOut(BaseModel):

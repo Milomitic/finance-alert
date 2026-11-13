@@ -102,3 +102,25 @@ def sized_interval(*, rate_pct: float, effective_n: int) -> tuple[float, float]:
     """
     lo, hi = wilson_interval(rate_pct / 100.0 * effective_n, effective_n)
     return round(lo * 100.0, 1), round(hi * 100.0, 1)
+
+
+def tasso_per_giorno(coppie: Sequence[tuple[date, int]]) -> tuple[float | None, int]:
+    """Il tasso a PESI UGUALI PER GIORNO, in percentuale, e quanti giorni.
+
+    La media delle medie giornaliere invece della media delle righe (FA-140).
+    Misurato in produzione il 2026-11-13: dieci giorni contenevano 1.984 esiti
+    su 9.212, fino a 348 in un giorno solo. Nella media per riga un giorno cosi'
+    pesa quanto un mese tranquillo, eppure e' il mercato di QUEL giorno visto
+    348 volte. Le due cifre insieme dicono se il tasso viene da pochi giorni
+    affollati o da tutto il periodo.
+
+    Non sostituisce il tasso per riga, che resta la stima puntuale: e' un
+    secondo modo di leggerlo. (None, 0) senza coppie.
+    """
+    per_giorno: dict[date, list[int]] = {}
+    for d, colpo in coppie:
+        per_giorno.setdefault(d, []).append(colpo)
+    if not per_giorno:
+        return None, 0
+    medie = [sum(v) / len(v) for v in per_giorno.values()]
+    return round(sum(medie) / len(medie) * 100.0, 1), len(per_giorno)

@@ -213,6 +213,9 @@ BERSAGLI: dict[str, list[str]] = {
         # La maturazione degli SCARTATI dai cancelli, con la stessa `_label`
         # degli alert (2026-09-24): un chiamante diretto.
         "tests/test_registro_scartati.py",
+        # Gli esiti a piu' orizzonti (FA-138) usano il suo riferimento di
+        # mercato, e la prova di parita' lo confronta con `mature_outcomes`.
+        "tests/test_esiti_orizzonti.py",
         # ⚠️ Questo NON importa il servizio: costruisce righe `SignalOutcome` a
         # mano e verifica il verso della curva dal lato del CONSUMATORE. Resta
         # in elenco perche' fissa lo stesso contratto (il tono al momento della

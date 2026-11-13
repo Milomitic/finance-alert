@@ -77,6 +77,7 @@ export type _M7_InfraLogSource = Nessuno<SoloNelFrontend<M7.InfraLogSource, S.In
 export type _M7_InfraLogs = Nessuno<SoloNelFrontend<M7.InfraLogs, S.InfraLogsOut>>;
 export type _M7_SignalDriftRow = Nessuno<SoloNelFrontend<M7.SignalDriftRow, S.SignalDriftRowOut>>;
 export type _M7_DetectorPerfCell = Nessuno<SoloNelFrontend<M7.DetectorPerfCell, S.DetectorPerfCellOut>>;
+export type _M7_OrizzonteCell = Nessuno<SoloNelFrontend<M7.OrizzonteCell, S.OrizzonteCellOut>>;
 export type _M7_DetectorPerfRow = Nessuno<SoloNelFrontend<M7.DetectorPerfRow, S.DetectorPerfRowOut>>;
 export type _M7_DetectorPerfMeta = Nessuno<SoloNelFrontend<M7.DetectorPerfMeta, S.DetectorPerfMetaOut>>;
 export type _M7_DetectorPerformance = Nessuno<SoloNelFrontend<M7.DetectorPerformance, S.DetectorPerformanceOut>>;

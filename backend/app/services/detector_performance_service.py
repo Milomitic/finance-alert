@@ -65,7 +65,7 @@ from sqlalchemy.orm import Session
 
 from app.models import SignalOutcome
 from app.signals.horizon import _PRIOR
-from app.stats.sizing import independent_blocks, sized_interval
+from app.stats.sizing import independent_blocks, sized_interval, tasso_per_giorno
 
 # Replay artifact written by `app.scripts.backfill_replay_outcomes`.
 # Module-level so tests can monkeypatch it to a tmp path.
@@ -144,9 +144,18 @@ def _cell(key: str, rows: Sequence, min_n: int) -> dict:
             "above" if ci_low > 50.0 else "below" if ci_high < 50.0 else "inconclusive"
         )
 
+    # Lo stesso tasso con ogni GIORNO a peso uguale (FA-140): un giorno con
+    # trecento segnali e' il mercato di quel giorno visto trecento volte, e
+    # nella media per riga pesa quanto un mese tranquillo.
+    per_giorno, giorni = tasso_per_giorno(
+        [(r.signal_date, r.mkt_neutral_hit) for r in labeled]
+    )
+
     return {
         "key": key,
         "n": n,
+        "giorni": giorni,
+        "mkt_neutral_hit_rate_per_giorno": per_giorno,
         "effective_n": eff_n,
         # Travels with the count because it EXPLAINS it: over one identical
         # span, a 5-day detector yields ~16 independent windows and a 63-day
@@ -260,6 +269,10 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
     by_detector: dict[str, list] = defaultdict(list)
     for r in rows:
         by_detector[r.detector].append(r)
+    # Lo stesso detector a 1, 5, 21 e 63 sedute, col controllo abbinato
+    # (FA-138, FA-139). Tabella separata: vedi `app.models.esito_orizzonte`.
+    from app.services.esiti_orizzonti_service import celle_per_detector
+    per_orizzonte = celle_per_detector(db, min_n=min_n)
 
     detectors: list[dict] = []
     for name, det_rows in sorted(
@@ -275,6 +288,7 @@ def compute_detector_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) ->
             "by_strength": _breakdown(
                 det_rows, lambda r: _strength_band(r.strength), _STRENGTH_ORDER, min_n
             ),
+            "per_orizzonte": per_orizzonte.get(name, []),
         })
 
     # Replay segment (B4-5): additive, clearly labeled, never blended into
