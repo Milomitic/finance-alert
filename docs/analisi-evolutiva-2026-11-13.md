@@ -293,10 +293,8 @@ criterio scritto il 24 settembre.
 Qualità e Tecnico sono descrittori (studio score-IC: nessun pilastro
 predittivo). Migliorie che non pretendono di predire:
 
-- **Storia del punteggio a schermo**: `score_history` ha 246.000 righe e
-  nessuna vista. «Qualità 71, era 58 a giugno» è informazione; il numero
-  fermo no.
-- **Scomposizione della variazione**: quale pilastro ha mosso il composito.
+- **Scomposizione della variazione**: la storia del composito è già nella
+  scheda del punteggio; manca quale pilastro lo ha mosso a 30 e 90 giorni.
 - **Confidenza**: già fatta a novembre; estenderla allo screener come filtro
   («solo titoli con dati completi»).
 
