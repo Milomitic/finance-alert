@@ -138,7 +138,8 @@ del lockfile a superset (CLAUDE.md), controllando che nessuna chiave
 Oggi una riga di `signal_outcomes` ha l'orizzonte del suo detector. I detector
 a 63 sedute hanno 2 finestre indipendenti; misurati anche a 5 ne avrebbero ~25.
 
-- Tabella nuova `signal_outcomes_orizzonti (alert_id, horizon_days,
+- Realizzata come `esiti_orizzonti`, ancorata al giorno di emissione invece
+  che a `signal_date`. Disegno iniziale: tabella `signal_outcomes_orizzonti (alert_id, horizon_days,
   fwd_return, universe_median, mkt_neutral_excess, mkt_neutral_hit,
   matured_at, method_version)`, unica su `(alert_id, horizon_days)`, per
   h ∈ {1, 5, 21, 63}. La tabella esistente non si tocca: resta la fonte
@@ -166,11 +167,13 @@ volatili vanno diversamente». Nel terzo più volatile i rialzisti leggono 39%
 di colpi e i ribassisti 48,8% con eccesso −2,46%.
 
 - Per ogni esito, K=5 titoli di controllo: stesso giorno, stesso terzile di
-  `atr_pct` (calcolato sull'universo di quel giorno, con le stesse 260 barre
-  di `contesto_emissione`), nessun segnale dello stesso detector nei ±5
+  volatilità realizzata a 20 sedute (dalle chiusure, la stessa finestra di
+  `vol20`; l'ATR avrebbe chiesto massimi e minimi di tutto l'universo per un
+  ordinamento quasi identico), nessun alert dello stesso detector nei ±5
   giorni, scelti con un generatore seminato su `alert_id`.
-- Colonne nuove in `signal_outcomes_orizzonti`: `controllo_fwd` (media dei K)
-  e `controllo_hit` (segnale meglio del controllo, col segno del tono).
+- Colonne in `esiti_orizzonti`: `controllo` (MEDIANA dei cinque, non la
+  media: con la mediana di un numero dispari l'ipotesi nulla vale 50% esatti
+  per qualunque distribuzione), `eccesso_controllo`, `colpo_controllo`.
 - Cubo e UI: «contro la mediana» e «contro il controllo» affiancati.
 - Riempimento all'indietro possibile (solo barre).
 - Test: stesso seme, stessi controlli; il titolo del segnale non è mai fra i
@@ -224,18 +227,20 @@ Dieci giorni contengono 1.984 esiti su 9.212.
 Variabili che oggi mancano e che non si ricostruiscono a posteriori con
 fedeltà: vanno fissate da subito.
 
-- `contesto_emissione.contesto(ohlcv, extra)` a `VERSIONE = "2"`, con:
+- `contesto_emissione.contesto` a `VERSIONE = "2"`, con:
   `giorni_a_trimestrale` e `giorni_da_trimestrale` (dalla cache dei
-  fondamentali, senza rete), `beta_252` contro l'indice di riferimento del
-  mercato del titolo, `rs_settore_63` (rendimento a 63 sedute meno la mediana
-  del settore), `quota_universo_sopra_sma200` del giorno, `segnali_del_giorno`
-  (quanti alert dello stesso verso nella scansione).
+  fondamentali, senza rete), `beta_252` contro il rendimento mediano del
+  catalogo (gli indici non sono nel database), `rs_settore_63` (rendimento a
+  63 sedute meno la mediana del settore).
+- Restano fuori, per la regola già scritta nel modulo, l'ampiezza del mercato
+  e il numero di segnali del giorno: sono una per data e si ricostruiscono
+  dal catalogo e dalla tabella degli alert.
 - `signal_scan_service`: le fissa in `first_contesto` per gli alert e in
   `contesto` per gli scartati. Le variabili di mercato si calcolano una volta
   per scansione.
-- Riempimento all'indietro: solo `beta_252` e `rs_settore_63` (barre); le
-  date delle trimestrali storiche vengono dallo storico delle sorprese dove
-  c'è. Il resto resta nullo sugli alert vecchi, senza marcatori.
+- Nessun riempimento all'indietro: beta e forza relativa si ricalcolano
+  dalle barre quando uno studio ne ha bisogno, e le date delle trimestrali
+  non si ricostruiscono fedelmente. Gli alert vecchi restano in versione 1.
 - Test: nessuna chiamata di rete; una cache dei fondamentali vuota rende
   None e non solleva; la versione 1 resta leggibile.
 
