@@ -4000,6 +4000,37 @@ permutati). La prima versione della spec lo trattava come un cancello a 2,6,
 cioè un allarme che sarebbe suonato quasi sempre. Sulla catena si leggono R² e
 AUC; sulla selezione decide solo il confronto dal vivo.
 
+### Esiti a piu' orizzonti e controllo abbinato (FA-138/139/140, 2026-11-14)
+
+`esiti_orizzonti` misura ogni alert a 1, 5, 21 e 63 sedute, accanto a
+`signal_outcomes` che resta la fonte dell'orizzonte proprio (cinque
+consumatori). Proprietario: `app/services/esiti_orizzonti_service.py`,
+maturato a fine scansione; riempimento e prova di parita' con
+`python -m app.scripts.backfill_esiti_orizzonti` (esce 1 se le due tabelle
+divergono all'orizzonte proprio).
+
+- **Ancora = giorno di emissione** (`first_emitted_at`), non `signal_date`:
+  e' il giorno del prezzo d'ingresso. Quindi la parita' si controlla solo
+  sugli alert mai spostati da una revisione.
+- **Il controllo e' la MEDIANA di cinque titoli** dello stesso giorno e dello
+  stesso terzile di volatilita' a 20 sedute, esclusi quelli con un alert
+  dello stesso detector entro 5 giorni. Con la mediana di un numero dispari
+  l'ipotesi nulla vale 50% esatti per qualunque distribuzione; con la media
+  no. Meno di cinque candidati = nessun controllo, mai un controllo piu'
+  piccolo.
+- **Il verdetto solo all'orizzonte proprio.** Gli altri tre descrivono:
+  scegliere il migliore dei quattro dopo averli visti e' la regola B dello
+  studio condizionale.
+- Il cubo porta anche il tasso a pesi uguali per GIORNO (`tasso_per_giorno`
+  in `app/stats/sizing.py`): un giorno con 348 segnali e' un giorno.
+
+Contesto d'emissione versione 2 (FA-150): `giorni_a_trimestrale`,
+`giorni_da_trimestrale`, `beta_252` (sul rendimento mediano del catalogo, non
+su un indice), `rs_settore_63`. Le fonti di mercato si costruiscono una volta
+per scansione (`contesto_mercato_service.costruisci`) e un loro guasto costa
+solo le loro chiavi. Le chiavi della versione 1 non cambiano: i modelli in
+prova le leggono per nome.
+
 ### Archivio puntuale dei dati non-prezzo (fase 4, 2026-09-24)
 
 `archivio_non_prezzo`: una riga per (titolo, fonte, giorno) con cio' che si
