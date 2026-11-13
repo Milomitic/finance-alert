@@ -361,6 +361,33 @@ def next_earnings_cached(tickers: set[str]) -> dict[str, tuple[date, str | None]
     return out
 
 
+def trimestrali_cached(ticker: str) -> tuple[list[date], date | None]:
+    """(date delle trimestrali GIA' PUBBLICATE, prossima data), SOLO DA CACHE.
+
+    Per il contesto d'emissione dei segnali (FA-150), che deve sapere quanto
+    distava una trimestrale nel momento in cui il segnale e' comparso: le date
+    future si spostano e quelle passate escono dalla cache dopo cinque anni,
+    quindi a posteriori quel numero non si ricostruisce.
+
+    Una trimestrale passata conta solo se porta l'utile pubblicato: le righe
+    con la sola stima sono previsioni, anche quando la data e' alle spalle
+    (yfinance a volte non aggiorna). Come le funzioni sopra, non innesca mai
+    una chiamata di rete: una voce fredda rende ([], None)."""
+    cached = _CACHE.get(ticker)
+    if cached is None:
+        return [], None
+    passate: list[date] = []
+    for e in getattr(cached, "earnings", None) or []:
+        if getattr(e, "eps_reported", None) is None:
+            continue
+        try:
+            passate.append(date.fromisoformat(str(e.date)[:10]))
+        except (ValueError, TypeError):
+            continue
+    prossima = next_earnings_dates_cached({ticker}).get(ticker)
+    return sorted(passate), prossima
+
+
 def _is_permanent_error(err: str | None) -> bool:
     """True when an error string represents a stable, ticker-specific failure
     (404, no-data, partial fetch with empty info) — safe to cache. False

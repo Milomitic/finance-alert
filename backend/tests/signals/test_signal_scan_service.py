@@ -590,6 +590,42 @@ def test_un_alert_nuovo_fissa_forza_fattori_e_contesto(db, monkeypatch):
     assert {"ret_5", "atr_pct", "rsi14"} <= set(snap["first_contesto"])
 
 
+def test_col_mercato_il_contesto_porta_le_variabili_della_versione_2(db, monkeypatch):
+    """FA-150: le fonti esterne arrivano allo snapshot, e un loro guasto costa
+    solo le loro chiavi."""
+    from app.services.contesto_mercato_service import Mercato
+
+    _relax(monkeypatch)
+    s = Stock(ticker="VAR_V2", exchange="NASDAQ", name="Variabili", country="US",
+              sector="Tecnologia")
+    db.add(s); db.flush()
+    df = _confirmed_df()
+    giorni = [date.fromisoformat(str(g)[:10]) for g in df["date"]]
+    mercato = Mercato(rendimenti={g: 0.001 * ((i % 7) - 3) for i, g in enumerate(giorni)},
+                      rs63_settore={"Tecnologia": 0.02})
+    from app.services import stock_fundamentals_service as sfs
+    monkeypatch.setattr(sfs, "trimestrali_cached",
+                        lambda t: ([date(2026, 4, 20)], date(2026, 5, 8)))
+    evaluate_signals(db, s, df, mercato=mercato)
+    db.commit()
+    ctx = json.loads(_vb_rows(db, s)[0].snapshot)["first_contesto"]
+    # Ultima barra 2026-05-01: 7 giorni alla prossima, 11 dalla precedente.
+    assert ctx["giorni_a_trimestrale"] == 7
+    assert ctx["giorni_da_trimestrale"] == 11
+
+    class Rotto(Mercato):
+        def per_titolo(self, stock):
+            raise RuntimeError("fonte giu'")
+
+    s2 = Stock(ticker="VAR_V2B", exchange="NASDAQ", name="Variabili", country="US")
+    db.add(s2); db.flush()
+    evaluate_signals(db, s2, _confirmed_df(), mercato=Rotto())
+    db.commit()
+    ctx2 = json.loads(_vb_rows(db, s2)[0].snapshot)["first_contesto"]
+    assert {"ret_5", "atr_pct"} <= set(ctx2)
+    assert "giorni_a_trimestrale" not in ctx2
+
+
 def test_una_revisione_NON_sovrascrive_le_variabili_dell_ingresso(db, monkeypatch):
     from app.signals.contesto_emissione import VARIABILI_ALL_EMISSIONE
 

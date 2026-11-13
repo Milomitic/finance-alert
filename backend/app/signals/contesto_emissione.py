@@ -23,11 +23,34 @@ STESSA finestra. Per questo le distanze sono dalle medie SEMPLICI: una SMA200 e'
 esatta su qualunque finestra di almeno 200 barre, una EMA200 su 260 barre
 dipende da dove comincia la serie, e lo stesso numero ricalcolato sulla storia
 intera sarebbe un altro.
+
+Versione 2 (FA-150, 2026-11-14): quattro variabili che dipendono da fuori
+dalla serie del titolo e che a posteriori NON si ricostruiscono fedelmente.
+
+- `giorni_a_trimestrale`, `giorni_da_trimestrale`: giorni di calendario dalla
+  barra alla prossima trimestrale e dall'ultima pubblicata, letti dalla cache
+  dei fondamentali. Le date future si spostano e quelle vecchie escono dalla
+  cache: e' il motivo per cui si fissano adesso.
+- `beta_252`: contro il rendimento giornaliero MEDIANO del catalogo (solo
+  societa'), sulle stesse barre della finestra. Non contro un indice: gli
+  indici non stanno nel database, e il catalogo e' il mercato contro cui ogni
+  esito di questo progetto e' gia' misurato.
+- `rs_settore_63`: il rendimento a 63 sedute meno la mediana del suo settore
+  nella stessa scansione. Il settore di un titolo puo' cambiare col catalogo.
+
+Le variabili di ampiezza del mercato restano fuori, per la ragione scritta
+sopra: sono una per data e si ricostruiscono dal catalogo.
+
+Tutte e quattro mancano quando chi chiama non passa la loro fonte (la
+rivalutazione manuale di un titolo, per esempio): chiave assente = non noto,
+come per il resto.
 """
 from __future__ import annotations
 
 import math
+from datetime import date, datetime
 
+import numpy as np
 import pandas as pd
 
 from app.indicators.atr import atr as atr_serie
@@ -43,7 +66,7 @@ from app.indicators.sma import sma
 #: Cambia quando cambia una definizione qui sotto: un modello addestrato su una
 #: versione non va nutrito con un'altra, e senza il numero le due popolazioni
 #: sarebbero indistinguibili — la stessa ragione di `PLAN_METHOD_VERSION`.
-VERSIONE = "1"
+VERSIONE = "2"
 
 #: Le chiavi dello snapshot fissate alla prima emissione e conservate a ogni
 #: revisione. Per chi le SCRIVE (lo scan) e per chi le riempie all'indietro:
@@ -63,6 +86,46 @@ VARIABILI_ALL_EMISSIONE: tuple[str, ...] = (
 
 _ANNO = 252
 
+#: Sotto questo numero di rendimenti abbinati la beta non si dichiara.
+_MIN_BETA = 120
+
+
+def _giorno(x: object) -> date | None:
+    # `datetime` (e il `Timestamp` di pandas) e' una sottoclasse di `date`.
+    if isinstance(x, datetime):
+        return x.date()
+    if isinstance(x, date):
+        return x
+    try:
+        return date.fromisoformat(str(x)[:10])
+    except ValueError:
+        return None
+
+
+def beta(
+    giorni: list[date | None], chiusure: np.ndarray, mercato: dict[date, float],
+) -> float | None:
+    """Beta dei rendimenti giornalieri del titolo su quelli del mercato, sulle
+    ultime `_ANNO` coppie disponibili; None sotto `_MIN_BETA` coppie o con un
+    mercato fermo."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for i in range(1, len(chiusure)):
+        g = giorni[i]
+        m = mercato.get(g) if g is not None else None
+        if m is None or chiusure[i - 1] <= 0:
+            continue
+        xs.append(m)
+        ys.append(chiusure[i] / chiusure[i - 1] - 1.0)
+    xs, ys = xs[-_ANNO:], ys[-_ANNO:]
+    if len(xs) < _MIN_BETA:
+        return None
+    x, y = np.asarray(xs), np.asarray(ys)
+    var = float(np.var(x, ddof=1))
+    if var <= 0:
+        return None
+    return float(np.cov(x, y, ddof=1)[0, 1] / var)
+
 
 def _num(x: float) -> float | None:
     """Un float finito arrotondato a 6 cifre significative, o None."""
@@ -74,8 +137,19 @@ def _num(x: float) -> float | None:
     return float(f"{x:.6g}")
 
 
-def contesto(ohlcv: pd.DataFrame) -> dict:
+def contesto(
+    ohlcv: pd.DataFrame,
+    *,
+    rendimenti_mercato: dict[date, float] | None = None,
+    rs63_settore: float | None = None,
+    trimestrali: tuple[list[date], date | None] | None = None,
+) -> dict:
     """Le variabili del titolo all'ultima barra di `ohlcv`.
+
+    `rendimenti_mercato` ({giorno: rendimento mediano del catalogo}),
+    `rs63_settore` (la mediana del rendimento a 63 sedute del settore) e
+    `trimestrali` (date pubblicate, prossima) sono le fonti delle variabili
+    della versione 2; senza, quelle chiavi mancano.
 
     Una chiave manca quando la storia non basta a calcolarla (un titolo con 100
     barre non ha un rendimento a un anno): una chiave assente dice «non noto»,
@@ -126,6 +200,22 @@ def contesto(ohlcv: pd.DataFrame) -> dict:
             out["range_pos20"] = (ultimo - mn) / (mx - mn)
     if c.iloc[-2] > 0:
         out["gap"] = o.iloc[-1] / c.iloc[-2] - 1
+
+    giorni = [_giorno(g) for g in ohlcv["date"]] if "date" in ohlcv else []
+    if rendimenti_mercato and giorni:
+        b = beta(giorni, c.to_numpy(dtype=float), rendimenti_mercato)
+        if b is not None:
+            out["beta_252"] = b
+    if rs63_settore is not None and "ret_63" in out:
+        out["rs_settore_63"] = out["ret_63"] - rs63_settore
+    ultimo_giorno = giorni[-1] if giorni else None
+    if trimestrali is not None and ultimo_giorno is not None:
+        passate, prossima = trimestrali
+        if prossima is not None and prossima >= ultimo_giorno:
+            out["giorni_a_trimestrale"] = (prossima - ultimo_giorno).days
+        prima = [d for d in passate if d <= ultimo_giorno]
+        if prima:
+            out["giorni_da_trimestrale"] = (ultimo_giorno - max(prima)).days
 
     pulito = {k: _num(x) for k, x in out.items()}
     return {"versione": VERSIONE, **{k: x for k, x in pulito.items() if x is not None}}

@@ -99,6 +99,14 @@ def scan_universe(
     # scan's age) — so signals that completed during a multi-day scan outage
     # aren't hard-dropped by the 7-day guard. Normal daily cadence → still 7.
     eff_max_age = effective_max_age_days(db)
+    # Le fonti di mercato del contesto d'emissione (FA-150), una volta per
+    # scansione. Best-effort: senza, i segnali nascono con meno variabili.
+    try:
+        from app.services import contesto_mercato_service
+        mercato = contesto_mercato_service.costruisci(db)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[scan] contesto di mercato non disponibile: {e}")
+        mercato = None
 
     if on_progress:
         on_progress(0, total, result, None)
@@ -147,7 +155,7 @@ def scan_universe(
         # Signal engine — the only alert source.
         try:
             result.alerts_fired += evaluate_signals(
-                db, stock, ohlcv, max_age_days=eff_max_age
+                db, stock, ohlcv, max_age_days=eff_max_age, mercato=mercato
             )
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[scan] signals failed for {stock.ticker}: {e}")

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from loguru import logger
@@ -21,6 +22,9 @@ from app.signals.horizon import classify_horizon
 from app.signals.negoziazione import motivo_non_negoziato
 from app.signals.runner import detect_signals_and_setups
 from app.signals.trade_plan import INGRESSI_CONGELATI
+
+if TYPE_CHECKING:
+    from app.services.contesto_mercato_service import Mercato
 
 # --- Quality gates (reduce false positives) --------------------------------
 # Trend-following signals: their direction should agree with the prevailing
@@ -232,15 +236,38 @@ def _persist_setups(db, stock, setups, bar_date: date | None = None, bar_close: 
         )
 
 
+def _contesto_titolo(ohlcv: pd.DataFrame, stock: Stock, mercato: Mercato | None) -> dict:
+    """Il contesto d'emissione con le fonti esterne che ci sono. Un guasto
+    nelle fonti esterne costa le loro chiavi, mai il contesto o il segnale."""
+    try:
+        if mercato is not None:
+            esterne = mercato.per_titolo(stock)
+        else:
+            from app.services import stock_fundamentals_service
+            esterne = {"trimestrali": stock_fundamentals_service.trimestrali_cached(stock.ticker)}
+        return contesto(ohlcv, **esterne)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[signals] {stock.ticker}: contesto esterno non disponibile ({e})")
+        return contesto(ohlcv)
+
+
 def evaluate_signals(
     db: Session, stock: Stock, ohlcv: pd.DataFrame, *, max_age_days: int | None = None,
+    mercato: Mercato | None = None,
 ) -> int:
     """Detect signals for `stock` and add Alert rows for new ones above the
     confidence threshold. Returns the count added. Caller commits.
 
     `max_age_days`: recency window override (default: settings.signal_max_age_days).
     The scan loop passes the scan-gap-aware value from effective_max_age_days()
-    so signals that completed during a scan outage aren't hard-dropped."""
+    so signals that completed during a scan outage aren't hard-dropped.
+
+    `mercato`: le fonti delle variabili di mercato del contesto d'emissione
+    (FA-150), costruite una volta per scansione. Senza, quelle chiavi mancano.
+
+    Senza mercato, ma non senza trimestrali: le date vengono dalla cache dei
+    fondamentali e non costano niente, quindi le legge anche la rivalutazione
+    manuale."""
     age_limit = max_age_days if max_age_days is not None else settings.signal_max_age_days
     last_close = float(ohlcv["close"].iloc[-1])
     last_bar_date = _to_date(str(ohlcv["date"].iloc[-1]))
@@ -326,7 +353,7 @@ def evaluate_signals(
                 if scartati is None:
                     scartati = _ultimi_scartati(db, stock.id)
                 if contesto_titolo is None:
-                    contesto_titolo = contesto(ohlcv)
+                    contesto_titolo = _contesto_titolo(ohlcv, stock, mercato)
                 _registra_scartato(
                     db, stock.id, m, sig_date, last_bar_date, last_close,
                     passa_forza, passa_trend, passa_follow, scartati,
@@ -522,7 +549,7 @@ def evaluate_signals(
         # `app.signals.contesto_emissione`). Il contesto si calcola una volta
         # per titolo, alla prima creazione, sulla stessa finestra dello scan.
         if contesto_titolo is None:
-            contesto_titolo = contesto(ohlcv)
+            contesto_titolo = _contesto_titolo(ohlcv, stock, mercato)
         snapshot["first_strength"] = m.strength
         snapshot["first_factors"] = dict(m.factors or {})
         snapshot["first_contesto"] = contesto_titolo

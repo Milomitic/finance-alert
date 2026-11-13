@@ -96,3 +96,74 @@ def test_una_serie_di_due_barre_non_esplode() -> None:
     ctx = contesto(_serie(2))
     assert ctx["versione"] == VERSIONE
     assert "ret_1" in ctx
+
+
+# ─── Versione 2: le fonti esterne (FA-150) ──────────────────────────────────
+
+_V2 = {"beta_252", "rs_settore_63", "giorni_a_trimestrale", "giorni_da_trimestrale"}
+
+
+def _giorni(df: pd.DataFrame) -> list:
+    from datetime import date as _d
+    return [_d.fromisoformat(g) for g in df["date"]]
+
+
+def test_senza_fonti_esterne_le_chiavi_della_versione_2_mancano() -> None:
+    """Chiave assente = non noto: uno zero direbbe un valore."""
+    ctx = contesto(_serie(300))
+    assert not (_V2 & set(ctx))
+
+
+def test_la_beta_e_quella_della_regressione_sul_mercato() -> None:
+    """Titolo costruito come 1,5 volte il mercato: la beta deve leggere 1,5."""
+    df = _serie(300)
+    rng = np.random.default_rng(3)
+    giorni = _giorni(df)
+    mercato = {g: float(r) for g, r in zip(giorni[1:], rng.normal(0, 0.01, 299), strict=True)}
+    c = [100.0]
+    for g in giorni[1:]:
+        c.append(c[-1] * (1 + 1.5 * mercato[g]))
+    df = df.assign(close=c)
+    ctx = contesto(df, rendimenti_mercato=mercato)
+    assert ctx["beta_252"] == pytest.approx(1.5, rel=1e-4)
+
+
+def test_la_beta_non_si_dichiara_con_poche_coppie() -> None:
+    df = _serie(300)
+    giorni = _giorni(df)
+    mercato = {g: 0.001 * (i % 3) for i, g in enumerate(giorni[-100:])}
+    assert "beta_252" not in contesto(df, rendimenti_mercato=mercato)
+
+
+def test_la_forza_relativa_e_sul_rendimento_a_63_sedute() -> None:
+    df = _serie(300)
+    ctx = contesto(df, rs63_settore=0.05)
+    assert ctx["rs_settore_63"] == pytest.approx(ctx["ret_63"] - 0.05, rel=1e-5)
+
+
+def test_i_giorni_alle_trimestrali_sono_contati_dall_ultima_barra() -> None:
+    from datetime import timedelta
+    df = _serie(300)
+    ultimo = _giorni(df)[-1]
+    passate = [ultimo - timedelta(days=100), ultimo - timedelta(days=12), ultimo + timedelta(days=3)]
+    ctx = contesto(df, trimestrali=(passate, ultimo + timedelta(days=9)))
+    assert ctx["giorni_a_trimestrale"] == 9
+    # Una data «passata» successiva alla barra e' un'anomalia della fonte e non conta.
+    assert ctx["giorni_da_trimestrale"] == 12
+
+
+def test_una_prossima_trimestrale_gia_passata_non_si_legge() -> None:
+    from datetime import timedelta
+    df = _serie(300)
+    ultimo = _giorni(df)[-1]
+    ctx = contesto(df, trimestrali=([], ultimo - timedelta(days=1)))
+    assert "giorni_a_trimestrale" not in ctx and "giorni_da_trimestrale" not in ctx
+
+
+def test_le_variabili_della_versione_1_non_cambiano_con_le_fonti_esterne() -> None:
+    """I modelli in prova leggono le variabili per nome: la versione 2 aggiunge,
+    non tocca."""
+    df = _serie(300)
+    v1 = contesto(df)
+    v2 = contesto(df, rs63_settore=0.0, trimestrali=([], None))
+    assert {k: v2[k] for k in v1} == v1
