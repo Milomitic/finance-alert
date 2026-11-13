@@ -1,8 +1,8 @@
 # Piano di implementazione — evolutive 2026-11
 
 Mette in ordine tutte le voci di `docs/analisi-evolutiva-2026-11-13.md` e le
-proposte sui motori di segnali ed esiti del 2026-11-13. Trenta voci in sette
-filoni, da FA-133 a FA-162, più FA-129 che è già aperta.
+proposte sui motori di segnali ed esiti del 2026-11-13. Trentuno voci in sette
+filoni, da FA-133 a FA-163, più FA-129 che è già aperta.
 
 ## Come leggere il piano
 
@@ -26,7 +26,7 @@ Stime in giorni di lavoro di una sessione; sono ordini di grandezza.
 |---|---|---|
 | 0 | FA-129 | il database si ferma fra pochi giorni |
 | 1 | FA-138, 139, 140, 150 | substrato che accumula dati: ogni giorno di ritardo è un giorno non misurabile |
-| 2 | FA-133, 134, 135, 136 | l'app che si usa: accesso, velocità, segnali dove servono |
+| 2 | FA-133, 134, 135, 136, 163 | l'app che si usa: accesso, velocità, segnali dove servono |
 | 3 | FA-143, 144, 145, 146, 147, 148 | rischio delle posizioni, la capability principale |
 | 4 | FA-141, 142, 151, 152, 153 | resto dei motori |
 | 5 | FA-137, 149, 154, 155, 156 | ricerca sul titolo e cruscotto |
@@ -290,6 +290,14 @@ candle_reversal e gap_and_go: 97% dei piani scade senza stop né target.
   non sostiene.
 - `trade_plan.costruisci_piano` e il gemello `tradePlaybook.ts`, coi vettori
   d'oro aggiornati; `PLAN_METHOD_VERSION` a "5" e rimisura.
+- **squeeze_expansion**: 1.271 alert su 1.705 non hanno un piano perché il
+  tono è «non determinato», e lo schermo non lo dice. Nel dialogo e nella
+  riga, al posto del piano vuoto: «nessun piano: il verso non è ancora
+  determinato». Nel pannello Motore la copertura (`with_plan` su `alerts`)
+  compare accanto all'attesa, perché una media su un quarto degli alert non
+  descrive il detector.
+- Test: un alert `undetermined` rende la frase e non un piano; la copertura
+  è nel payload.
 
 ### FA-155 · Modello di volatilità per stop e target (2 g, vincolata)
 
@@ -485,6 +493,19 @@ di dominio (`services/etoro/`, `services/esiti/`, `services/prezzi/`) con
 ri-esportazione dal vecchio percorso, e i modelli nuovi del frontend nascono
 da `schema.gen.ts` invece che in `types.ts`.
 
+### FA-163 · Catalogo del FTSE MIB fermo (0,5 g)
+
+`FinanceAlertCatalogRefreshFailing` è attivo dal 6 novembre: tre sabati di
+rinnovo falliti. Stessa forma del Dow Jones di settembre.
+
+- Leggere `catalog_refresh_log` e il log del job per la causa (tabella
+  sorgente cambiata o irraggiungibile dal pod).
+- Correggere il parser o la fonte in `catalog_refresh`; il blocco
+  anti-svuotamento resta com'è.
+- Test su una copia salvata della pagina sorgente, così il prossimo cambio
+  di formato rompe un test e non il sabato.
+- Verifica: rinnovo riuscito a mano dal pod e allarme rientrato.
+
 ---
 
 ## Decisione dell'utente
@@ -519,5 +540,5 @@ tabella è vuota).
 
 ## Totale
 
-Circa 52 giorni di lavoro: fase 1 sei e mezzo, fase 2 sei, fase 3 dieci e mezzo,
+Circa 53 giorni di lavoro: fase 1 sei e mezzo, fase 2 sei e mezzo, fase 3 dieci e mezzo,
 fase 4 sette e mezzo, fase 5 nove, fase 6 tredici.
