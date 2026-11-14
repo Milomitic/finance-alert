@@ -5,6 +5,7 @@ import {
   fetchEtoroAndamento,
   fetchEtoroCosti,
   fetchEtoroDiario,
+  fetchEtoroRischio,
   fetchEtoroDisponibile,
   fetchEtoroPortafoglio,
   fetchEtoroVivo,
@@ -68,6 +69,17 @@ export function useEtoroCosti(
     queryFn: ({ signal }) => fetchEtoroCosti(p!, signal),
     enabled: p != null && p.importo > 0 && p.stop > 0,
     staleTime: 30 * 60_000,
+  });
+}
+
+/** Il rischio delle posizioni aperte (FA-143): il server lo ricalcola solo
+ *  dopo una sincronizzazione, quindi qui basta una cache di qualche minuto. */
+export function useEtoroRischio(enabled = true) {
+  return useQuery({
+    queryKey: ["etoro", "rischio"],
+    queryFn: ({ signal }) => fetchEtoroRischio(signal),
+    staleTime: 5 * 60_000,
+    enabled,
   });
 }
 

@@ -277,3 +277,85 @@ export interface EtoroDiario {
 export function fetchEtoroDiario(signal?: AbortSignal): Promise<EtoroDiario> {
   return api<EtoroDiario>("/api/etoro/diario", { signal });
 }
+
+/* ─── Il rischio delle posizioni aperte (FA-143, FA-145) ─────────────────── */
+
+/** In quante finestre storiche disgiunte dello strumento il prezzo ha toccato
+ *  prima lo stop, prima il target, o nessuno dei due, con stop e target alle
+ *  distanze percentuali di oggi. Stop e target nella stessa barra = stop. */
+export interface EtoroPrimoPassaggio {
+  finestre: number;
+  stop: number;
+  target: number;
+  nessuno: number;
+  orizzonte: number;
+  /** Intervallo di Wilson al 95% sulla quota «stop prima», in %. */
+  stop_pct_ci: [number, number];
+  dal: string;
+  al: string;
+}
+
+export interface EtoroCostoTenuta {
+  pagate_usd: number | null;
+  notte_usd: number | null;
+  settimana_usd: number | null;
+  settimane_1_usd: number | null;
+  settimane_4_usd: number | null;
+  settimane_12_usd: number | null;
+}
+
+export interface EtoroRischioPosizione {
+  position_id: number;
+  ticker: string;
+  nome: string | null;
+  lato: string;
+  leva: number;
+  prezzo: number | null;
+  stop: number | null;
+  target: number | null;
+  esposizione_usd: number;
+  margine_usd: number | null;
+  distanza_stop_pct: number | null;
+  distanza_stop_atr: number | null;
+  distanza_stop_sedute: number | null;
+  distanza_target_pct: number | null;
+  primo_passaggio: EtoroPrimoPassaggio | null;
+  storia_barre: number;
+  beta: Record<string, number | null>;
+  costo_tenuta?: EtoroCostoTenuta | null;
+}
+
+export interface EtoroVoceEsposizione {
+  nome: string;
+  usd: number;
+}
+
+export interface EtoroScenario {
+  indice: string;
+  shock_pct: number;
+  pnl_usd: number;
+  esposizione_coperta: number;
+}
+
+export interface EtoroCorrelazione {
+  titoli: string[];
+  matrice: number[][] | null;
+  sedute: number;
+}
+
+export interface EtoroRischio {
+  calcolato_il: string;
+  valore_conto: number | null;
+  esposizione_totale: number;
+  leva_effettiva: number | null;
+  posizioni: EtoroRischioPosizione[];
+  per_sottostante: EtoroVoceEsposizione[];
+  per_settore: EtoroVoceEsposizione[];
+  scenario: EtoroScenario[];
+  correlazione: EtoroCorrelazione;
+  posizioni_effettive: number | null;
+}
+
+export function fetchEtoroRischio(signal?: AbortSignal): Promise<EtoroRischio> {
+  return api<EtoroRischio>("/api/etoro/rischio", { signal });
+}

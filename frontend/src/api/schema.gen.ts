@@ -496,6 +496,12 @@ export interface EtoroContoOut {
   guadagno_giorno_pct: number | null;
 }
 
+export interface EtoroCorrelazioneOut {
+  titoli: string[];
+  matrice: number[][] | null;
+  sedute: number;
+}
+
 export interface EtoroCostiOut {
   configurato: boolean;
   disponibile: boolean;
@@ -505,6 +511,15 @@ export interface EtoroCostiOut {
   notte_usd: number | null;
   weekend_usd: number | null;
   aggiornato_il: string | null;
+}
+
+export interface EtoroCostoTenutaOut {
+  pagate_usd: number | null;
+  notte_usd: number | null;
+  settimana_usd: number | null;
+  settimane_1_usd: number | null;
+  settimane_4_usd: number | null;
+  settimane_12_usd: number | null;
 }
 
 export interface EtoroDiarioOut {
@@ -618,9 +633,61 @@ export interface EtoroPosizioneOut {
   anche_manuale: boolean;
 }
 
+export interface EtoroPrimoPassaggioOut {
+  finestre: number;
+  stop: number;
+  target: number;
+  nessuno: number;
+  orizzonte: number;
+  stop_pct_ci: [number, number];
+  dal: string;
+  al: string;
+}
+
 export interface EtoroPuntoOut {
   istante: string;
   valore: number;
+}
+
+export interface EtoroRischioOut {
+  calcolato_il: string;
+  valore_conto: number | null;
+  esposizione_totale: number;
+  leva_effettiva: number | null;
+  posizioni: EtoroRischioPosizioneOut[];
+  per_sottostante: EtoroVoceEsposizioneOut[];
+  per_settore: EtoroVoceEsposizioneOut[];
+  scenario: EtoroScenarioOut[];
+  correlazione: EtoroCorrelazioneOut;
+  posizioni_effettive: number | null;
+}
+
+export interface EtoroRischioPosizioneOut {
+  position_id: number;
+  ticker: string;
+  nome: string | null;
+  lato: string;
+  leva: number;
+  prezzo: number | null;
+  stop: number | null;
+  target: number | null;
+  esposizione_usd: number;
+  margine_usd: number | null;
+  distanza_stop_pct: number | null;
+  distanza_stop_atr: number | null;
+  distanza_stop_sedute: number | null;
+  distanza_target_pct: number | null;
+  primo_passaggio: EtoroPrimoPassaggioOut | null;
+  storia_barre: number;
+  beta: Record<string, number | null>;
+  costo_tenuta?: EtoroCostoTenutaOut | null;
+}
+
+export interface EtoroScenarioOut {
+  indice: string;
+  shock_pct: number;
+  pnl_usd: number;
+  esposizione_coperta: number;
 }
 
 export interface EtoroSincronizzazioneOut {
@@ -680,6 +747,11 @@ export interface EtoroVoceCostoOut {
   importo: number;
   valuta: string;
   importo_usd: number | null;
+}
+
+export interface EtoroVoceEsposizioneOut {
+  nome: string;
+  usd: number;
 }
 
 export interface FilterOptionsOut {

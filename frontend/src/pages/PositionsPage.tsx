@@ -29,7 +29,8 @@ import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { EtoroPortafoglioCard } from "@/components/positions/EtoroPortafoglioCard";
 import { DiarioEtoroCard } from "@/components/positions/DiarioEtoroCard";
-import { useEtoroPortafoglio } from "@/hooks/useEtoro";
+import { useEtoroPortafoglio, useEtoroRischio } from "@/hooks/useEtoro";
+import { RischioPosizioniCard } from "@/components/positions/RischioPosizioniCard";
 
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
    (see CLAUDE.md), don't refactor to template composition. */
@@ -186,6 +187,8 @@ export default function PositionsPage() {
   // Il portafoglio eToro si aspetta INSIEME alle posizioni manuali: arrivato
   // dopo, la sua scheda in cima spingerebbe giu' la pagina (FA-106).
   const etoroQ = useEtoroPortafoglio();
+  // Il rischio si chiede solo se ci sono posizioni eToro aperte (FA-144).
+  const rischioQ = useEtoroRischio((etoroQ.data?.aperte?.length ?? 0) > 0);
   const inAttesa = q.isLoading || etoroQ.isLoading;
   const update = useUpdatePosition();
   const remove = useDeletePosition();
@@ -246,6 +249,10 @@ export default function PositionsPage() {
         // Il conto eToro vero (FA-124), sopra le posizioni inserite a mano.
         // Fuori dal ramo d'errore di queste: un guasto dell'una non nasconde l'altra.
         <EtoroPortafoglioCard d={etoroQ.data} errore={etoroQ.isError} />
+      )}
+
+      {!inAttesa && (etoroQ.data?.aperte?.length ?? 0) > 0 && (
+        <RischioPosizioniCard d={rischioQ.data} caricamento={rischioQ.isLoading} errore={rischioQ.isError} />
       )}
 
       {!inAttesa && !q.isError && (

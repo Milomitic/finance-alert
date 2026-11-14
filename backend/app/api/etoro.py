@@ -497,3 +497,144 @@ def diario(
         r_reale_medio=d.r_reale_medio, r_piano_medio=d.r_piano_medio, con_r=d.con_r,
         anni=[EtoroAnnoOut(**a.__dict__) for a in d.anni],
     )
+
+
+# ─── Il rischio delle posizioni aperte (FA-143, FA-145) ─────────────────────
+
+
+class EtoroPrimoPassaggioOut(BaseModel):
+    finestre: int
+    stop: int
+    target: int
+    nessuno: int
+    orizzonte: int
+    stop_pct_ci: tuple[float, float]
+    dal: str
+    al: str
+
+
+class EtoroCostoTenutaOut(BaseModel):
+    #: Commissioni eToro gia' addebitate alla posizione (overnight compresi).
+    pagate_usd: float | None
+    notte_usd: float | None
+    #: Stima: 4 notti feriali + l'addebito del fine settimana.
+    settimana_usd: float | None
+    settimane_1_usd: float | None
+    settimane_4_usd: float | None
+    settimane_12_usd: float | None
+
+
+class EtoroRischioPosizioneOut(BaseModel):
+    position_id: int
+    ticker: str
+    nome: str | None
+    lato: str
+    leva: int
+    prezzo: float | None
+    stop: float | None
+    target: float | None
+    esposizione_usd: float
+    margine_usd: float | None
+    distanza_stop_pct: float | None
+    distanza_stop_atr: float | None
+    distanza_stop_sedute: float | None
+    distanza_target_pct: float | None
+    primo_passaggio: EtoroPrimoPassaggioOut | None
+    storia_barre: int
+    beta: dict[str, float | None]
+    costo_tenuta: EtoroCostoTenutaOut | None = None
+
+
+class EtoroVoceEsposizioneOut(BaseModel):
+    nome: str
+    usd: float
+
+
+class EtoroScenarioOut(BaseModel):
+    indice: str
+    shock_pct: float
+    pnl_usd: float
+    esposizione_coperta: float
+
+
+class EtoroCorrelazioneOut(BaseModel):
+    titoli: list[str]
+    matrice: list[list[float]] | None
+    sedute: int
+
+
+class EtoroRischioOut(BaseModel):
+    calcolato_il: str
+    valore_conto: float | None
+    esposizione_totale: float
+    leva_effettiva: float | None
+    posizioni: list[EtoroRischioPosizioneOut]
+    per_sottostante: list[EtoroVoceEsposizioneOut]
+    per_settore: list[EtoroVoceEsposizioneOut]
+    scenario: list[EtoroScenarioOut]
+    correlazione: EtoroCorrelazioneOut
+    posizioni_effettive: float | None
+
+
+#: (istante dell'ultima sincronizzazione, risultato): il quadro cambia solo
+#: quando cambiano le posizioni, e ricalcolarlo a ogni apertura della scheda
+#: rileggerebbe dieci anni di barre per strumento.
+_CACHE_RISCHIO: dict[str, tuple[object, dict]] = {}
+
+
+def _costo_tenuta(db: Session, p: dict, pos: EtoroPosizione) -> EtoroCostoTenutaOut | None:
+    """FA-145. Il preventivo eToro della posizione con i suoi parametri veri;
+    None se lo strumento non e' nel catalogo eToro o il servizio non risponde.
+    Una posizione senza leva non paga notti."""
+    pagate = pos.commissioni_usd
+    if (pos.leva or 1) <= 1 and pos.lato == "long":
+        return EtoroCostoTenutaOut(pagate_usd=pagate, notte_usd=0.0, settimana_usd=0.0,
+                                   settimane_1_usd=0.0, settimane_4_usd=0.0, settimane_12_usd=0.0)
+    if not etoro_client.configurato():
+        return None
+    try:
+        c = catalogo.costi(db, p["ticker"], lato=pos.lato, leva=int(pos.leva or 1),
+                           importo=float(pos.importo_usd or 0.0), stop=pos.stop)
+    except Exception:  # noqa: BLE001 — il preventivo e' un di piu'
+        return EtoroCostoTenutaOut(pagate_usd=pagate, notte_usd=None, settimana_usd=None,
+                                   settimane_1_usd=None, settimane_4_usd=None, settimane_12_usd=None)
+    if c is None or c.notte_usd is None:
+        return EtoroCostoTenutaOut(pagate_usd=pagate, notte_usd=None, settimana_usd=None,
+                                   settimane_1_usd=None, settimane_4_usd=None, settimane_12_usd=None)
+    weekend = c.weekend_usd if c.weekend_usd else 3 * c.notte_usd
+    sett = 4 * c.notte_usd + weekend
+    return EtoroCostoTenutaOut(
+        pagate_usd=pagate, notte_usd=round(c.notte_usd, 2), settimana_usd=round(sett, 2),
+        settimane_1_usd=round(sett, 2), settimane_4_usd=round(4 * sett, 2),
+        settimane_12_usd=round(12 * sett, 2),
+    )
+
+
+@router.get("/rischio", response_model=EtoroRischioOut)
+def rischio(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroRischioOut:
+    """Il rischio delle posizioni aperte, descritto con la storia degli
+    strumenti: distanza dallo stop, primo passaggio fra stop e target,
+    esposizione per sottostante e settore, scenario lineare, correlazione e
+    costo di tenuta. Statistica storica, non una previsione ne' un consiglio.
+    In cache fino alla prossima sincronizzazione con eToro."""
+    from app.services import rischio_posizioni_service  # noqa: PLC0415
+
+    conto = db.get(EtoroConto, 1)
+    chiave = (conto.aggiornato_il if conto else None,
+              tuple(sorted(db.execute(select(EtoroPosizione.position_id).where(
+                  EtoroPosizione.chiusa_il.is_(None))).scalars())))
+    in_cache = _CACHE_RISCHIO.get("ultimo")
+    if in_cache and in_cache[0] == chiave:
+        return EtoroRischioOut(**in_cache[1])
+    dati = rischio_posizioni_service.rischio(db)
+    per_id = {p.position_id: p for p in db.execute(
+        select(EtoroPosizione).where(EtoroPosizione.chiusa_il.is_(None))).scalars()}
+    for p in dati["posizioni"]:
+        pos = per_id.get(p["position_id"])
+        costo = _costo_tenuta(db, p, pos) if pos else None
+        p["costo_tenuta"] = costo.model_dump() if costo else None
+    _CACHE_RISCHIO["ultimo"] = (chiave, dati)
+    return EtoroRischioOut(**dati)
