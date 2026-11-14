@@ -170,3 +170,45 @@ def test_una_posizione_senza_leva_non_paga_notti(db, client, monkeypatch):
     monkeypatch.setattr(rp, "_barre_indice", lambda sym: [])
     c = client.get("/api/etoro/rischio").json()["posizioni"][0]["costo_tenuta"]
     assert c["settimane_4_usd"] == 0.0
+
+
+# ─── Le fonti delle barre, eseguite davvero (il cancello del codice morto) ──
+
+def test_le_barre_di_uno_strumento_fuori_catalogo_vengono_da_yahoo_e_restano_in_memoria(monkeypatch):
+    import pandas as pd
+
+    from app.services import ohlcv_service
+
+    chiamate = []
+
+    def finto(tickers, **kw):
+        chiamate.append((tuple(tickers), kw))
+        idx = pd.to_datetime(["2026-11-12", "2026-11-13"])
+        cols = pd.MultiIndex.from_product([["TECL"], ["High", "Low", "Close"]])
+        return pd.DataFrame([[11, 9, 10], [12, 10, 11]], index=idx, columns=cols)
+
+    rp._CACHE_YAHOO.clear()
+    monkeypatch.setattr(ohlcv_service, "_yf_download", finto)
+    barre = rp._barre_yahoo("TECL")
+    assert barre == [Barra("2026-11-12", 11.0, 9.0, 10.0), Barra("2026-11-13", 12.0, 10.0, 11.0)]
+    assert rp._barre_yahoo("TECL") == barre
+    assert len(chiamate) == 1 and chiamate[0][1] == {"period": "10y"}
+
+    monkeypatch.setattr(ohlcv_service, "_yf_download", lambda *a, **k: (_ for _ in ()).throw(OSError("giu'")))
+    assert rp._barre_yahoo("XYZ") == []
+    rp._CACHE_YAHOO.clear()
+
+
+def test_le_barre_dell_indice_vengono_dal_dettaglio_mercato(monkeypatch):
+    from types import SimpleNamespace as NS
+
+    from app.services import market_detail_service
+
+    barra = NS(date=date(2026, 11, 13), high=6010.0, low=5950.0, close=6000.0)
+    monkeypatch.setattr(market_detail_service, "get_detail", lambda s, r: NS(bars=[barra]))
+    assert rp._barre_indice("^GSPC") == [Barra("2026-11-13", 6010.0, 5950.0, 6000.0)]
+    monkeypatch.setattr(market_detail_service, "get_detail", lambda s, r: None)
+    assert rp._barre_indice("^GSPC") == []
+    monkeypatch.setattr(market_detail_service, "get_detail",
+                        lambda s, r: (_ for _ in ()).throw(RuntimeError("yahoo giu'")))
+    assert rp._barre_indice("^GSPC") == []
