@@ -201,12 +201,20 @@ def test_la_parita_col_magazzino_esistente_regge(db, monkeypatch):
     eo.matura(db, eta_massima_giorni=None)
     o = db.execute(select(SignalOutcome)).scalars().one()
     assert o.method_version == OUTCOME_METHOD_VERSION and o.alert_id == a.id
-    assert script.parita(db)[:2] == (1, 0)
+    p = script.parita(db)
+    assert (p["confrontati"], p["discordi"], p["deriva_mediana"]) == (1, 0, 0)
 
-    # Controllo negativo: un rendimento alterato si vede.
-    o.fwd_return += 0.01
+    # Controllo negativo: a parita' di ingressi un colpo diverso e' un difetto.
+    o.mkt_neutral_hit = 1 - o.mkt_neutral_hit
     db.commit()
-    assert script.parita(db)[:2] == (1, 1)
+    assert script.parita(db)["discordi"] == 1
+
+    # Una mediana cambiata dopo la maturazione e' deriva dei dati, non un
+    # difetto di questo codice: si conta a parte, e cambia il colpo.
+    o.universe_mean_fwd += 0.5
+    db.commit()
+    p = script.parita(db)
+    assert (p["discordi"], p["deriva_mediana"]) == (0, 1)
 
 
 def test_lo_script_riempie_e_rende_zero_quando_la_parita_regge(db, monkeypatch, capsys):
@@ -223,4 +231,4 @@ def test_lo_script_riempie_e_rende_zero_quando_la_parita_regge(db, monkeypatch, 
     monkeypatch.setattr(dbm, "SessionLocal", lambda: nullcontext(db))
     assert script.main() == 0
     out = capsys.readouterr().out
-    assert "righe scritte ora: 3" in out and "1 confrontati, 0 discordi" in out
+    assert "righe scritte ora: 3" in out and "1 confrontati, 0 discordi a parita' di ingressi" in out
