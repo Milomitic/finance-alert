@@ -568,3 +568,6 @@ perché il piano dica cosa si è deciso e perché.
 - **FA-164 (nuova)**: la prova di parità di FA-138 ha trovato che il 90% delle
   mediane conservate in `signal_outcomes` non si riproduce dai dati di oggi.
 - **FA-133** resta in attesa dell'utente (account Tailscale e client).
+- **Decisioni dell'utente del 2026-11-14:** FA-154 fatta con la variante (b),
+  piano medio a 21 sedute per tutti; FA-162 chiusa tenendo tutte le funzioni;
+  FA-133 e FA-160 escluse per ora.
