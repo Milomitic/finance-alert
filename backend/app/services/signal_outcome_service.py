@@ -570,3 +570,87 @@ def mature_candidate_outcomes(db: Session, *, commit: bool = True) -> int:
         db.commit()
     logger.info(f"[candidate-outcomes] matured {scritte} scartati ({len(pending)} maturabili)")
     return scritte
+
+
+# ─── Il riallineamento ai dati di oggi (FA-164) ─────────────────────────────
+
+def _cambiato(a: object, b: object) -> bool:
+    if a is None or b is None:
+        return (a is None) != (b is None)
+    return abs(float(a) - float(b)) > 1e-12
+
+
+def riallinea_esiti(db: Session, *, commit: bool = True) -> dict[str, int]:
+    """Ricalcola dai dati di OGGI gli esiti gia' scritti di alert e scartati,
+    e aggiorna quelli cambiati.
+
+    ⚠️ Perche'. Le barre salvate vengono riscritte DOPO la maturazione:
+    riscaricamento dell'ultimo mese a ogni scansione, riparazione dei buchi,
+    aggiustamenti per split. Un esito fissato una volta fotografa quindi uno
+    stato dei dati poi corretto. Misurato il 2026-11-14 (FA-164): su 1.889
+    esiti all'orizzonte proprio, 1.698 avevano una mediana dell'universo che i
+    dati di oggi non riproducevano (0,39 punti di scarto medio, fino a 1,5) e
+    44 colpi cambiavano segno. Ricalcolata ADESSO con questa stessa funzione,
+    la mediana coincideva con quella della tabella nuova: l'aritmetica era
+    giusta, erano i dati a essere cambiati.
+
+    Riallinea con la STESSA `_label` della maturazione e sulla stessa ancora
+    (`signal_date` della riga). Una riga cambiata prende il metodo corrente:
+    e' stata ricalcolata con quello. Una riga che oggi non si calcola piu' (la
+    serie e' stata accorciata da una riparazione) resta com'era.
+
+    Gli alert del replay storico non si toccano: vengono da un artefatto,
+    non dalle barre del catalogo di oggi."""
+    out = {"alert_esaminati": 0, "alert_cambiati": 0,
+           "scartati_esaminati": 0, "scartati_cambiati": 0}
+    alert = list(db.execute(
+        select(SignalOutcome).where(SignalOutcome.source == "live")
+    ).scalars())
+    scartati = list(db.execute(
+        select(SignalCandidate).where(SignalCandidate.matured_at.is_not(None))
+    ).scalars())
+    if not alert and not scartati:
+        return out
+    dal = min([r.signal_date for r in alert] + [c.signal_date for c in scartati])
+    serie = _load_universe_closes(db, since=dal - timedelta(days=10))
+    orizzonti = {r.horizon_days for r in alert} | {
+        c.horizon_days for c in scartati if c.horizon_days
+    }
+    mediane = _benchmark_medians(db, dal, orizzonti)
+
+    for r in alert:
+        out["alert_esaminati"] += 1
+        lab = _label(serie.get(r.stock_id), r.signal_date, r.tone, r.horizon_days, mediane)
+        if lab is None:
+            continue
+        nuovi = {
+            "entry_close": lab.entry, "forward_close": lab.forward_close,
+            "fwd_return": lab.fwd_return, "universe_mean_fwd": lab.universe_median,
+            "mkt_neutral_excess": lab.mkt_excess, "abs_hit": lab.abs_hit,
+            "mkt_neutral_hit": lab.mkt_hit,
+        }
+        if any(_cambiato(getattr(r, k), v) for k, v in nuovi.items()):
+            for k, v in nuovi.items():
+                setattr(r, k, v)
+            r.method_version = OUTCOME_METHOD_VERSION
+            out["alert_cambiati"] += 1
+
+    for c in scartati:
+        out["scartati_esaminati"] += 1
+        if not c.horizon_days:
+            continue
+        lab = _label(serie.get(c.stock_id), c.signal_date, c.tone, c.horizon_days, mediane)
+        if lab is None:
+            continue
+        nuovi = {"fwd_return": lab.fwd_return, "mkt_neutral_excess": lab.mkt_excess,
+                 "mkt_neutral_hit": lab.mkt_hit}
+        if any(_cambiato(getattr(c, k), v) for k, v in nuovi.items()):
+            for k, v in nuovi.items():
+                setattr(c, k, v)
+            c.method_version = OUTCOME_METHOD_VERSION
+            out["scartati_cambiati"] += 1
+
+    if commit and (out["alert_cambiati"] or out["scartati_cambiati"]):
+        db.commit()
+    logger.info(f"[signal-outcomes] riallineati: {out}")
+    return out

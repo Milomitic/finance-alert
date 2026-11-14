@@ -188,14 +188,105 @@ def _escluso(intervalli: list[tuple[date, date]], giorno: date) -> bool:
     return any(da <= giorno <= a for da, a in intervalli)
 
 
+class _Calcolo:
+    """Lo stato condiviso del calcolo, costruito una volta: serie dal giorno
+    `dal`, mediane dell'universo, sezioni di volatilita' per giorno ed
+    esclusioni. Serve sia alla maturazione sia al riallineamento, cosi' le due
+    strade non possono calcolare in modo diverso."""
+
+    def __init__(self, db: Session, dal: date) -> None:
+        # Margine per la volatilita' (20 sedute) prima della prima ancora.
+        grezze = _load_universe_closes(db, since=dal - timedelta(days=45))
+        etf = set(db.execute(select(Stock.id).where(Stock.instrument_type == "etf")).scalars())
+        self.serie = {sid: _Serie(ds, cs, volatilita(cs)) for sid, (ds, cs) in grezze.items()}
+        societa = {sid: v for sid, v in grezze.items() if sid not in etf}
+        self.mediane = {h: _universe_fwd_medians(societa, h) for h in ORIZZONTI}
+        # La sezione trasversale di ogni giorno: (titolo, volatilita', indice).
+        self.sezione: dict[date, list[tuple[int, float, int]]] = defaultdict(list)
+        for sid, s in self.serie.items():
+            if sid in etf:
+                continue
+            for i, v in enumerate(s.vol):
+                if v == v:
+                    self.sezione[s.date[i]].append((sid, float(v), i))
+        self._tagli: dict[date, tuple[float, float] | None] = {}
+        self.esclusi = _esclusioni(db, dal)
+
+    def tagli(self, g: date) -> tuple[float, float] | None:
+        if g not in self._tagli:
+            vols = [v for _, v, _ in self.sezione.get(g, ())]
+            self._tagli[g] = (
+                (float(np.quantile(vols, 1 / 3)), float(np.quantile(vols, 2 / 3)))
+                if len(vols) >= MIN_SEZIONE else None
+            )
+        return self._tagli[g]
+
+    def esiti(self, a: Alert, tono: str, anc: date, orizzonti: list[int]) -> dict[int, dict]:
+        """{orizzonte: valori} per gli orizzonti gia' trascorsi."""
+        s = self.serie.get(a.stock_id)
+        if not orizzonti or s is None:
+            return {}
+        ti = _trigger_index(s.date, anc)
+        if ti is None:
+            return {}
+        ingresso = float(s.chiusure[ti])
+        if ingresso <= 0:
+            return {}
+        giorno = s.date[ti]
+
+        ordine: list[tuple[int, int]] = []
+        t = self.tagli(giorno)
+        mia_vol = s.vol[ti]
+        if t is not None and mia_vol == mia_vol:
+            mia = fascia(float(mia_vol), t)
+            candidati = {
+                sid: i for sid, v, i in self.sezione[giorno]
+                if sid != a.stock_id and fascia(v, t) == mia
+                and not _escluso(self.esclusi.get((a.signal_name, sid), []), giorno)
+            }
+            ordine = [(sid, candidati[sid]) for sid in ordine_dei_controlli(list(candidati), a.id)]
+
+        out: dict[int, dict] = {}
+        for h in orizzonti:
+            if ti + h >= len(s.chiusure):
+                continue  # orizzonte non ancora trascorso
+            uscita = float(s.chiusure[ti + h])
+            rend = uscita / ingresso - 1.0
+            med = self.mediane[h].get(giorno)
+            ecc_m = colpo_m = None
+            if med is not None:
+                ecc_m = (rend - med) if tono == "bull" else -(rend - med)
+                colpo_m = 1 if ecc_m > 0 else 0
+
+            rend_controlli: list[float] = []
+            for sid, i in ordine:
+                cs = self.serie[sid].chiusure
+                if i + h < len(cs) and cs[i] > 0:
+                    rend_controlli.append(float(cs[i + h] / cs[i] - 1.0))
+                    if len(rend_controlli) == CONTROLLI:
+                        break
+            ctrl = ecc_c = colpo_c = n_ctrl = None
+            if len(rend_controlli) == CONTROLLI:
+                ctrl, ecc_c, colpo_c = contro_il_controllo(rend, rend_controlli, tono)
+                n_ctrl = CONTROLLI
+            out[h] = {
+                "ancora": giorno, "ingresso": ingresso, "uscita": uscita, "rendimento": rend,
+                "mediana_universo": med, "eccesso_mediana": ecc_m, "colpo_mediana": colpo_m,
+                "controllo": ctrl, "controlli_n": n_ctrl, "eccesso_controllo": ecc_c,
+                "colpo_controllo": colpo_c,
+            }
+        return out
+
+
 def matura(
     db: Session, *, commit: bool = True, eta_massima_giorni: int | None = ETA_MASSIMA_GIORNI,
     oggi: date | None = None,
 ) -> int:
     """Scrive gli orizzonti maturati che mancano. Rende quante righe.
 
-    Idempotente: una coppia (alert, orizzonte) gia' scritta non si ricalcola.
-    `eta_massima_giorni=None` esamina tutta la storia (riempimento)."""
+    Idempotente: una coppia (alert, orizzonte) gia' scritta non si ricalcola
+    qui (la riallinea `riallinea`). `eta_massima_giorni=None` esamina tutta la
+    storia (riempimento)."""
     oggi = oggi or datetime.now(UTC).date()
     alert = []
     for a in _da_esaminare(db, oggi, eta_massima_giorni):
@@ -212,91 +303,15 @@ def matura(
         if aid in ids:
             gia[aid].add(h)
 
-    dal = min(anc for _, _, anc in alert)
-    # Margine per la volatilita' (20 sedute) prima della prima ancora.
-    grezze = _load_universe_closes(db, since=dal - timedelta(days=45))
-    etf = set(db.execute(select(Stock.id).where(Stock.instrument_type == "etf")).scalars())
-    serie = {sid: _Serie(ds, cs, volatilita(cs)) for sid, (ds, cs) in grezze.items()}
-    societa = {sid: v for sid, v in grezze.items() if sid not in etf}
-    mediane = {h: _universe_fwd_medians(societa, h) for h in ORIZZONTI}
-
-    # La sezione trasversale di ogni giorno: (titolo, volatilita', indice).
-    sezione: dict[date, list[tuple[int, float, int]]] = defaultdict(list)
-    for sid, s in serie.items():
-        if sid in etf:
-            continue
-        for i, v in enumerate(s.vol):
-            if v == v:
-                sezione[s.date[i]].append((sid, float(v), i))
-    tagli: dict[date, tuple[float, float] | None] = {}
-
-    def _tagli(g: date) -> tuple[float, float] | None:
-        if g not in tagli:
-            vols = [v for _, v, _ in sezione.get(g, ())]
-            tagli[g] = (
-                (float(np.quantile(vols, 1 / 3)), float(np.quantile(vols, 2 / 3)))
-                if len(vols) >= MIN_SEZIONE else None
-            )
-        return tagli[g]
-
-    esclusi = _esclusioni(db, dal)
+    calcolo = _Calcolo(db, min(anc for _, _, anc in alert))
     adesso = datetime.now(UTC)
     scritte = 0
     for a, tono, anc in alert:
         mancano = [h for h in ORIZZONTI if h not in gia[a.id]]
-        s = serie.get(a.stock_id)
-        if not mancano or s is None:
-            continue
-        ti = _trigger_index(s.date, anc)
-        if ti is None:
-            continue
-        ingresso = float(s.chiusure[ti])
-        if ingresso <= 0:
-            continue
-        giorno = s.date[ti]
-
-        ordine: list[tuple[int, int]] = []
-        t = _tagli(giorno)
-        mia_vol = s.vol[ti]
-        if t is not None and mia_vol == mia_vol:
-            mia = fascia(float(mia_vol), t)
-            candidati = {
-                sid: i for sid, v, i in sezione[giorno]
-                if sid != a.stock_id and fascia(v, t) == mia
-                and not _escluso(esclusi.get((a.signal_name, sid), []), giorno)
-            }
-            ordine = [(sid, candidati[sid]) for sid in ordine_dei_controlli(list(candidati), a.id)]
-
-        for h in mancano:
-            if ti + h >= len(s.chiusure):
-                continue  # orizzonte non ancora trascorso
-            uscita = float(s.chiusure[ti + h])
-            rend = uscita / ingresso - 1.0
-            med = mediane[h].get(giorno)
-            ecc_m = colpo_m = None
-            if med is not None:
-                ecc_m = (rend - med) if tono == "bull" else -(rend - med)
-                colpo_m = 1 if ecc_m > 0 else 0
-
-            rend_controlli: list[float] = []
-            for sid, i in ordine:
-                cs = serie[sid].chiusure
-                if i + h < len(cs) and cs[i] > 0:
-                    rend_controlli.append(float(cs[i + h] / cs[i] - 1.0))
-                    if len(rend_controlli) == CONTROLLI:
-                        break
-            ctrl = ecc_c = colpo_c = n_ctrl = None
-            if len(rend_controlli) == CONTROLLI:
-                ctrl, ecc_c, colpo_c = contro_il_controllo(rend, rend_controlli, tono)
-                n_ctrl = CONTROLLI
-
+        for h, v in calcolo.esiti(a, tono, anc, mancano).items():
             db.add(EsitoOrizzonte(
                 alert_id=a.id, stock_id=a.stock_id, detector=a.signal_name, tono=tono,
-                ancora=giorno, orizzonte=h, ingresso=ingresso, uscita=uscita,
-                rendimento=rend, mediana_universo=med, eccesso_mediana=ecc_m,
-                colpo_mediana=colpo_m, controllo=ctrl, controlli_n=n_ctrl,
-                eccesso_controllo=ecc_c, colpo_controllo=colpo_c,
-                metodo=METODO, maturato_il=adesso,
+                orizzonte=h, metodo=METODO, maturato_il=adesso, **v,
             ))
             scritte += 1
 
@@ -304,6 +319,56 @@ def matura(
         db.commit()
     logger.info(f"[esiti-orizzonti] {scritte} righe scritte su {len(alert)} alert esaminati")
     return scritte
+
+
+def _diverso(a: object, b: object) -> bool:
+    if a is None or b is None:
+        return (a is None) != (b is None)
+    if isinstance(a, float) or isinstance(b, float):
+        return abs(float(a) - float(b)) > 1e-12
+    return a != b
+
+
+def riallinea(db: Session, *, commit: bool = True) -> tuple[int, int]:
+    """Ricalcola dai dati di OGGI ogni riga gia' scritta e aggiorna quelle
+    cambiate. Rende (esaminate, cambiate).
+
+    ⚠️ Perche' (FA-164). Le barre salvate vengono riscritte dopo la
+    maturazione — riscaricamento dell'ultimo mese, riparazione dei buchi,
+    aggiustamenti per split — e un esito fissato una volta fotografa uno stato
+    dei dati poi corretto. Misurato il 2026-11-14 su `signal_outcomes`: il 90%
+    delle mediane non si riproduceva piu', e il 2,6% dei colpi cambiava segno.
+    Si aggiornano solo le righe cambiate, per non riscrivere il magazzino
+    intero a ogni passata."""
+    righe = list(db.execute(select(EsitoOrizzonte)).scalars())
+    if not righe:
+        return 0, 0
+    per_alert: dict[int, list[EsitoOrizzonte]] = defaultdict(list)
+    for r in righe:
+        per_alert[r.alert_id].append(r)
+    alert = {a.id: a for a in db.execute(
+        select(Alert).where(Alert.id.in_(select(EsitoOrizzonte.alert_id)))
+    ).scalars()}
+    calcolo = _Calcolo(db, min(r.ancora for r in righe))
+    cambiate = 0
+    for aid, gruppo in per_alert.items():
+        a = alert.get(aid)
+        if a is None:
+            continue
+        nuovi = calcolo.esiti(a, gruppo[0].tono, gruppo[0].ancora, [r.orizzonte for r in gruppo])
+        for r in gruppo:
+            v = nuovi.get(r.orizzonte)
+            if v is None:
+                continue  # serie accorciata da una riparazione: si tiene il valore
+            if any(_diverso(getattr(r, k), x) for k, x in v.items()):
+                for k, x in v.items():
+                    setattr(r, k, x)
+                r.metodo = METODO
+                cambiate += 1
+    if commit and cambiate:
+        db.commit()
+    logger.info(f"[esiti-orizzonti] riallineate {cambiate} righe su {len(righe)}")
+    return len(righe), cambiate
 
 
 # ─── Lettura per il cubo ────────────────────────────────────────────────────

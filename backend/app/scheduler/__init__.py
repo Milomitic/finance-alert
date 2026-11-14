@@ -29,6 +29,7 @@ from app.scheduler.jobs.refresh_premarket import run_refresh_premarket
 from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
+from app.scheduler.jobs.riallinea_esiti import run_riallinea_esiti
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.scheduler.jobs.sincronizza_etoro import (
@@ -141,6 +142,17 @@ def get_scheduler() -> BackgroundScheduler:
             run_addestra_modelli_ombra,
             trigger=_cron(day_of_week="sun", hour=5, minute=0),
             id="addestra_modelli_ombra",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60 * 60 * 12,
+        )
+        # Gli esiti gia' maturati, ricalcolati dai dati di oggi (FA-164):
+        # domenica 06:30, dopo i modelli in prova e senza scansioni.
+        _scheduler.add_job(
+            run_riallinea_esiti,
+            trigger=_cron(day_of_week="sun", hour=6, minute=30),
+            id="riallinea_esiti",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

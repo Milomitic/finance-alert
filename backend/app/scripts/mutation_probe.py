@@ -216,6 +216,9 @@ BERSAGLI: dict[str, list[str]] = {
         # Gli esiti a piu' orizzonti (FA-138) usano il suo riferimento di
         # mercato, e la prova di parita' lo confronta con `mature_outcomes`.
         "tests/test_esiti_orizzonti.py",
+        # Il riallineamento ai dati di oggi (FA-164) usa `_label` e il
+        # riferimento dell'universo: un chiamante diretto.
+        "tests/test_riallinea_esiti.py",
         # ⚠️ Questo NON importa il servizio: costruisce righe `SignalOutcome` a
         # mano e verifica il verso della curva dal lato del CONSUMATORE. Resta
         # in elenco perche' fissa lo stesso contratto (il tono al momento della

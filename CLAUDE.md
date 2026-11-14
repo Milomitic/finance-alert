@@ -1879,8 +1879,10 @@ Due scelte che sembrano dettagli:
 
 **Non si correggono.** Lo snapshot porta livelli propri sulla stessa base
 vecchia, che il playbook legge insieme al trigger; il fattore sarebbe NOSTRO
-(la lezione SOXS); e gli esiti sono gia' giusti, perche' entrambe le chiusure
-vengono dalla serie riparata.
+(la lezione SOXS); e gli esiti si riallineano alla serie riparata dal job
+settimanale `riallinea_esiti` (FA-164). ⚠️ Fino al 2026-11-14 questa riga
+diceva «gli esiti sono gia' giusti», vero solo per quelli maturati DOPO la
+riparazione: un esito si fissava una volta e non si ricalcolava piu'.
 
 ## Catalog ticker rows — duplicates RESOLVED (2026-05)
 
@@ -4023,6 +4025,17 @@ divergono all'orizzonte proprio).
   studio condizionale.
 - Il cubo porta anche il tasso a pesi uguali per GIORNO (`tasso_per_giorno`
   in `app/stats/sizing.py`): un giorno con 348 segnali e' un giorno.
+
+⚠️ **Gli esiti si riallineano ai dati di oggi (FA-164).** Le barre salvate
+vengono riscritte dopo la maturazione (riscaricamento dell'ultimo mese,
+buchi riparati, split), e un esito fissato una volta fotografa uno stato poi
+corretto: il 2026-11-14 il 90% delle mediane di `signal_outcomes` non si
+riproduceva piu' e il 2,6% dei colpi cambiava segno, con l'aritmetica giusta
+(ricalcolata adesso, coincideva con la tabella nuova). Il job della domenica
+06:30 `riallinea_esiti` ricalcola alert, scartati e orizzonti con le stesse
+funzioni della maturazione e aggiorna SOLO le righe cambiate. Non si sa quale
+processo abbia riscritto le barre di settembre: le barre non portano un
+orario di scrittura.
 
 Contesto d'emissione versione 2 (FA-150): `giorni_a_trimestrale`,
 `giorni_da_trimestrale`, `beta_252` (sul rendimento mediano del catalogo, non
