@@ -2,7 +2,7 @@
 name = "finance-alert-backend"
 version = "0.1.0"
 description = "Finance Alert backend"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 dependencies = [
     "fastapi>=0.139.2",
     "uvicorn[standard]>=0.27",
