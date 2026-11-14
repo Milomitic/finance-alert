@@ -156,6 +156,12 @@ def _warm_premarket_on_boot() -> None:
     startup isn't blocked. Reuses the scheduler job verbatim — it
     self-gates to the US pre-market window and no-ops cheaply
     otherwise, so this is safe to call unconditionally on every boot."""
+    import os
+
+    # Mai un thread di riscaldamento dal ciclo di vita di un TestClient: vedi
+    # la nota in `_warm_sector_performance_on_boot`.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
     try:
         from app.scheduler.jobs.refresh_premarket import (
             run_refresh_premarket,
@@ -173,7 +179,21 @@ def _warm_sector_performance_on_boot() -> None:
     """L'andamento dei settori costa decine di secondi a freddo nel worker vivo
     (`sector_performance_service`): lo si precalcola all'avvio, in un thread,
     cosi' la tabella di /sectors e i dettagli rispondono subito anche dopo un
-    rilascio."""
+    rilascio.
+
+    ⚠️ Mai sotto pytest. Il thread legge `app.core.db.SessionLocal` quando
+    gira, non quando parte, e sopravvive al test che l'ha avviato: se il test
+    successivo nello stesso processo sostituisce `SessionLocal` con la propria
+    connessione SQLite in memoria, il thread la usa INSIEME al test e SQLite
+    cade con un segmentation fault. Successo in CI il 2026-11-14, due volte su
+    tre, su test che non c'entravano (`test_list_sectors_basic`,
+    `test_stream_requires_auth`): il processo muore nel test che sta girando,
+    non in quello che ha lasciato il thread acceso. Stessa guardia degli altri
+    lavori d'avvio."""
+    import os
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
     try:
         from app.api.sectors import SECTOR_ETF_PROXY
         from app.services import sector_performance_service

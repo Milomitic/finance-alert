@@ -212,3 +212,18 @@ def test_le_barre_dell_indice_vengono_dal_dettaglio_mercato(monkeypatch):
     monkeypatch.setattr(market_detail_service, "get_detail",
                         lambda s, r: (_ for _ in ()).throw(RuntimeError("yahoo giu'")))
     assert rp._barre_indice("^GSPC") == []
+
+
+def test_sotto_pytest_l_avvio_non_lancia_thread_di_riscaldamento(monkeypatch):
+    """Un thread nato nel ciclo di vita di un TestClient sopravvive al test e
+    usa la connessione del test successivo: in CI ha fatto cadere pytest con
+    un segmentation fault di SQLite."""
+    import threading
+
+    from app import main
+
+    partiti = []
+    monkeypatch.setattr(threading.Thread, "start", lambda self: partiti.append(self.name))
+    main._warm_sector_performance_on_boot()
+    main._warm_premarket_on_boot()
+    assert partiti == []
