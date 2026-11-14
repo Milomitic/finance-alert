@@ -2630,6 +2630,23 @@ Il sintomo e ingannevole: la suite torna rossa su TUTTI i test invece che su
 uno, il che si legge come «ho rotto qualcos'altro» mentre il codice e
 semplicemente sparito.
 
+## ⚠️ Un thread lanciato dall'avvio dell'app sopravvive al test che l'ha avviato (2026-11-14)
+
+Due job backend rossi su tre in CI con `Fatal Python error: Segmentation
+fault` dentro SQLite, su test che non c'entravano. Il traceback: il thread
+`settori-boot-warm`, avviato dal `lifespan` di un TestClient, legge
+`app.core.db.SessionLocal` QUANDO GIRA e sopravvive al test; se il test dopo
+sostituisce `SessionLocal` con la propria connessione in memoria (StaticPool),
+la usano in due thread e SQLite cade. Il processo muore nel test che sta
+girando, non in quello che ha lasciato il thread acceso, quindi il nome del
+test fallito non dice niente.
+
+**Ogni lavoro d'avvio in un thread va spento sotto `PYTEST_CURRENT_TEST`**,
+come gli altri in `main.py`, e il suo corpo si esercita in un test che
+esegue il thread sul posto (`test_riscaldamento_avvio.py`). ⚠️ Spegnerlo e
+basta fa scattare il cancello del codice mai eseguito, giustamente: quel
+codice girava solo li'.
+
 ## Leggere metriche IN-PROCESS dal pod: serve HTTP, non `kubectl exec python` (2026-09-11)
 
 `data_source_metrics` (e ogni contatore in memoria) vive nel worker uvicorn.
@@ -4043,6 +4060,18 @@ su un indice), `rs_settore_63`. Le fonti di mercato si costruiscono una volta
 per scansione (`contesto_mercato_service.costruisci`) e un loro guasto costa
 solo le loro chiavi. Le chiavi della versione 1 non cambiano: i modelli in
 prova le leggono per nome.
+
+### Rischio delle posizioni e notifiche (FA-143..148, 2026-11-14)
+
+`rischio_posizioni_service` descrive, non consiglia: primo passaggio su
+finestre storiche DISGIUNTE (stop e target nella stessa barra = stop, come la
+gara dei piani), fondi a leva al loro multiplo sul sottostante (`SOTTOSTANTI`),
+scenario lineare dichiarato non lineare per un ETF a leva su piu' giorni.
+`GET /api/etoro/rischio` e' in cache fino alla sincronizzazione successiva.
+Gli avvisi (`allarmi_posizioni_service`) stanno nel job di sincronizzazione
+eToro, col prezzo di eToro. ⚠️ La soglia dello stop vicino e' 0,5 ATR perche'
+a 1 ATR le posizioni di novembre 2026 avrebbero suonato ogni giorno: prima di
+abbassarla, misurare dove stanno le posizioni vere.
 
 ### Archivio puntuale dei dati non-prezzo (fase 4, 2026-09-24)
 

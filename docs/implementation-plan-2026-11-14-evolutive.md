@@ -571,3 +571,9 @@ perché il piano dica cosa si è deciso e perché.
 - **Decisioni dell'utente del 2026-11-14:** FA-154 fatta con la variante (b),
   piano medio a 21 sedute per tutti; FA-162 chiusa tenendo tutte le funzioni;
   FA-133 e FA-160 escluse per ora.
+- **Fase 3 (2026-11-14):** fatta. Differenze dal piano: la scheda Rischio e'
+  una scheda sotto il conto, non una scheda di pagina; la soglia dello stop
+  vicino e' 0,5 ATR (a 1 suonava ogni giorno); gli avvisi stanno nella
+  sincronizzazione eToro invece che nello sweep; FA-148 esisteva gia' per
+  insider e analisti, e si e' aggiunta la regola sui fondi. Nuova FA-165: il
+  segmentation fault in CI dei thread d'avvio.
