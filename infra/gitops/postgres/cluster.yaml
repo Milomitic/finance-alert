@@ -89,7 +89,14 @@ spec:
       # Il prezzo: in un disastro si possono perdere fino a 30 minuti di
       # scritture invece di 5. Qui si accetta, perche' cio' che conta si
       # ricostruisce dalle fonti (scansioni, storico eToro).
-      archive_timeout: "30min"
+      #
+      # ⚠️ 6 ORE dal 2026-11-14, TEMPORANEO. L'archiviazione e' ancora ferma
+      # (FA-129 non applicata): pg_wal a 53 GB, disco del nodo al 94%, ~0,9 GB
+      # al giorno di cui ~48 segmenti su 57 forzati da questo timeout. A 6 ore
+      # la crescita scende a ~0,2 GB al giorno. Il prezzo e' nullo finche'
+      # non esiste un backup: non si perde un ripristino che non c'e'.
+      # RIPORTARE A "30min" appena ContinuousArchiving torna True.
+      archive_timeout: "6h"
 
   # Least-privilege bootstrap: create the app database owned by a NON-superuser
   # role (fa_app). CNPG keeps the postgres superuser password-less/no external
