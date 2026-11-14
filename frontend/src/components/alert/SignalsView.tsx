@@ -294,6 +294,24 @@ export function SignalsView() {
               onSelectAll={onSelectAll}
               onRowClick={setOpenDetail}
               q={filters.q ?? ""}
+              // ⚠️ La lista parte dai titoli in posizione e fra i preferiti
+              // (FA-136): vuota, deve dire che e' ristretta e come allargarla,
+              // altrimenti si legge come «oggi non e' scattato niente».
+              vuoto={filters.solo_rilevanti ? (
+                <>
+                  Nessun segnale sui tuoi titoli con questi filtri.{" "}
+                  <button
+                    type="button"
+                    className="underline underline-offset-2 text-foreground"
+                    onClick={() => {
+                      setPage(0);
+                      setFilters({ ...filters, solo_rilevanti: undefined });
+                    }}
+                  >
+                    Mostra tutti i titoli
+                  </button>
+                </>
+              ) : undefined}
               onQueryChange={(v) => {
                 setPage(0);
                 setFilters({ ...filters, q: v || undefined });

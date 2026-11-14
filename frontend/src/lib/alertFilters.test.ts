@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 
 import {
-  esitoNascostoDallArchivio, filtersFromSearch, searchFromState,
+  esitoNascostoDallArchivio, filtersFromSearch, sceltaTitoli, searchFromState,
 } from "@/lib/alertFilters";
 
 /* Alert filters live in the URL, so a bookmark outlives the UI that made it.
@@ -127,5 +127,41 @@ describe("filtersFromSearch — entrambe le metà", () => {
     expect(f.include_archived).toBeUndefined();
     const out = searchFromState(f, 0, "triggered_at", "desc", new URLSearchParams());
     expect(out.has("include_archived")).toBe(false);
+  });
+});
+
+describe("la scelta dei titoli (FA-136)", () => {
+  const sp = (q: string) => new URLSearchParams(q);
+
+  it("la lista nuda parte dai miei titoli", () => {
+    expect(sceltaTitoli(sp(""))).toBe("miei");
+    expect(filtersFromSearch(sp("")).solo_rilevanti).toBe(true);
+  });
+
+  it("un link con un filtro proprio mostra tutto, non una lista vuota", () => {
+    expect(sceltaTitoli(sp("ticker=XYZ"))).toBe("tutti");
+    expect(sceltaTitoli(sp("rule_kind=signal:sr_flip"))).toBe("tutti");
+    expect(filtersFromSearch(sp("ticker=XYZ")).solo_rilevanti).toBeUndefined();
+  });
+
+  it("i segnalibri di prima valgono ancora", () => {
+    expect(sceltaTitoli(sp("solo_rilevanti=true&ticker=XYZ"))).toBe("miei");
+    expect(sceltaTitoli(sp("solo_etoro=true"))).toBe("etoro");
+  });
+
+  it("ogni scelta sopravvive al giro nell'URL", () => {
+    for (const q of ["", "titoli=tutti", "titoli=etoro", "ticker=XYZ",
+                     "ticker=XYZ&titoli=miei", "rule_kind=signal:gap_and_go&titoli=tutti"]) {
+      const f = filtersFromSearch(sp(q));
+      const dopo = filtersFromSearch(searchFromState(f, 0, "rilevanza", "desc", sp("")));
+      expect([dopo.solo_rilevanti, dopo.solo_etoro], q).toEqual([f.solo_rilevanti, f.solo_etoro]);
+    }
+  });
+
+  it("«Tutti» scelto a mano si scrive, altrimenti ricaricare lo perderebbe", () => {
+    expect(searchFromState({ archived: false }, 0, "rilevanza", "desc", sp("")).get("titoli"))
+      .toBe("tutti");
+    expect(searchFromState({ archived: false, solo_rilevanti: true }, 0, "rilevanza", "desc", sp("")).toString())
+      .toBe("");
   });
 });

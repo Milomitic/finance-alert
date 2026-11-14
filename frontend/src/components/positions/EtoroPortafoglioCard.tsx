@@ -11,6 +11,8 @@ import { useSincronizzaEtoro } from "@/hooks/useEtoro";
 import { etichettaLato, fmtPct, raggruppaPerStrumento, type GruppoStrumento } from "@/lib/etoroPortafoglio";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
+import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
 
 /* ─── Il portafoglio eToro (FA-124) ───────────────────────────────────────
  *
@@ -64,6 +66,7 @@ function Conto({ conto }: { conto: EtoroConto }) {
 
 function Identita({ g }: { g: GruppoStrumento }) {
   const nome = g.ticker ?? g.simbolo ?? `#${g.instrumentId}`;
+  const segnali = useSegnaliSuiMieiTitoli();
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <StockLogo ticker={g.ticker ?? g.simbolo} size="xs" />
@@ -76,6 +79,7 @@ function Identita({ g }: { g: GruppoStrumento }) {
           ) : (
             <span className="shrink-0 text-sm font-bold">{nome}</span>
           )}
+          {g.ticker && <SegnaliTitolo ticker={g.ticker} s={segnali.data?.get(g.ticker)} collegamento />}
           {g.nome && <span className="min-w-0 truncate text-xs text-muted-foreground" title={g.nome}>{g.nome}</span>}
         </div>
         <div className="text-xs text-muted-foreground">

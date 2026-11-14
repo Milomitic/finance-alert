@@ -15,6 +15,7 @@ export const ORDINE_PREDEFINITO = "rilevanza";
  *  test that reads the behaviour directly. */
 export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
   const s = (k: string) => sp.get(k) || undefined;
+  const titoli = sceltaTitoli(sp);
   return {
     archived: sp.get("archived") === "true",
     // Vedi `STATUS_OPTIONS` in AlertFilters: quasi ogni esito maturato vive su
@@ -23,8 +24,8 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     // altrimenti un segnalibro riaprirebbe una lista diversa da quella
     // condivisa.
     include_archived: sp.get("include_archived") === "true" || undefined,
-    solo_rilevanti: sp.get("solo_rilevanti") === "true" || undefined,
-    solo_etoro: sp.get("solo_etoro") === "true" || undefined,
+    solo_rilevanti: titoli === "miei" || undefined,
+    solo_etoro: titoli === "etoro" || undefined,
     ticker: s("ticker"),
     q: s("q"),
     rule_kind: s("rule_kind"),
@@ -44,6 +45,33 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     // why. Dropping it degrades an old link to "no filter", which is the only
     // safe reading.
   };
+}
+
+/** Le chiavi che restringono la lista. Un link che ne porta una arriva con
+ *  un'intenzione propria, e il default «i miei titoli» non gli si sovrappone. */
+const FILTRI_DEL_LINK = [
+  "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
+  "date_from", "date_to", "strength_min",
+] as const;
+
+/** Quali titoli mostrare (FA-136).
+ *
+ *  Il default della lista e' «Posizioni e preferiti»: nascono 60-165 segnali
+ *  al giorno sull'intero catalogo e la lista si apriva una dozzina di volte
+ *  al mese, cioe' l'universo era un elenco senza destinatario.
+ *
+ *  ⚠️ Il default vale solo per `/alerts` NUDO. `/alerts?ticker=XYZ` dal
+ *  dettaglio di un titolo che non si possiede, o `?rule_kind=` dalla
+ *  Diagnostica, aprirebbero altrimenti una lista vuota senza dire perche'.
+ *  «Tutti» scelto a mano si scrive (`titoli=tutti`): senza, ricaricare la
+ *  pagina riporterebbe al default. I segnalibri di prima (`solo_rilevanti`,
+ *  `solo_etoro`) continuano a valere. */
+export function sceltaTitoli(sp: URLSearchParams): "miei" | "etoro" | "tutti" {
+  const t = sp.get("titoli");
+  if (t === "tutti") return "tutti";
+  if (t === "etoro" || sp.get("solo_etoro") === "true") return "etoro";
+  if (t === "miei" || sp.get("solo_rilevanti") === "true") return "miei";
+  return FILTRI_DEL_LINK.some((k) => sp.get(k)) ? "tutti" : "miei";
 }
 
 /** Parse a 0-100 numeric param; anything else → undefined (ignored). */
@@ -78,7 +106,7 @@ function numParam(sp: URLSearchParams, key: string): number | undefined {
 const CHIAVI_PROPRIE = [
   "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
   "date_from", "date_to", "strength_min", "archived", "include_archived",
-  "solo_rilevanti", "solo_etoro", "page", "sort_by", "sort_dir",
+  "solo_rilevanti", "solo_etoro", "titoli", "page", "sort_by", "sort_dir",
 ] as const;
 
 export function searchFromState(
@@ -102,8 +130,12 @@ export function searchFromState(
   if (filters.strength_min != null) sp.set("strength_min", String(filters.strength_min));
   if (filters.archived) sp.set("archived", "true");
   if (filters.include_archived) sp.set("include_archived", "true");
-  if (filters.solo_rilevanti) sp.set("solo_rilevanti", "true");
-  if (filters.solo_etoro) sp.set("solo_etoro", "true");
+  // Una sola chiave per la scelta dei titoli; «miei» resta implicito solo
+  // quando nessun altro filtro lo farebbe leggere come «tutti».
+  const altri = FILTRI_DEL_LINK.some((k) => sp.get(k));
+  if (filters.solo_etoro) sp.set("titoli", "etoro");
+  else if (!filters.solo_rilevanti) sp.set("titoli", "tutti");
+  else if (altri) sp.set("titoli", "miei");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
   if (sortBy !== ORDINE_PREDEFINITO) sp.set("sort_by", sortBy);
   if (sortDir !== "desc") sp.set("sort_dir", sortDir);

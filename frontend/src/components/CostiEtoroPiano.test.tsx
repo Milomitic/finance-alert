@@ -100,8 +100,11 @@ describe("CostiEtoroPiano", () => {
 describe("il filtro «Negoziabili su eToro» nella lista segnali", () => {
   it("va e torna dall'URL", () => {
     const sp = searchFromState({ solo_etoro: true }, 0, "rilevanza", "desc", new URLSearchParams());
-    expect(sp.get("solo_etoro")).toBe("true");
+    // Dal 2026-11-14 la scelta dei titoli e' una chiave sola (FA-136); il
+    // segnalibro di prima, `solo_etoro=true`, si legge ancora.
+    expect(sp.get("titoli")).toBe("etoro");
     expect(filtersFromSearch(sp).solo_etoro).toBe(true);
+    expect(filtersFromSearch(new URLSearchParams("solo_etoro=true")).solo_etoro).toBe(true);
     expect(filtersFromSearch(new URLSearchParams()).solo_etoro).toBeUndefined();
   });
 });

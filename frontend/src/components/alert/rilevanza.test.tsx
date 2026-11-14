@@ -30,9 +30,13 @@ describe("l'URL", () => {
 
   it("il filtro «solo i miei titoli» va e torna dall'URL", () => {
     const sp = searchFromState({ solo_rilevanti: true }, 0, "rilevanza", "desc", new URLSearchParams());
-    expect(sp.get("solo_rilevanti")).toBe("true");
     expect(filtersFromSearch(sp).solo_rilevanti).toBe(true);
-    expect(filtersFromSearch(new URLSearchParams()).solo_rilevanti).toBeUndefined();
+    // Dal 2026-11-14 (FA-136) e' il default della lista nuda, quindi non si
+    // scrive; e «Tutti» si scrive, perche' non e' piu' il default.
+    expect(sp.toString()).toBe("");
+    expect(filtersFromSearch(new URLSearchParams()).solo_rilevanti).toBe(true);
+    const tutti = searchFromState({}, 0, "rilevanza", "desc", new URLSearchParams());
+    expect(filtersFromSearch(tutti).solo_rilevanti).toBeUndefined();
   });
 });
 

@@ -25,6 +25,12 @@ vi.mock("@/hooks/useEtoro", () => ({
   useSincronizzaEtoro: () => ({ mutate: sincronizza, isPending: false, isError: false, error: null }),
 }));
 
+// FA-136: i segnali vivi accanto alla posizione. Vuoti di default.
+const segnali = vi.hoisted(() => ({ m: new Map() as Map<string, { n: number; rialzisti: number; ribassisti: number }> }));
+vi.mock("@/hooks/useSegnaliSuiMieiTitoli", () => ({
+  useSegnaliSuiMieiTitoli: () => ({ data: segnali.m }),
+}));
+
 function monta(errore = false) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -46,6 +52,7 @@ const CONTO = {
 };
 
 beforeEach(() => {
+  segnali.m = new Map();
   abbina.mockReset();
   sincronizza.mockReset();
   portafoglio = {
@@ -82,6 +89,21 @@ describe("EtoroPortafoglioCard", () => {
       "Mostra le posizioni su SOXL", "Mostra le posizioni su MU",
     ]);
     expect(screen.getByText(/Long ×5 CFD · 2 posizioni/)).toBeTruthy();
+  });
+
+  it("accanto alla posizione c'e' il segnale vivo sul titolo, con il link ai suoi segnali", () => {
+    segnali.m = new Map([["SOXL", { n: 2, rialzisti: 2, ribassisti: 0 }],
+                         ["MU", { n: 2, rialzisti: 1, ribassisti: 1 }]]);
+    monta();
+    const soxl = screen.getByRole("link", { name: "SOXL: 2 segnali vivi, rialzisti" });
+    expect(soxl.getAttribute("href")).toBe("/alerts?ticker=SOXL");
+    // Due direzioni opposte non fanno una direzione: si dice che sono opposte.
+    expect(screen.getByRole("link", { name: "MU: 2 segnali vivi, in direzioni opposte" })).toBeTruthy();
+  });
+
+  it("senza segnali vivi non c'e' niente da mostrare", () => {
+    monta();
+    expect(screen.queryByRole("link", { name: /segnal/ })).toBeNull();
   });
 
   it("dice quante posizioni non hanno uno stop", () => {

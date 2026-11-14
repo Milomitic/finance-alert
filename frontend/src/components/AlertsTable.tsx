@@ -2,7 +2,7 @@ import {
   Archive, ArchiveRestore, ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Check, Clock, Hourglass,
   Star, Target, Unplug, X,
 } from "lucide-react";
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent, type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Alert, PlanBrief } from "@/api/types";
@@ -90,6 +90,9 @@ interface Props {
    *  Filters server-side via the AlertListParams `q` param. */
   q: string;
   onQueryChange: (v: string) => void;
+  /** Cosa dire quando non ci sono righe, se chi chiama sa perche' meglio
+   *  della tabella (es. la lista ristretta ai titoli dell'utente). */
+  vuoto?: ReactNode;
   /** Embedded mode for surfaces that show the alerts of a single
    *  stock (e.g. the StockAlertsHistoryCard on the stock-detail page).
    *  When true:
@@ -248,6 +251,7 @@ export function AlertsTable({
   onSort,
   onArchiveToggle,
   prezzoAttuale = null,
+  vuoto,
 }: Props) {
   const allSelected = alerts.length > 0 && alerts.every((a) => selectedIds.has(a.id));
 
@@ -520,7 +524,7 @@ export function AlertsTable({
             >
               {q.trim()
                 ? `Nessun risultato per "${q}".`
-                : "Nessun segnale con questi filtri."}
+                : vuoto ?? "Nessun segnale con questi filtri."}
             </TableCell>
           </TableRow>
         )}

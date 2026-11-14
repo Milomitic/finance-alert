@@ -8,6 +8,8 @@ import { usePreferiti } from "@/hooks/usePreferiti";
 import { formatMoney } from "@/lib/money";
 import { leggiRecenti } from "@/lib/titoliRecenti";
 import { cn } from "@/lib/utils";
+import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
+import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
 
 /* ─── Preferiti e recenti, in cima alla home (FA-112) ─────────────────────
  *
@@ -54,6 +56,7 @@ export function PreferitiStrip() {
   const tutti = lista.data ?? [];
   const preferiti = tutti.slice(0, PREFERITI_IN_STRISCIA);
   const altri = tutti.length - preferiti.length;
+  const segnali = useSegnaliSuiMieiTitoli();
   const tickers = preferiti.map((p) => p.ticker);
   const quotes = useLiveQuotes(tickers, tickers.length > 0);
   const perTicker = new Map<string, LiveQuote>(
@@ -88,6 +91,7 @@ export function PreferitiStrip() {
           return (
             <Link key={p.ticker} to={`/stocks/${encodeURIComponent(p.ticker)}`} className={PASTIGLIA}>
               <span className="font-semibold">{p.ticker}</span>
+              <SegnaliTitolo ticker={p.ticker} s={segnali.data?.get(p.ticker)} />
               {q?.price != null && (
                 <span className="tabular-nums text-foreground/80">
                   {formatMoney(q.price, p.currency ?? q.currency)}
