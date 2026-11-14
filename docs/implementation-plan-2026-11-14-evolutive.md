@@ -547,3 +547,24 @@ tabella è vuota).
 
 Circa 53 giorni di lavoro: fase 1 sei e mezzo, fase 2 sei e mezzo, fase 3 dieci e mezzo,
 fase 4 sette e mezzo, fase 5 nove, fase 6 tredici.
+
+---
+
+## Stato dopo le fasi 1 e 2 (2026-11-14)
+
+Le misure fatte prima di implementare hanno cambiato tre voci; restano qui
+perché il piano dica cosa si è deciso e perché.
+
+- **FA-134**: la cache precalcolata NON è stata costruita. A riposo, misurati
+  nel pod, gli endpoint «lenti» rispondono in 0,03-0,4 s; le medie di 2 s in
+  Prometheus vengono da concorrenza, scansioni e cache fredde. Unico caso vero
+  il dettaglio mercato giornaliero (15 MB, 5,6 s): ora porta dieci anni.
+- **FA-135**: l'endpoint aggregato NON è stato fatto. Il dettaglio titolo è
+  già compresso e arrotondato (0,6-1 s); l'aggregato toglierebbe solo round
+  trip su HTTP/2.
+- **FA-136**: Esiti e In formazione restano nella pagina Segnali. Spostarli in
+  Diagnostica era una proposta fatta sulle sole aperture; sono le tappe dello
+  stesso episodio, e la scelta di tenerle insieme era documentata.
+- **FA-164 (nuova)**: la prova di parità di FA-138 ha trovato che il 90% delle
+  mediane conservate in `signal_outcomes` non si riproduce dai dati di oggi.
+- **FA-133** resta in attesa dell'utente (account Tailscale e client).
