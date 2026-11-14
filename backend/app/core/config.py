@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # come le notifiche di prezzo e di posizione: i titoli li ha scelti
     # l'utente. Nessun messaggio se domani non c'e' niente.
     telegram_promemoria_trimestrali: bool = True
+    # Avvisi sulle posizioni eToro aperte (FA-146): stop vicino e mossa
+    # anomala, in ATR, una volta per posizione, tipo e giorno. Spenti di
+    # default; il chart li accende in produzione.
+    telegram_posizioni: bool = False
+    telegram_posizioni_stop_atr: float = 0.5
+    telegram_posizioni_mossa_atr: float = 2.0
     digest_hour: int = 8
     digest_minute: int = 0
     scan_hour: int = 23

@@ -23,7 +23,7 @@ positions and preferiti — see `promemoria_trimestrali_service`):
 """
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -259,7 +259,85 @@ def _righe_novita(novita: list[Any]) -> list[str]:
     return righe
 
 
-def build_digest_message(db: Session, alerts: list[Alert], novita: list[Any] | None = None) -> str:
+def _righe_brief(db: Session, oggi: date) -> list[str]:
+    """Il brief del mattino (FA-147): conto e posizioni eToro aperte, con lo
+    stop piu' vicino in % e in ATR e le trimestrali entro 7 giorni, poi gli
+    eventi macro importanti di oggi. Vuoto senza posizioni aperte: allora il
+    digest resta quello dei segnali.
+
+    Descrive, non consiglia, come la scheda Rischio da cui prende le misure."""
+    from app.models import EtoroConto, EtoroPosizione, EtoroStrumento  # noqa: PLC0415
+    from app.services import allarmi_posizioni_service as allarmi  # noqa: PLC0415
+    from app.services import rischio_posizioni_service as rp  # noqa: PLC0415
+    from app.services import stock_fundamentals_service as sfs  # noqa: PLC0415
+
+    righe = db.execute(
+        select(EtoroPosizione, EtoroStrumento, Stock)
+        .join(EtoroStrumento, EtoroStrumento.instrument_id == EtoroPosizione.instrument_id)
+        .outerjoin(Stock, Stock.id == EtoroStrumento.stock_id)
+        .where(EtoroPosizione.chiusa_il.is_(None))
+    ).all()
+    if not righe:
+        return []
+    out = ["<b>Le tue posizioni</b>"]
+    conto = db.get(EtoroConto, 1)
+    if conto and conto.valore_totale is not None:
+        pnl = f", P/L aperto {conto.pnl_aperto:+,.0f} USD" if conto.pnl_aperto is not None else ""
+        out.append(f"Conto {conto.valore_totale:,.0f} USD{pnl}")
+    gruppi: dict[str, list] = {}
+    for p, st_e, st in righe:
+        ticker = (st.ticker if st else None) or st_e.simbolo or f"#{st_e.instrument_id}"
+        gruppi.setdefault(ticker, []).append((p, st_e, st))
+    trimestrali = []
+    for ticker, gruppo in gruppi.items():
+        p0, st_e, st = gruppo[0]
+        prezzo = p0.prezzo_corrente
+        barre = allarmi._barre_recenti(db, st, st_e.simbolo)
+        a = rp.atr(barre)
+        distanze = []
+        for p, _, _ in gruppo:
+            if p.stop and prezzo:
+                d = (prezzo - p.stop) if p.lato == "long" else (p.stop - prezzo)
+                distanze.append(d)
+        verso = "long" if p0.lato == "long" else "short"
+        riga = f"• <b>{ticker}</b> {verso} ×{p0.leva}"
+        if len(gruppo) > 1:
+            riga += f" ({len(gruppo)} posizioni)"
+        if prezzo:
+            riga += f" — {_fmt_price(prezzo)}"
+        if distanze and prezzo:
+            d = min(distanze)
+            riga += f", stop piu' vicino a {d / prezzo * 100:.1f}%"
+            if a:
+                riga += f" ({d / a:.2f} ATR)"
+        elif prezzo:
+            riga += ", senza stop"
+        out.append(riga)
+        _, prossima = sfs.trimestrali_cached(ticker)
+        if prossima is not None and 0 <= (prossima - oggi).days <= 7:
+            trimestrali.append((ticker, (prossima - oggi).days))
+    for ticker, giorni in trimestrali:
+        quando = "oggi" if giorni == 0 else "domani" if giorni == 1 else f"fra {giorni} giorni"
+        out.append(f"📅 {ticker}: trimestrale {quando}")
+    try:
+        from app.services import calendar_service  # noqa: PLC0415
+        eventi = calendar_service.get_events(db, oggi, oggi, kinds={"macro"}, importance={"high"})
+    except Exception as exc:  # noqa: BLE001 — il brief non dipende dal calendario
+        logger.warning(f"[notifier] eventi macro di oggi non letti: {exc}")
+        eventi = []
+    if eventi:
+        out.append("")
+        out.append("<b>Oggi</b>")
+        for ev in eventi[:6]:
+            ora = f" ({ev.release_time})" if getattr(ev, "release_time", None) else ""
+            out.append(f"• {ev.label}{ora}")
+    return out
+
+
+def build_digest_message(
+    db: Session, alerts: list[Alert], novita: list[Any] | None = None,
+    brief: list[str] | None = None,
+) -> str:
     """Format the digest as Telegram HTML — grouped by signal label, with
     per-alert tone emoji + Forza/Probabilità when the snapshot carries them.
 
@@ -283,6 +361,29 @@ def build_digest_message(db: Session, alerts: list[Alert], novita: list[Any] | N
         (a for a in alerts if a.stock_id in rilevanti),
         key=lambda a: -rilevanza_service.PESO[rilevanti[a.stock_id]],
     )
+
+    if brief:
+        # FA-147: il brief del mattino. Posizioni e oggi in testa, poi le
+        # novita' e i segnali sui tuoi titoli; il resto del catalogo e' una
+        # riga, perche' non e' cio' per cui il messaggio esiste.
+        lines = [f"☀️ <b>Finance Alert — Brief del {today}</b>", ""] + brief + [""]
+        if novita:
+            lines += _righe_novita(novita)
+            lines.append("")
+        if miei:
+            lines.append(f"<b>Segnali sui tuoi titoli ({len(miei)}):</b>")
+            for a in miei[:DIGEST_TOP_N]:
+                lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
+            if len(miei) > DIGEST_TOP_N:
+                lines.append(f"... e altri {len(miei) - DIGEST_TOP_N}.")
+            lines.append("")
+        altri = n - len(miei)
+        if altri:
+            lines.append(f"Sul resto del catalogo: {altri} segnal{'e' if altri == 1 else 'i'} "
+                         f"nuov{'o' if altri == 1 else 'i'} → {settings.public_base_url}/alerts")
+        else:
+            lines.append(f"🔗 {settings.public_base_url}/positions")
+        return _truncate("\n".join(lines))
 
     lines = [f"🔔 <b>Finance Alert — Digest del {today}</b>", ""]
     if novita:
@@ -342,11 +443,16 @@ def send_daily_digest(db: Session) -> DigestResult:
 
     alerts = _fetch_alerts_last_24h(db)
     novita = _novita_da_mandare(db)
-    if not alerts and not novita:
+    try:
+        brief = _righe_brief(db, datetime.now(UTC).date())
+    except Exception as exc:  # noqa: BLE001 — senza brief resta il digest
+        logger.warning(f"[notifier] brief non costruito: {exc}")
+        brief = []
+    if not alerts and not novita and not brief:
         logger.info("[notifier] digest skipped: no alerts in last 24h")
         return DigestResult(sent=False, reason="no_alerts")
 
-    text = build_digest_message(db, alerts, novita)
+    text = build_digest_message(db, alerts, novita, brief)
 
     if not _send_telegram(text, what="digest"):
         return DigestResult(sent=False, alerts_count=len(alerts), reason="http_error")
@@ -652,3 +758,43 @@ def notify_trimestrali(trimestrali: list[Any], domani: Any) -> PushResult:
         return PushResult(sent=False, alerts_count=n, reason="http_error")
     logger.info(f"[notifier] earnings reminder sent: {n} trimestrale/i")
     return PushResult(sent=True, alerts_count=n, reason="ok")
+
+
+def notify_posizioni(avvisi: list[Any]) -> PushResult:
+    """Gli avvisi sulle posizioni eToro (FA-146): stop vicino e mossa anomala.
+
+    `avvisi` = `allarmi_posizioni_service.Avviso`. Si spegne con
+    `TELEGRAM_POSIZIONI=false`. Descrive, non consiglia: distanza e
+    variazione, nella volatilita' dello strumento."""
+    if not settings.telegram_posizioni:
+        return PushResult(sent=False, reason="push_disabled")
+    if not avvisi:
+        return PushResult(sent=False, reason="no_alerts")
+    if not _telegram_enabled():
+        logger.info("[notifier] position alerts skipped: Telegram disabled")
+        return PushResult(sent=False, reason="telegram_disabled")
+
+    lines = ["⚠️ <b>Sulle tue posizioni eToro</b>", ""]
+    for a in avvisi[:PUSH_TOP_N]:
+        verso = "long" if a.lato == "long" else "short"
+        if a.tipo == "stop_vicino":
+            lines.append(
+                f"• <b>{a.ticker}</b> ({verso}) a {a.distanza_atr:.2f} ATR dallo stop: "
+                f"{_fmt_price(a.prezzo)} contro stop {_fmt_price(a.stop)} "
+                f"({a.distanza_pct * 100:.1f}%)"
+            )
+        else:
+            segno = "+" if a.variazione_pct >= 0 else ""
+            lines.append(
+                f"• <b>{a.ticker}</b> ({verso}) si muove di {segno}{a.variazione_pct * 100:.1f}% "
+                f"da ieri, {abs(a.variazione_atr):.1f} volte la sua escursione tipica"
+            )
+    if len(avvisi) > PUSH_TOP_N:
+        lines.append(f"... e altri {len(avvisi) - PUSH_TOP_N}.")
+    lines.append("")
+    lines.append(f"🔗 {settings.public_base_url}/positions")
+    text = _truncate("\n".join(lines))
+    if not _send_telegram(text, what="position alerts"):
+        return PushResult(sent=False, alerts_count=len(avvisi), reason="http_error")
+    logger.info(f"[notifier] position alerts sent: {len(avvisi)}")
+    return PushResult(sent=True, alerts_count=len(avvisi), reason="ok")

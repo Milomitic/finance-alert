@@ -47,7 +47,32 @@ def run_sincronizza_etoro() -> None:
             r = notifier_service.notify_etoro_chiuse(chiuse)
             if r.sent or r.reason == "telegram_disabled":
                 svc.segna_notificate(db, [p.position_id for p, _, _ in chiuse])
+        _avvisa_posizioni(db)
     _riepilogo(esito)
+
+
+def _avvisa_posizioni(db) -> None:
+    """Stop vicino e mossa anomala sulle posizioni aperte (FA-146), col prezzo
+    appena letto da eToro. Si segnano solo dopo un invio riuscito: un invio
+    fallito si riprova al giro dopo. Best-effort: un guasto qui non deve
+    costare la sincronizzazione."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from app.core.config import settings  # noqa: PLC0415
+    from app.services import allarmi_posizioni_service as allarmi  # noqa: PLC0415
+
+    if not settings.telegram_posizioni:
+        return
+    try:
+        adesso = datetime.now(UTC)
+        avvisi = allarmi.da_avvisare(
+            db, soglia_stop_atr=settings.telegram_posizioni_stop_atr,
+            soglia_mossa_atr=settings.telegram_posizioni_mossa_atr, adesso=adesso)
+        if avvisi and notifier_service.notify_posizioni(avvisi).sent:
+            allarmi.segna(db, avvisi, adesso.date())
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[etoro] avvisi sulle posizioni non valutati: {e}")
+        db.rollback()
 
 
 def _recupera(db) -> None:

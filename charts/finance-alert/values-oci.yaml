@@ -144,6 +144,8 @@ deployGate:
 telegram:
   # FA-113: accesa dal 2026-09-28, decisione dell'utente.
   pushPerSignal: true
+  # FA-146, accesi dal 2026-11-14 con la fase 3 del piano.
+  posizioni: true
 
 restoreDrill:
   enabled: true

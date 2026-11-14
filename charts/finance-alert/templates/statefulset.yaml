@@ -203,6 +203,13 @@ spec:
             # questo chart sono gia' rimaste spente tre volte senza un errore.
             - name: TELEGRAM_PUSH_PER_SIGNAL
               value: {{ .Values.telegram.pushPerSignal | quote }}
+            # Avvisi sulle posizioni eToro (FA-146).
+            - name: TELEGRAM_POSIZIONI
+              value: {{ .Values.telegram.posizioni | quote }}
+            - name: TELEGRAM_POSIZIONI_STOP_ATR
+              value: {{ .Values.telegram.posizioniStopAtr | quote }}
+            - name: TELEGRAM_POSIZIONI_MOSSA_ATR
+              value: {{ .Values.telegram.posizioniMossaAtr | quote }}
             # M7-P4 cutover switch. OFF (default) = the app keeps its embedded
             # SQLite on the PVC — the pre-M7 behaviour AND the instant rollback
             # (flip the flag back to false and the untouched .db is authoritative

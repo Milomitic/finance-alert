@@ -140,6 +140,11 @@ telegram:
   # Notifica per singolo segnale a fine scansione: solo i segnali NUOVI su
   # posizioni aperte e preferiti (FA-113). Spenta di default.
   pushPerSignal: false
+  # Avvisi sulle posizioni eToro (FA-146): stop vicino (in ATR) e mossa
+  # anomala, una volta per posizione, tipo e giorno. Spenti di default.
+  posizioni: false
+  posizioniStopAtr: 0.5
+  posizioniMossaAtr: 2.0
 
 # ─── Niente rilascio durante una scansione (FA-109) ────────────────────────
 # Hook PreSync di ArgoCD: prima di applicare un rilascio aspetta che la
