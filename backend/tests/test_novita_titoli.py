@@ -277,6 +277,36 @@ def test_il_ticker_col_trattino_trova_il_deposito_col_punto(db: Session) -> None
     db.flush()
     db.add(Preferito(stock_id=s.id))
     *_, ultimo = _fondo(db, "Markel", [date(2026, 3, 31), date(2026, 6, 30)])
-    _posizione(db, ultimo, "BRK.B", "reduce", -10.0, 2.0)
+    # -40%: sopra la soglia di FA-148; il test riguarda il trattino e il punto.
+    _posizione(db, ultimo, "BRK.B", "reduce", -40.0, 2.0)
     [n] = nt.da_mandare(db, OGGI, rinfresca=False)
     assert (n.ticker, n.testo.split(" (")[0]) == ("BRK-B", "Markel riduce la posizione")
+
+
+
+def test_una_variazione_piccola_non_e_una_novita(db: Session) -> None:
+    """FA-148: un ribilanciamento di pochi punti e' la norma per un fondo."""
+    s = Stock(ticker="AAPL", exchange="NASDAQ", name="Apple")
+    db.add(s)
+    db.flush()
+    db.add(Preferito(stock_id=s.id))
+    *_, ultimo = _fondo(db, "Markel", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, ultimo, "AAPL", "add", 12.0, 2.0)
+    assert nt.da_mandare(db, OGGI, rinfresca=False) == []
+
+
+def test_uno_split_non_e_un_aumento(db: Session) -> None:
+    """Azioni raddoppiate, peso nel portafoglio fermo: e' un frazionamento.
+    Lo stesso raddoppio con il peso raddoppiato e' un aumento vero."""
+    s = Stock(ticker="NVDA", exchange="NASDAQ", name="NVIDIA")
+    db.add(s)
+    db.flush()
+    db.add(Preferito(stock_id=s.id))
+    prima, ultimo = _fondo(db, "Markel", [date(2026, 3, 31), date(2026, 6, 30)])
+    _posizione(db, prima, "NVDA", "hold", 0.0, 3.0)
+    _posizione(db, ultimo, "NVDA", "add", 100.0, 3.1)
+    assert nt.da_mandare(db, OGGI, rinfresca=False) == []
+
+    assert nt.e_uno_split(100.0, 6.0, 3.0) is False
+    assert nt.e_uno_split(100.0, 3.1, 3.0) is True
+    assert nt.e_uno_split(100.0, None, 3.0) is False

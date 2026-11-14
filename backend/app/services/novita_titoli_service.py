@@ -175,6 +175,42 @@ def _forme(ticker: str) -> set[str]:
     return {ticker, ticker.replace("-", ".")}
 
 
+#: Sotto questa variazione di azioni un aumento o una riduzione non e' una
+#: notizia: ribilanciamenti di pochi punti sono la norma per un fondo (FA-148).
+SOGLIA_VARIAZIONE_13F = 25.0
+
+
+def _peso_precedente(db: Session, fondo_id: int, periodo: date, forme: set[str]) -> float | None:
+    """Il peso del titolo nel deposito PRECEDENTE dello stesso fondo."""
+    riga = db.execute(
+        select(InstitutionalHolding.portfolio_pct)
+        .join(InstitutionalFiling, InstitutionalFiling.id == InstitutionalHolding.filing_id)
+        .where(
+            InstitutionalFiling.institutional_id == fondo_id,
+            InstitutionalFiling.period_end_date < periodo,
+            InstitutionalHolding.ticker.in_(forme),
+        )
+        .order_by(InstitutionalFiling.period_end_date.desc())
+        .limit(1)
+    ).first()
+    return riga[0] if riga and isinstance(riga[0], (int, float)) else None
+
+
+def e_uno_split(variazione_azioni_pct: float, peso: float | None, peso_prima: float | None) -> bool:
+    """Un frazionamento cambia il numero di azioni e lascia il peso nel
+    portafoglio dov'era (il prezzo si divide per lo stesso fattore). Si legge
+    come split quando il peso si muove meno di un terzo di quanto si muovono le
+    azioni, in scala logaritmica. Senza i due pesi non si decide: False."""
+    import math  # noqa: PLC0415
+
+    if peso is None or peso_prima is None or peso <= 0 or peso_prima <= 0:
+        return False
+    r_azioni = 1 + variazione_azioni_pct / 100
+    if r_azioni <= 0:
+        return False
+    return abs(math.log(peso / peso_prima)) < abs(math.log(r_azioni)) / 3
+
+
 def dai_depositi_13f(db: Session, titoli: list[tuple[Stock, str]], dal: date) -> list[Novita]:
     """Le mosse dei fondi sui titoli dati, nei depositi ricevuti dal giorno
     `dal`. Un «apre una posizione» di un fondo con un deposito solo non si
@@ -204,6 +240,12 @@ def dai_depositi_13f(db: Session, titoli: list[tuple[Stock, str]], dal: date) ->
         if mossa == "new" and fondo_id not in fidati:
             continue
         s, ril = per_forma[forma]
+        if mossa in ("add", "reduce"):
+            # FA-148: solo le variazioni ampie, e non quelle di uno split.
+            if not isinstance(variazione, (int, float)) or abs(variazione) < SOGLIA_VARIAZIONE_13F:
+                continue
+            if e_uno_split(variazione, peso, _peso_precedente(db, fondo_id, periodo, _forme(s.ticker))):
+                continue
         testo = f"{fondo} {_MOSSE_13F[mossa]}"
         if mossa in ("add", "reduce") and isinstance(variazione, (int, float)):
             testo += f" ({variazione:+.0f}% di azioni)"
