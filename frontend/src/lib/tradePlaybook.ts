@@ -81,6 +81,11 @@ const HZ: Record<Horizon, {
   long:   { floor: 1.0, tp1R: 3.0, tp1Cap: 8.0,  tp2R: 4.5, tp2Cap: 14.0, label: "Lungo", duration: "1 - 3 mesi" },
 };
 
+/** I detector il cui piano usa la geometria media e corre 21 sedute anche
+ *  quando il segnale e' breve (FA-154). Gemello di `PIANO_MEDIO` in
+ *  `backend/app/signals/trade_plan.py`. */
+const PIANO_MEDIO: ReadonlySet<string> = new Set(["candle_reversal", "gap_and_go"]);
+
 /* Detector horizon prior, used as fallback when the chain spans a single day
    (so no time-span signal). Mirrors the backtest PRIOR map. */
 const PRIOR: Record<string, Horizon> = {
@@ -184,8 +189,13 @@ export function buildPlaybook(
   // ⚠️ La catena resta quella VIVA: è l'ultimo ripiego per gli alert che
   // precedono sia `first_horizon` sia `horizon`, e di quelli la catena
   // originale non esiste più da nessuna parte.
-  const hz: Horizon = (ing.horizon as Horizon | undefined)
+  const hzSegnale: Horizon = (ing.horizon as Horizon | undefined)
     ?? classifyHorizon(name ?? null, (s.chain ?? []) as { date?: string }[]);
+  // FA-154: per questi detector il piano corre 21 sedute con la geometria
+  // media anche quando il segnale e' breve. Gemello di `PIANO_MEDIO` in
+  // `backend/app/signals/trade_plan.py`, dove sta la misura che l'ha deciso.
+  const hz: Horizon = hzSegnale === "short" && name != null && PIANO_MEDIO.has(name)
+    ? "medium" : hzSegnale;
   const P = HZ[hz];
 
   // Stop: structural, floored at floor*ATR AND capped at STOP_CAP_ATR*ATR.

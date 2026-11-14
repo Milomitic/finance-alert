@@ -222,6 +222,9 @@ def test_il_gap_prende_il_livello_dalla_chiusura_precedente(db: Session) -> None
         ("2026-03-01", 101, 99, 100),   # la barra del segnale (gap)
         ("2026-03-03", 103, 99, 102),
         ("2026-03-04", 109, 101, 108),
+        # Dal 2026-11-14 il piano di gap_and_go e' medio (FA-154): 1° target a
+        # 2 R = 109,6, che la barra sopra non tocca. Questa lo tocca.
+        ("2026-03-05", 111, 107, 110),
     ])
 
     assert mature_plan_outcomes(db, commit=False) == 1

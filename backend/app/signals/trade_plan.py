@@ -63,6 +63,35 @@ _PRIOR: dict[str, str] = {
 }
 
 
+#: I detector il cui PIANO corre piu' a lungo del segnale (FA-154, 2026-11-14).
+#:
+#: Il segnale resta breve (5 sedute: lo misura cosi' il magazzino degli esiti),
+#: ma con la geometria breve — stop ad almeno 4 ATR, primo target a 1,5 R — in
+#: 5 sedute il prezzo non arrivava quasi mai a una delle due gambe: 97,6% dei
+#: piani di candle_reversal e 97,7% di gap_and_go scadevano senza esito, cioe'
+#: a schermo c'era un piano che non si risolveva. Decisione dell'utente:
+#: tenere un piano per tutti, allungandolo.
+#:
+#: Misurato sugli alert veri prima di scegliere (finestre chiuse, stesso
+#: campione): con la geometria MEDIA a 21 sedute si risolve il 51% dei piani di
+#: candle_reversal (contro il 27% della breve a 21) con uno stop mediano del
+#: 6,9% invece del 10,9%; su gap_and_go il 29% contro il 14%. Il rendimento non
+#: dice niente: 5 finestre indipendenti, tutte le varianti attorno a zero.
+#: La media e' la geometria gia' validata per i detector a 21 sedute.
+PIANO_MEDIO: frozenset[str] = frozenset({"candle_reversal", "gap_and_go"})
+
+#: Le sedute della gara di un piano medio.
+SEDUTE_PIANO_MEDIO = 21
+
+
+def sedute_della_gara(name: str | None, sedute_del_segnale: int) -> int:
+    """Quante sedute corre il piano: quelle del segnale, salvo i detector in
+    `PIANO_MEDIO`, il cui piano ne corre almeno 21."""
+    if name in PIANO_MEDIO:
+        return max(sedute_del_segnale, SEDUTE_PIANO_MEDIO)
+    return sedute_del_segnale
+
+
 @dataclass(frozen=True)
 class Target:
     label: str
@@ -212,6 +241,8 @@ def costruisci_piano(
     hz = ing.get("horizon")
     if hz not in _HZ:
         hz = _orizzonte_dalla_catena(name, snapshot.get("chain"))
+    if hz == "short" and name in PIANO_MEDIO:
+        hz = "medium"   # FA-154: vedi PIANO_MEDIO
     P = _HZ[hz]
 
     dist_strutturale = abs(prezzo - livello)

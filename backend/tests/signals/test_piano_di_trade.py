@@ -104,3 +104,16 @@ def test_lo_stop_sta_sempre_dalla_parte_che_fa_perdere() -> None:
         else:
             assert piano.stop > piano.entry
             assert all(t.price < piano.entry for t in piano.targets)
+
+
+def test_il_piano_di_candle_reversal_e_gap_and_go_corre_21_sedute():
+    """FA-154: il segnale resta a 5 sedute, il piano ne corre 21; gli altri
+    detector corrono quanto il loro segnale."""
+    from app.signals.trade_plan import SEDUTE_PIANO_MEDIO, sedute_della_gara
+
+    assert SEDUTE_PIANO_MEDIO == 21
+    assert sedute_della_gara("candle_reversal", 5) == 21
+    assert sedute_della_gara("gap_and_go", 5) == 21
+    assert sedute_della_gara("sr_flip", 21) == 21
+    assert sedute_della_gara("trend_pullback", 63) == 63
+    assert sedute_della_gara(None, 5) == 5

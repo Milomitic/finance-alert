@@ -1,6 +1,6 @@
 {
   "_perche": "Vettori d'oro della geometria del piano di trade. Li devono soddisfare ENTRAMBE le implementazioni: `frontend/src/lib/tradePlaybook.ts` (che li ha generati, ed e' cio' che l'utente vede a schermo) e `backend/app/signals/trade_plan.py` (che serve a far correre stop e target sulle barre per l'esito basato sul piano). Due copie della stessa aritmetica divergono al primo ritocco, e qui la divergenza farebbe misurare un piano diverso da quello mostrato. Chi tocca una meta' sola rende rosso il test dell'altra.",
-  "_generato": "dal gemello Python, 2026-09-24 (piano breve a 4 ATR / 1,5 R); verificato dal TS in src/lib/playbookVectors.test.ts",
+  "_generato": "dal gemello Python, 2026-09-24 (piano breve a 4 ATR / 1,5 R); verificato dal TS in src/lib/playbookVectors.test.ts; piano medio per candle_reversal e gap_and_go, 2026-11-14 (FA-154)",
   "_non_coperto": "riskBudgetPct / positionPct / leverage / leverageNote restano solo nel TS: sono una scelta di propensione al rischio e di resa a schermo, non geometria, e il backend non ne ha bisogno per far correre la gara.",
   "casi": [
     {
@@ -310,7 +310,7 @@
     },
     {
       "nome": "orizzonte_dal_prior_del_detector",
-      "name": "candle_reversal",
+      "name": "trend_pullback",
       "entry": 100,
       "snapshot": {
         "tone": "bull",
@@ -327,20 +327,20 @@
       "atteso": {
         "side": "long",
         "entry": 100,
-        "stop": 92,
-        "stopPct": 8,
+        "stop": 96.0,
+        "stopPct": 4.0,
         "stopCapped": false,
-        "horizon": "Breve",
+        "horizon": "Lungo",
         "targets": [
           {
             "label": "Target 1",
-            "price": 112,
-            "rr": 1.5
+            "price": 112.0,
+            "rr": 3.0
           },
           {
             "label": "Target 2",
-            "price": 118,
-            "rr": 2.25
+            "price": 118.0,
+            "rr": 4.5
           }
         ]
       }
@@ -467,6 +467,74 @@
             "label": "Target 2",
             "price": 145,
             "rr": 2.25
+          }
+        ]
+      }
+    },
+    {
+      "nome": "candle_reversal_breve_ha_un_piano_medio",
+      "name": "candle_reversal",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bull",
+        "atr": 2,
+        "horizon": "short",
+        "invalidation": {
+          "level": 97
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "long",
+        "entry": 100,
+        "stop": 95,
+        "stopPct": 5,
+        "stopCapped": false,
+        "horizon": "Medio",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 110,
+            "rr": 2
+          },
+          {
+            "label": "Target 2",
+            "price": 115,
+            "rr": 3
+          }
+        ]
+      }
+    },
+    {
+      "nome": "gap_and_go_breve_ha_un_piano_medio",
+      "name": "gap_and_go",
+      "entry": 100,
+      "snapshot": {
+        "tone": "bear",
+        "atr": 2,
+        "horizon": "short",
+        "invalidation": {
+          "level": 103
+        },
+        "chain": []
+      },
+      "atteso": {
+        "side": "short",
+        "entry": 100,
+        "stop": 105,
+        "stopPct": 5,
+        "stopCapped": false,
+        "horizon": "Medio",
+        "targets": [
+          {
+            "label": "Target 1",
+            "price": 90,
+            "rr": 2
+          },
+          {
+            "label": "Target 2",
+            "price": 85,
+            "rr": 3
           }
         ]
       }

@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from sqlalchemy import delete, exists, or_, select
 
 from app.models import Alert, OhlcvDaily, PlanOutcome
-from app.signals.trade_plan import PianoDiTrade, costruisci_piano
+from app.signals.trade_plan import PianoDiTrade, costruisci_piano, sedute_della_gara
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -230,7 +230,10 @@ def _esito(
 #:   "4"  il piano BREVE ha lo stop a 4 ATR e il TP1 a 1,5 R (era 0,5 ATR e
 #:        4 R tagliato a 2 ATR). Tutte le righe brevi cambiano; medio e lungo
 #:        si riscrivono identici. Ragione in `trade_plan._HZ`.
-PLAN_METHOD_VERSION = "4"
+#:   "5"  candle_reversal e gap_and_go: piano medio a 21 sedute invece che
+#:        breve a 5 (FA-154). Cambiano solo le loro righe. Ragione e misura in
+#:        `trade_plan.PIANO_MEDIO`.
+PLAN_METHOD_VERSION = "5"
 
 
 def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:
@@ -452,7 +455,7 @@ def mature_plan_outcomes(
         # modo sistematico e invisibile.
         barre = [b for b in tutte if b.data > ingresso.data]
 
-        orizzonte = _horizon_days(a.signal_name or "")
+        orizzonte = sedute_della_gara(a.signal_name, _horizon_days(a.signal_name or ""))
         esito = corri_la_gara(piano, barre, orizzonte)
         if esito is None:
             # Ancora aperto, o senza barre. ⚠️ Se c'e' una riga di un metodo
