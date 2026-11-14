@@ -64,7 +64,7 @@ def test_la_fonte_del_dow_e_la_pagina_elenco() -> None:
 
 
 def test_il_dow_si_rinnova_dalla_tabella_della_pagina_elenco(db: Session) -> None:
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=DOW):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[DOW]):
         r = refresh_index(db, "DJI")
     db.commit()
 
@@ -84,8 +84,8 @@ def test_la_tabella_sbagliata_nomina_la_causa_non_il_sintomo(db: Session) -> Non
     """«source returned no usable constituents» diceva che la tabella era vuota
     di ticker; la ragione era che non era piu' la tabella dei componenti. Il
     messaggio nuovo nomina la colonna che manca e quelle che ci sono."""
-    with patch("app.services.catalog_refresh_service._fetch_table",
-               return_value=CHIUSURE_ANNUALI):
+    with patch("app.services.catalog_refresh_service._fetch_tables",
+               return_value=[CHIUSURE_ANNUALI]):
         r = refresh_index(db, "DJI")
     db.commit()
 
@@ -146,8 +146,8 @@ def test_il_job_del_sabato_aggiorna_il_gauge_appena_finito(db: Session, monkeypa
     monkeypatch.setattr(refresh_catalog, "refresh_market_caps", lambda _db: None)
     app_metrics.CATALOG_REFRESH_FAILURE_STREAK.labels(index_code="DJI").set(-1)
 
-    with patch("app.services.catalog_refresh_service._fetch_table",
-               return_value=CHIUSURE_ANNUALI):
+    with patch("app.services.catalog_refresh_service._fetch_tables",
+               return_value=[CHIUSURE_ANNUALI]):
         refresh_catalog.run_refresh_all()
     assert _gauge("DJI") == 1
 
@@ -164,7 +164,7 @@ def test_il_rinnovo_manuale_aggiorna_il_gauge(db: Session, monkeypatch) -> None:
     db.commit()
     app_metrics.CATALOG_REFRESH_FAILURE_STREAK.labels(index_code="DJI").set(-1)
 
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=DOW):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[DOW]):
         catalog._run_refresh("DJI")
     assert _gauge("DJI") == 0
 
@@ -174,3 +174,32 @@ def test_la_regola_scatta_a_due_sabati_falliti() -> None:
               / "app-alert-rules.yaml").read_text(encoding="utf-8")
     assert "- alert: FinanceAlertCatalogRefreshFailing" in regole
     assert "finance_alert_catalog_refresh_failure_streak >= 2" in regole
+
+
+# ── la tabella si sceglie per colonne, non per posizione (FA-163) ───────────
+
+
+def test_una_tabella_nuova_sopra_i_componenti_non_rompe_il_rinnovo(db: Session) -> None:
+    """Il FTSE MIB del 2026-10-24: Wikipedia aggiunge le chiusure annuali
+    sopra i componenti. Con la posizione fissa il rinnovo falliva per tre
+    sabati; scegliendo per colonne trova la tabella giusta e lo dice."""
+
+    src = INDEX_SOURCES["DJI"]
+    vuota = pd.DataFrame({"Notes": ["x"]})
+    with patch("app.services.catalog_refresh_service._fetch_tables",
+               return_value=[CHIUSURE_ANNUALI, vuota, DOW]):
+        r = refresh_index(db, "DJI")
+    db.commit()
+    assert src["table_index"] == 0
+    assert r.status == "success"
+    assert r.stocks_added == len(DOW)
+
+
+def test_la_tabella_preferita_vince_se_ha_le_colonne() -> None:
+    from app.services.catalog_refresh_service import scegli_tabella
+
+    a = pd.DataFrame({"Symbol": ["A"], "Company": ["A"]})
+    b = pd.DataFrame({"Symbol": ["B"], "Company": ["B"]})
+    assert scegli_tabella([a, b], 1, ("Symbol", "Company"))[0] == 1
+    assert scegli_tabella([a, b], 5, ("Symbol", "Company"))[0] == 0
+    assert scegli_tabella([CHIUSURE_ANNUALI], 0, ("Symbol", "Company")) is None

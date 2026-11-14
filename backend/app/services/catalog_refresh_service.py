@@ -74,7 +74,10 @@ INDEX_SOURCES: dict[str, dict[str, object]] = {
         "url": "https://en.wikipedia.org/wiki/FTSE_MIB",
         "name": "FTSE MIB (Milano)",
         "country": "IT",
-        "table_index": 1,
+        # Era 1 fino al 2026-10-24, quando la pagina ha aggiunto le chiusure
+        # annuali sopra i componenti (FA-163). La scelta per colonne in
+        # `scegli_tabella` lo avrebbe trovato comunque.
+        "table_index": 2,
         "ticker_col": "Ticker",
         "name_col": "Company",
         "sector_col": "ICB Sector",
@@ -170,20 +173,43 @@ class CatalogSourceError(RuntimeError):
     crash."""
 
 
-def _fetch_table(url: str, table_index: int) -> pd.DataFrame:
-    """Wrap pandas.read_html with retry. Patchable for tests."""
+def _fetch_tables(url: str) -> list[pd.DataFrame]:
+    """Tutte le tabelle della pagina, con i tentativi. Il punto da sostituire
+    nei test."""
     last: Exception | None = None
     for attempt, delay in enumerate([0, 30, 120]):
         if delay:
             time.sleep(delay)
         try:
-            tables = pd.read_html(url, storage_options={"User-Agent": USER_AGENT})
-            return tables[table_index]
+            return pd.read_html(url, storage_options={"User-Agent": USER_AGENT})
         except Exception as e:  # noqa: BLE001
             last = e
             logger.warning(f"read_html failed for {url} (attempt {attempt + 1}): {e}")
     assert last is not None
     raise last
+
+
+def scegli_tabella(
+    tabelle: list[pd.DataFrame], preferita: int, colonne: tuple[str, ...],
+) -> tuple[int, pd.DataFrame] | None:
+    """La tabella dei componenti: quella in posizione `preferita` se ha le
+    colonne attese, altrimenti la PRIMA della pagina che le ha.
+
+    ⚠️ La posizione da sola non e' un'identita'. Il 2026-10-24 Wikipedia ha
+    aggiunto alla pagina del FTSE MIB una tabella delle chiusure annuali, la
+    tabella 1 e' diventata quella e il rinnovo e' fallito per tre sabati di
+    fila (FA-163); il Dow Jones si era rotto nello stesso modo ad agosto e
+    c'erano volute cinque settimane per accorgersene. Le colonne dicono cos'e'
+    una tabella; la posizione dice solo dov'era l'ultima volta."""
+    def ha(df: pd.DataFrame) -> bool:
+        return all(c in df.columns for c in colonne)
+
+    if 0 <= preferita < len(tabelle) and ha(tabelle[preferita]):
+        return preferita, tabelle[preferita]
+    for i, df in enumerate(tabelle):
+        if ha(df):
+            return i, df
+    return None
 
 
 def _normalize_ticker(raw: str, default_exchange: str) -> tuple[str, str]:
@@ -292,17 +318,28 @@ def refresh_index(db: Session, index_code: str) -> RefreshResult:
     log = _start_log(db, index_code)
     result = RefreshResult(index_code=index_code, status="in_progress")
     try:
-        df = _fetch_table(str(src["url"]), int(src["table_index"]))  # type: ignore[arg-type]
+        tabelle = _fetch_tables(str(src["url"]))
+        preferita = int(src["table_index"])  # type: ignore[arg-type]
+        colonne = tuple(str(c) for c in (src["ticker_col"], src["name_col"]) if c)
+        trovata = scegli_tabella(tabelle, preferita, colonne)
         # A table without the ticker column is not an empty index: it is a
         # DIFFERENT table, because the page moved. Say that, with the columns
         # that were found, instead of the "no usable constituents" the wipe
         # guard below would report — that message names the symptom, and it
         # took five weeks of Dow Jones failures to read it for what it was.
-        if src["ticker_col"] not in df.columns:
+        if trovata is None:
+            vista = tabelle[preferita] if 0 <= preferita < len(tabelle) else pd.DataFrame()
             raise CatalogSourceError(
-                f"{index_code}: table {src['table_index']} has no "
-                f"{src['ticker_col']!r} column (found {[str(c) for c in df.columns][:6]}) "
+                f"{index_code}: no table on the page has the "
+                f"{src['ticker_col']!r} column (table {preferita} has "
+                f"{[str(c) for c in vista.columns][:6]}) "
                 f"— the source page changed shape, update INDEX_SOURCES"
+            )
+        posizione, df = trovata
+        if posizione != preferita:
+            logger.warning(
+                f"[catalog] {index_code}: la tabella dei componenti e' la {posizione}, "
+                f"non la {preferita} — aggiornare INDEX_SOURCES"
             )
         # Optional top-N slice (e.g., HSI30 takes top 30 of more constituents)
         slice_n = src.get("slice_n")

@@ -22,7 +22,7 @@ SP500_TABLE = pd.DataFrame(
 
 
 def test_refresh_index_success(db: Session) -> None:
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=SP500_TABLE):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[SP500_TABLE]):
         result = refresh_index(db, "SP500")
     db.commit()
     assert result.status == "success"
@@ -34,7 +34,7 @@ def test_refresh_index_success(db: Session) -> None:
 
 def test_refresh_index_failure_logs_error(db: Session) -> None:
     with patch(
-        "app.services.catalog_refresh_service._fetch_table", side_effect=RuntimeError("boom")
+        "app.services.catalog_refresh_service._fetch_tables", side_effect=RuntimeError("boom")
     ):
         result = refresh_index(db, "SP500")
     db.commit()
@@ -50,12 +50,12 @@ def test_refresh_index_unknown_code_raises(db: Session) -> None:
 
 
 def test_refresh_all_continues_on_failure(db: Session) -> None:
-    def selective(url, table_index):
+    def selective(url):
         if "S%26P_500" in url:
-            return SP500_TABLE
+            return [SP500_TABLE]
         raise RuntimeError("source down")
 
-    with patch("app.services.catalog_refresh_service._fetch_table", side_effect=selective):
+    with patch("app.services.catalog_refresh_service._fetch_tables", side_effect=selective):
         results = refresh_all(db)
     db.commit()
     by_code = {r.index_code: r for r in results}
@@ -74,7 +74,7 @@ def test_refresh_all_continues_on_failure(db: Session) -> None:
 
 def test_empty_source_does_not_wipe_the_index(db: Session) -> None:
     """THE regression test: an unparseable source must leave membership alone."""
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=SP500_TABLE):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[SP500_TABLE]):
         refresh_index(db, "SP500")
     db.commit()
     idx = db.query(Index).filter_by(code="SP500").one()
@@ -84,7 +84,7 @@ def test_empty_source_does_not_wipe_the_index(db: Session) -> None:
     empty = pd.DataFrame(
         {"Symbol": [], "Security": [], "GICS Sector": [], "GICS Sub-Industry": []}
     )
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=empty):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[empty]):
         result = refresh_index(db, "SP500")
     db.commit()
 
@@ -106,14 +106,14 @@ def test_drastically_smaller_source_is_refused_as_a_parse_regression(db: Session
             "GICS Sub-Industry": ["Software"] * 10,
         }
     )
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=big):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[big]):
         refresh_index(db, "SP500")
     db.commit()
     idx = db.query(Index).filter_by(code="SP500").one()
     assert db.query(StockIndex).filter_by(index_id=idx.id).count() == 10
 
     shrunk = big.head(2)   # 2 of 10 — below the retained-ratio floor
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=shrunk):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[shrunk]):
         result = refresh_index(db, "SP500")
     db.commit()
 
@@ -131,12 +131,12 @@ def test_a_normal_prune_still_goes_through(db: Session) -> None:
             "GICS Sub-Industry": ["Software"] * 10,
         }
     )
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=big):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[big]):
         refresh_index(db, "SP500")
     db.commit()
     idx = db.query(Index).filter_by(code="SP500").one()
 
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=big.head(8)):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[big.head(8)]):
         result = refresh_index(db, "SP500")
     db.commit()
 
@@ -242,7 +242,7 @@ FTSE_TABLE = pd.DataFrame(
 
 
 def test_un_titolo_escluso_non_torna_col_refresh(db: Session) -> None:
-    with patch("app.services.catalog_refresh_service._fetch_table", return_value=FTSE_TABLE):
+    with patch("app.services.catalog_refresh_service._fetch_tables", return_value=[FTSE_TABLE]):
         result = refresh_index(db, "FTSE100")
     db.commit()
     assert result.status == "success"

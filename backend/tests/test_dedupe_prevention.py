@@ -123,13 +123,13 @@ def test_catalog_refresh_us_ticker_in_two_indices_does_not_duplicate(
     Storicamente questo creava due righe `AAPL`. Ora la seconda refresh
     deve riusare la riga esistente."""
     with patch(
-        "app.services.catalog_refresh_service._fetch_table",
-        return_value=SP500_TABLE,
+        "app.services.catalog_refresh_service._fetch_tables",
+        return_value=[SP500_TABLE],
     ):
         refresh_index(db, "SP500")
     with patch(
-        "app.services.catalog_refresh_service._fetch_table",
-        return_value=DJI_TABLE,
+        "app.services.catalog_refresh_service._fetch_tables",
+        return_value=[DJI_TABLE],
     ):
         refresh_index(db, "DJI")
     db.commit()
@@ -151,8 +151,8 @@ def test_catalog_refresh_european_ticker_unaffected(db: Session) -> None:
         "ICB Sector": ["Utilities", "Energy"],
     })
     with patch(
-        "app.services.catalog_refresh_service._fetch_table",
-        return_value=ftsemib_table,
+        "app.services.catalog_refresh_service._fetch_tables",
+        return_value=[ftsemib_table],
     ):
         refresh_index(db, "FTSEMIB")
     db.commit()
