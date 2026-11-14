@@ -203,3 +203,30 @@ def test_la_tabella_preferita_vince_se_ha_le_colonne() -> None:
     assert scegli_tabella([a, b], 1, ("Symbol", "Company"))[0] == 1
     assert scegli_tabella([a, b], 5, ("Symbol", "Company"))[0] == 0
     assert scegli_tabella([CHIUSURE_ANNUALI], 0, ("Symbol", "Company")) is None
+
+
+def test_la_lettura_della_pagina_riprova_e_rende_tutte_le_tabelle(monkeypatch) -> None:
+    """`_fetch_tables` e' sostituita in ogni altro test: senza questo, nessuno
+    la esegue (il cancello del codice morto l'ha segnalata)."""
+    from app.services import catalog_refresh_service as crs
+
+    attese: list[float] = []
+    monkeypatch.setattr(crs.time, "sleep", attese.append)
+    chiamate = {"n": 0}
+
+    def finto(url, storage_options):
+        chiamate["n"] += 1
+        assert storage_options == {"User-Agent": crs.USER_AGENT}
+        if chiamate["n"] == 1:
+            raise OSError("rete giu'")
+        return [CHIUSURE_ANNUALI, DOW]
+
+    monkeypatch.setattr(crs.pd, "read_html", finto)
+    tabelle = crs._fetch_tables("https://example.test/pagina")
+    assert [len(t) for t in tabelle] == [len(CHIUSURE_ANNUALI), len(DOW)]
+    assert attese == [30]
+
+    monkeypatch.setattr(crs.pd, "read_html", lambda url, storage_options: (_ for _ in ()).throw(OSError("giu'")))
+    import pytest
+    with pytest.raises(OSError):
+        crs._fetch_tables("https://example.test/pagina")
