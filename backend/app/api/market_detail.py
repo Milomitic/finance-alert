@@ -14,7 +14,7 @@ Why a separate router from `/api/stocks/...`
 """
 from datetime import date as date_t
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
@@ -119,8 +119,12 @@ class MarketDetailOut(BaseModel):
 def get_market_detail(
     symbol: str,
     range: Annotated[str, Query()] = "1d",
+    storia: Annotated[Literal["recente", "completa"], Query()] = "recente",
     _user: User = Depends(get_current_user),
 ) -> MarketDetailOut:
+    """`storia=completa` rende tutte le barre giornaliere (dal 1927 per
+    l'S&P 500): serve al server MCP per le domande sul passato. Il grafico
+    chiede la recente, gli ultimi dieci anni."""
     if range not in (
         "5m", "30m", "1h", "1d", "1w", "1m",
         # legacy compat for old URLs/bookmarks ("all" removed from the
@@ -147,6 +151,8 @@ def get_market_detail(
     detail = market_detail_service.get_detail(symbol, range)
     if detail is None:
         raise HTTPException(status_code=404, detail="No market data available")
+    if storia == "recente" and detail.range_key in market_detail_service.GIORNALIERI:
+        detail = market_detail_service.taglia_agli_ultimi_anni(detail)
 
     quote_out: LiveQuoteOut | None = None
     try:

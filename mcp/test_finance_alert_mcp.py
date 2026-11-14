@@ -98,7 +98,8 @@ def test_storico_di_un_indice_ripiega_sui_mercati_e_taglia_alle_date(monkeypatch
     def finto(percorso, parametri=None, **kw):
         if percorso.startswith("/api/stocks/"):
             return []
-        assert (percorso, parametri) == ("/api/markets/^IXIC/detail", {"range": "1d"})
+        assert (percorso, parametri) == ("/api/markets/^IXIC/detail",
+                                         {"range": "1d", "storia": "completa"})
         return {"bars": [_barra("1999-12-31", 1), _barra("2016-01-04", 2),
                          _barra("2016-01-05", 3), _barra("2026-01-02", 4)]}
 

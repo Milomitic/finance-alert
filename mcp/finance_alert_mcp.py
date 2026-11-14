@@ -248,7 +248,8 @@ def leggi_storico(simbolo: str, dal: str | None = None, al: str | None = None,
     fonte = "catalogo (database dell'app)"
     if not barre:
         try:
-            d = chiama(f"/api/markets/{s}/detail", {"range": "1d"}, timeout=120.0)
+            d = chiama(f"/api/markets/{s}/detail", {"range": "1d", "storia": "completa"},
+                       timeout=120.0)
         except ErroreApp as e:
             raise ErroreApp(
                 f"{s} non e' un titolo del catalogo ne' un mercato servito dall'app. "

@@ -26,7 +26,7 @@ daily chart is invisible.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, date, datetime, timedelta
 from threading import Lock
 
@@ -281,6 +281,48 @@ def get_detail(symbol: str, range_key: str) -> MarketDetailDC | None:
         )
         return stale[1]
     return None
+
+
+#: Le chiavi a barre GIORNALIERE con la storia intera da yfinance.
+GIORNALIERI: frozenset[str] = frozenset({"1d", "1y"})
+
+#: Quanti anni di barre giornaliere va al grafico. La stessa profondita' del
+#: catalogo dei titoli: il grafico di un indice e quello di un titolo
+#: mostrano lo stesso periodo, e per la storia lunga ci sono il settimanale
+#: e il mensile.
+ANNI_GRAFICO = 10
+
+
+def taglia_agli_ultimi_anni(detail: MarketDetailDC, anni: int = ANNI_GRAFICO) -> MarketDetailDC:
+    """Barre e indicatori degli ultimi `anni`, col massimo e il minimo del
+    periodo ricalcolati sulle barre rimaste.
+
+    ⚠️ Perche'. Con la storia intera il dettaglio giornaliero dell'S&P 500
+    pesava 15 MB (circa 25.000 barre dal 1927 piu' dieci serie di indicatori
+    lunghe uguali): 5,6 s a freddo misurati nel pod, e tutto per un grafico che
+    si apre sull'ultimo anno.
+
+    Gli indicatori sono gia' calcolati sulla serie intera, quindi la EMA200
+    del primo giorno rimasto e' quella vera e non un riscaldamento. Il
+    massimo e il minimo «del periodo» invece si rifanno: accanto a dieci anni
+    di grafico, il massimo del 1929 non sarebbe quello del periodo mostrato.
+    Il 52 settimane non cambia, e' sempre dentro la finestra."""
+    if not detail.bars:
+        return detail
+    soglia = _as_date(detail.bars[-1].date) - timedelta(days=round(anni * 365.25))
+    bars = [b for b in detail.bars if _as_date(b.date) >= soglia]
+    if len(bars) == len(detail.bars):
+        return detail
+    ind = detail.indicators
+    nuovi = IndicatorBundle(**{
+        f.name: [p for p in getattr(ind, f.name) if _as_date(p.date) >= soglia]
+        for f in fields(IndicatorBundle)
+    })
+    chiusure = [b.close for b in bars]
+    return replace(
+        detail, bars=bars, indicators=nuovi,
+        high_window=max(chiusure), low_window=min(chiusure),
+    )
 
 
 def clear_cache() -> None:

@@ -99,3 +99,67 @@ def test_52w_closing_range_is_independent_from_chart_timeframe(
     assert detail.high_52w == 120.0
     assert history_mock.call_count == expected_history_calls
     assert ticker_factory.call_count == expected_history_calls
+
+
+# ─── Il giornaliero del grafico: dieci anni, non dal 1927 ──────────────────
+
+def _lungo(anni: int = 30):
+    from datetime import date, timedelta
+
+    giorni = [date(2026, 11, 13) - timedelta(days=7 * k) for k in range(anni * 52)][::-1]
+    bars = [svc.OhlcvBar(d, 100 + i, 101 + i, 99 + i, 100 + i, 1) for i, d in enumerate(giorni)]
+    ind = svc.IndicatorBundle(**{
+        f: [svc.IndicatorPoint(d, 1.0) for d in giorni] for f in svc.IndicatorBundle.__dataclass_fields__
+    })
+    chiusure = [b.close for b in bars]
+    return svc.MarketDetailDC(symbol="^GSPC", range_key="1d", bars=bars, indicators=ind,
+                              high_window=max(chiusure), low_window=min(chiusure),
+                              high_52w=max(chiusure[-52:]), low_52w=min(chiusure[-52:]))
+
+
+def test_il_taglio_tiene_dieci_anni_e_ricalcola_il_periodo():
+    d = _lungo()
+    t = svc.taglia_agli_ultimi_anni(d)
+    assert 515 <= len(t.bars) <= 525
+    assert all(len(getattr(t.indicators, f)) == len(t.bars)
+               for f in svc.IndicatorBundle.__dataclass_fields__)
+    assert t.indicators.ema200[0].date == t.bars[0].date
+    chiusure = [b.close for b in t.bars]
+    assert (t.high_window, t.low_window) == (max(chiusure), min(chiusure))
+    assert t.low_window > d.low_window
+    assert (t.high_52w, t.low_52w) == (d.high_52w, d.low_52w)
+
+
+def test_una_serie_corta_resta_com_e():
+    d = _lungo(anni=3)
+    assert svc.taglia_agli_ultimi_anni(d) is d
+
+
+@pytest.fixture
+def client(db):
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_user, get_db
+    from app.main import app
+    from app.models import User
+
+    user = User(username="admin", password_hash="x")
+    db.add(user)
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+def test_l_endpoint_taglia_solo_se_non_si_chiede_la_storia_completa(client):
+    with patch.object(svc, "get_detail", return_value=_lungo()), \
+         patch("app.services.live_quote_service.get_quote", return_value=None):
+        recente = client.get("/api/markets/%5EGSPC/detail?range=1d").json()
+        completa = client.get("/api/markets/%5EGSPC/detail?range=1d&storia=completa").json()
+        settimanale = client.get("/api/markets/%5EGSPC/detail?range=1w").json()
+    assert len(completa["bars"]) == 30 * 52
+    assert len(recente["bars"]) < 530
+    assert len(recente["indicators"]["rsi14"]) == len(recente["bars"])
+    # Il taglio vale per le barre giornaliere; la chiave la decide il servizio.
+    assert len(settimanale["bars"]) < 530
