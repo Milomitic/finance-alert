@@ -47,6 +47,15 @@ _cache_costi: dict[tuple, tuple[float, Any]] = {}
 _lock = threading.Lock()
 
 
+#: I tipi di strumento eToro che possono essere un titolo del catalogo.
+#: ⚠️ Senza questo filtro il simbolo nudo vinceva su qualunque strumento: il
+#: 2026-11-15 quindici titoli USA erano abbinati a una criptovaluta con lo
+#: stesso simbolo (Chevron a «Convex Finance», AT&T a «Threshold Network»,
+#: Agilent a «VAULTA»...), e il filtro «su eToro» e i preventivi dei costi
+#: leggevano quella.
+TIPI_TITOLO = frozenset({"Stocks", "ETF"})
+
+
 def varianti(ticker: str) -> list[str]:
     """Le forme in cui eToro puo' scrivere un ticker del catalogo, in ordine di
     preferenza: la prima trovata vince."""
@@ -76,7 +85,7 @@ def aggiorna(db: Session, *, adesso: datetime | None = None) -> tuple[int, int]:
         lotto = simboli[i:i + _LOTTO]
         dati = etoro_client.get(_STRUMENTI, op="strumenti", params={"symbols": ",".join(lotto), "pageSize": _LOTTO})
         for r in (dati.get("results") if isinstance(dati, dict) else None) or []:
-            if isinstance(r, dict) and isinstance(r.get("instrumentId"), int) and r.get("symbol"):
+            if isinstance(r, dict) and isinstance(r.get("instrumentId"), int) and r.get("symbol")                     and r.get("type") in TIPI_TITOLO:
                 trovati.setdefault(str(r["symbol"]).upper(), r)
     scelta: dict[int, tuple[int, dict]] = {}
     for simbolo, r in trovati.items():

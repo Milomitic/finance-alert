@@ -252,3 +252,18 @@ def test_la_notte_in_pence_passa_dalla_sterlina(db: Session, etoro, catalogo, mo
     cat.aggiorna(db, adesso=ADESSO)
     c = cat.costi(db, "SOXL", lato="long", leva=5, importo=500, stop=40.0)
     assert c.notte_usd == pytest.approx(1.2 * 1.3)
+
+
+def test_una_cripto_con_lo_stesso_simbolo_non_e_il_titolo(db: Session, etoro: FintoEtoro) -> None:
+    """Il 2026-11-15 quindici titoli USA erano abbinati a una criptovaluta:
+    Agilent («A») a VAULTA. Vince la variante `.US`, che e' il titolo."""
+    s = Stock(ticker="A", exchange="NYSE", name="Agilent Technologies")
+    db.add(s)
+    db.commit()
+    etoro.anagrafica.update({
+        100022: strumento(100022, "A", "VAULTA", tipo="Crypto"),
+        4321: strumento(4321, "A.US", "Agilent Technologies Inc"),
+    })
+    cat.aggiorna(db, adesso=ADESSO)
+    riga = db.get(EtoroCatalogo, s.id)
+    assert (riga.instrument_id, riga.simbolo, riga.tipo) == (4321, "A.US", "Stocks")
