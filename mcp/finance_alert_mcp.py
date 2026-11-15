@@ -274,7 +274,7 @@ def screener(filtri: dict[str, Any] | None = None, limite: int = 30) -> Any:
     ignoti = sorted(set(filtri) - set(FILTRI_SCREENER))
     if ignoti:
         return {"errore": f"filtri sconosciuti: {ignoti}", "accettati": list(FILTRI_SCREENER)}
-    d = chiama("/api/stocks", {**filtri, "limit": min(max(1, limite), 100)})
+    d = chiama("/api/stocks/search", {**filtri, "limit": min(max(1, limite), 100)})
     righe = []
     for it in d.get("items") or []:
         st, sc, te, me = (it.get(k) or {} for k in ("stock", "score", "technical", "metrics"))

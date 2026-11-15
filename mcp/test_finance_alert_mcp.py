@@ -166,7 +166,7 @@ def test_lo_screener_rifiuta_filtri_sconosciuti_e_riassume_le_righe(monkeypatch)
     assert r["titoli"][0] == {"ticker": "AAPL", "nome": "Apple", "settore": "Tech", "qualita": 70,
                               "tecnico": 60, "postura": "Forte", "prezzo": 200.0,
                               "variazione_pct": 1.2, "rsi": 55}
-    assert chiamate[-1] == ("/api/stocks", {"min_score": 60, "sector": ["Technology"], "limit": 100})
+    assert chiamate[-1] == ("/api/stocks/search", {"min_score": 60, "sector": ["Technology"], "limit": 100})
 
 
 def test_primo_passaggio_rischio_e_confronti_chiamano_le_rotte_giuste(monkeypatch) -> None:
