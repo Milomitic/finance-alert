@@ -6,6 +6,7 @@ import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
 import { LiveVolumeMoversCard } from "@/components/dashboard/LiveVolumeMoversCard";
 import { DallUltimaVisitaStrip } from "@/components/dashboard/DallUltimaVisitaStrip";
 import { PreferitiStrip } from "@/components/dashboard/PreferitiStrip";
+import { SuiTuoiTitoliCard } from "@/components/dashboard/SuiTuoiTitoliCard";
 import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { MarketPulseJumbotron } from "@/components/dashboard/MarketPulseJumbotron";
@@ -247,6 +248,8 @@ function HomePageContent() {
           aprire un titolo, e da qui e' un clic. Una riga di altezza fissa:
           non sposta niente quando la lista arriva. */}
       <PreferitiStrip />
+      {/* FA-149: cosa succede ai tuoi titoli, prima del mercato. Altezza fissa. */}
+      <SuiTuoiTitoliCard />
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
           {/* Nascosto sul telefono: la barra di navigazione dice gia' dove

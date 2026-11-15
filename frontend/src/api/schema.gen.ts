@@ -111,6 +111,16 @@ export interface AlertsByIndexPointOut {
   alert_count: number;
 }
 
+export interface AnalistaMioOut {
+  ticker: string;
+  rilevanza: string;
+  data: string;
+  societa: string;
+  azione: string;
+  da: string;
+  a: string;
+}
+
 export interface AnalystPriceTargetOut {
   current: number | null;
   current_as_of?: string | null;
@@ -1345,6 +1355,16 @@ export interface MultiTfKpisOut {
   items: TimeframeKpisOut[];
 }
 
+export interface NotiziaMiaOut {
+  ticker: string;
+  rilevanza: string;
+  titolo?: string | null;
+  link?: string | null;
+  fonte?: string | null;
+  pubblicata: string;
+  tono?: string | null;
+}
+
 export interface NovitaTitoloOut {
   ticker: string;
   rilevanza: string;
@@ -2122,6 +2142,13 @@ export interface SubScoresOut {
   sentiment: number | null;
 }
 
+export interface SuiTuoiTitoliOut {
+  titoli: number;
+  trimestrali?: TrimestraleMiaOut[];
+  analisti?: AnalistaMioOut[];
+  notizie?: NotiziaMiaOut[];
+}
+
 export interface SystemStatusOut {
   scheduler_running: boolean;
   scan_alerts_next_run: string | null;
@@ -2295,6 +2322,15 @@ export interface TrendOut {
   y1: number;
   x2: number;
   y2: number;
+}
+
+export interface TrimestraleMiaOut {
+  ticker: string;
+  nome?: string | null;
+  rilevanza: string;
+  data: string;
+  ora_utc?: string | null;
+  giorni: number;
 }
 
 export interface UsoPagineOut {

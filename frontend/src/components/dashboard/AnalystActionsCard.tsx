@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Briefcase, Gavel, Newspaper, Star } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalystAction } from "@/api/dashboard";
@@ -249,8 +250,12 @@ export function AnalystActionsCard() {
     // dashboard revisit while staying fresh enough.
     staleTime: 5 * 60_000,
   });
+  // FA-149: per difetto i tuoi titoli. Il server include sempre le loro
+  // azioni, anche oltre il tetto di 40, quindi il filtro qui non perde niente.
+  const [vista, setVista] = useState<"miei" | "tutti">("miei");
   // Show only genuine rating changes — hide the Maintain/Reiterate rows.
-  const items = (q.data ?? []).filter((a) => CHANGE_ACTIONS.has(a.action));
+  const cambi = (q.data ?? []).filter((a) => CHANGE_ACTIONS.has(a.action));
+  const items = vista === "miei" ? cambi.filter((a) => a.rilevanza) : cambi;
   const isEmpty = !q.isLoading && items.length === 0;
 
   return (
@@ -261,9 +266,22 @@ export function AnalystActionsCard() {
             icon={Gavel}
             label="Valutazioni analisti"
             right={
-              <span className="text-xs text-muted-foreground">
-                upgrade & downgrade
-              </span>
+              <div className="flex rounded-md border border-border text-xs" role="group" aria-label="Quali titoli">
+                {(["miei", "tutti"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={vista === v}
+                    onClick={() => setVista(v)}
+                    className={cn(
+                      "min-h-6 px-2 first:rounded-l-md last:rounded-r-md",
+                      vista === v ? "bg-muted font-semibold text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {v === "miei" ? "I miei" : "Tutti"}
+                  </button>
+                ))}
+              </div>
             }
           />
         </div>
@@ -278,6 +296,16 @@ export function AnalystActionsCard() {
              affermazione sul mercato, fatta quando la fetch non e' arrivata. */
           <div className="p-4">
             <QueryError message="delle azioni analisti" onRetry={q.refetch} isRetrying={q.isFetching} />
+          </div>
+        ) : isEmpty && vista === "miei" ? (
+          <div className="flex-1 min-h-0 flex items-center justify-center px-4 text-center">
+            <div className="text-xs text-muted-foreground">
+              Nessun cambio di rating sui tuoi titoli negli ultimi 90 giorni.
+              <br />
+              <button type="button" className="mt-1 underline underline-offset-2 text-foreground" onClick={() => setVista("tutti")}>
+                Mostra tutto il catalogo
+              </button>
+            </div>
           </div>
         ) : isEmpty ? (
           <div className="flex-1 min-h-0 flex items-center justify-center px-4 text-center">

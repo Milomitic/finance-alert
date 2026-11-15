@@ -121,3 +121,43 @@ class PremarketMoversOut(BaseModel):
     progress_pct: int = 0
     gainers: list[PremarketMoverOut] = []
     losers: list[PremarketMoverOut] = []
+
+
+class TrimestraleMiaOut(BaseModel):
+    ticker: str
+    nome: str | None = None
+    rilevanza: str
+    data: str
+    ora_utc: str | None = None
+    giorni: int
+
+
+class AnalistaMioOut(BaseModel):
+    ticker: str
+    rilevanza: str
+    data: str
+    societa: str
+    azione: str
+    da: str
+    a: str
+
+
+class NotiziaMiaOut(BaseModel):
+    ticker: str
+    rilevanza: str
+    titolo: str | None = None
+    link: str | None = None
+    fonte: str | None = None
+    pubblicata: str
+    tono: str | None = None
+
+
+class SuiTuoiTitoliOut(BaseModel):
+    """FA-149: trimestrali vicine, cambi di rating e notizie dei titoli in
+    posizione e fra i preferiti. `titoli` = quanti titoli segui: zero dice
+    «niente da seguire», non «niente di nuovo»."""
+    titoli: int
+    trimestrali: list[TrimestraleMiaOut] = []
+    analisti: list[AnalistaMioOut] = []
+    notizie: list[NotiziaMiaOut] = []
+

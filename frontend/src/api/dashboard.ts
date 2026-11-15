@@ -58,10 +58,50 @@ export type PremarketMovers = {
   losers: PremarketMover[];
 };
 
+/** «Sui tuoi titoli» (FA-149): solo dalle cache del server. */
+export type TrimestraleMia = {
+  ticker: string;
+  nome?: string | null;
+  rilevanza: string;
+  data: string;
+  ora_utc?: string | null;
+  giorni: number;
+};
+
+export type AnalistaMio = {
+  ticker: string;
+  rilevanza: string;
+  data: string;
+  societa: string;
+  azione: string;
+  da: string;
+  a: string;
+};
+
+export type NotiziaMia = {
+  ticker: string;
+  rilevanza: string;
+  titolo?: string | null;
+  link?: string | null;
+  fonte?: string | null;
+  pubblicata: string;
+  tono?: string | null;
+};
+
+export type SuiTuoiTitoli = {
+  /** Quanti titoli segui: zero dice «niente da seguire», non «niente di nuovo». */
+  titoli: number;
+  trimestrali: TrimestraleMia[];
+  analisti: AnalistaMio[];
+  notizie: NotiziaMia[];
+};
+
 export const dashboard = {
   summary: (signal?: AbortSignal) => api<DashboardSummary>("/api/dashboard/summary", { signal }),
   analystActions: (limit = 40, signal?: AbortSignal) =>
     api<AnalystAction[]>(`/api/dashboard/analyst-actions?limit=${limit}`, { signal }),
   premarketMovers: (signal?: AbortSignal) =>
     api<PremarketMovers>("/api/dashboard/premarket-movers", { signal }),
+  suiTuoiTitoli: (signal?: AbortSignal) =>
+    api<SuiTuoiTitoli>("/api/dashboard/sui-tuoi-titoli", { signal }),
 };

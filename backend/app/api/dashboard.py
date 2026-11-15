@@ -14,6 +14,7 @@ from app.schemas.dashboard import (
     DashboardSummaryOut,
     KpiSummaryOut,
     PremarketMoversOut,
+    SuiTuoiTitoliOut,
     SystemStatusOut,
     TopStockOut,
 )
@@ -51,6 +52,18 @@ def _latest_scan(db: Session) -> ScanStatusOut | None:
         current_target=latest.current_target,
         error_message=latest.error_message,
     )
+
+
+@router.get("/sui-tuoi-titoli", response_model=SuiTuoiTitoliOut)
+def get_sui_tuoi_titoli(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> SuiTuoiTitoliOut:
+    """FA-149: che cosa succede ai titoli in posizione e fra i preferiti.
+    Solo cache, nessuna chiamata di rete."""
+    from app.services import sui_tuoi_titoli_service  # noqa: PLC0415
+
+    return SuiTuoiTitoliOut(**sui_tuoi_titoli_service.riepilogo(db))
 
 
 @router.get("/analyst-actions", response_model=list[AnalystActionOut])
