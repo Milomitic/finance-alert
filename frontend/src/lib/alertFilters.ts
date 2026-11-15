@@ -26,6 +26,7 @@ export function filtersFromSearch(sp: URLSearchParams): AlertListParams {
     include_archived: sp.get("include_archived") === "true" || undefined,
     solo_rilevanti: titoli === "miei" || undefined,
     solo_etoro: titoli === "etoro" || undefined,
+    mostra_giornate: sp.get("giornate") === "tutte" || undefined,
     ticker: s("ticker"),
     q: s("q"),
     rule_kind: s("rule_kind"),
@@ -74,6 +75,16 @@ export function sceltaTitoli(sp: URLSearchParams): "miei" | "etoro" | "tutti" {
   return FILTRI_DEL_LINK.some((k) => sp.get(k)) ? "tutti" : "miei";
 }
 
+/** Le giornate di mercato si comprimono quando si guarda l'universo (FA-152).
+ *
+ *  Non sui miei titoli, dove ogni segnale va letto; non con un filtro di data,
+ *  che e' proprio come si apre una giornata compressa; e non se chi legge ha
+ *  chiesto di vederle. Calcolato dai filtri al momento della richiesta e non
+ *  salvato: passare da «miei» a «tutti» deve accenderla senza altro. */
+export function comprimeGiornate(f: AlertListParams): boolean {
+  return !f.solo_rilevanti && !f.date_from && !f.date_to && !f.mostra_giornate;
+}
+
 /** Parse a 0-100 numeric param; anything else → undefined (ignored). */
 function numParam(sp: URLSearchParams, key: string): number | undefined {
   const raw = sp.get(key);
@@ -107,6 +118,7 @@ const CHIAVI_PROPRIE = [
   "ticker", "q", "rule_kind", "tone", "nature", "outcome", "horizon",
   "date_from", "date_to", "strength_min", "archived", "include_archived",
   "solo_rilevanti", "solo_etoro", "titoli", "page", "sort_by", "sort_dir",
+  "giornate",
 ] as const;
 
 export function searchFromState(
@@ -136,6 +148,7 @@ export function searchFromState(
   if (filters.solo_etoro) sp.set("titoli", "etoro");
   else if (!filters.solo_rilevanti) sp.set("titoli", "tutti");
   else if (altri) sp.set("titoli", "miei");
+  if (filters.mostra_giornate) sp.set("giornate", "tutte");
   if (page > 0) sp.set("page", String(page + 1)); // 1-based in the URL
   if (sortBy !== ORDINE_PREDEFINITO) sp.set("sort_by", sortBy);
   if (sortDir !== "desc") sp.set("sort_dir", sortDir);

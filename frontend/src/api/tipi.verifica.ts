@@ -30,6 +30,7 @@ type Nessuno<T extends never> = T;
 
 export type _M0_ConfluenceComponent = Nessuno<SoloNelFrontend<M0.ConfluenceComponent, S.ConfluenceComponentOut>>;
 export type _M0_Confluence = Nessuno<SoloNelFrontend<M0.Confluence, S.ConfluenceOut>>;
+export type _M0_GiornataMercato = Nessuno<SoloNelFrontend<M0.GiornataMercato, S.GiornataMercatoOut>>;
 export type _M1_Candidato = Nessuno<SoloNelFrontend<M1.Candidato, S.CandidatoOut>>;
 export type _M1_VerificaFonte = Nessuno<SoloNelFrontend<M1.VerificaFonte, S.VerificaFonteOut>>;
 export type _M2_NovitaTitolo = Nessuno<SoloNelFrontend<M2.NovitaTitolo, S.NovitaTitoloOut>>;

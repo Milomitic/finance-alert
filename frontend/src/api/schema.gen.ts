@@ -819,6 +819,13 @@ export interface GapSuggestionOut {
   suggestion: string;
 }
 
+export interface GiornataMercatoOut {
+  giorno: string;
+  tono: string;
+  segnali: number;
+  soglia: number;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }

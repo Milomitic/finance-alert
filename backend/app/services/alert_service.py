@@ -277,6 +277,7 @@ def list_alerts(
     sort_dir: str = "desc",
     solo_rilevanti: bool = False,
     solo_etoro: bool = False,
+    comprimi_giornate: bool = False,
 ) -> tuple[list[dict[str, Any]], int, bool]:
     """List alerts with stock.ticker. Returns (items, total, has_more).
 
@@ -340,6 +341,14 @@ def list_alerts(
         from app.services.etoro_catalogo_service import filtro_su_etoro
 
         base = base.where(filtro_su_etoro(Alert.stock_id))
+    if comprimi_giornate:
+        # FA-152: le giornate di mercato escono dalla lista nel loro verso,
+        # tranne sui titoli in posizione o fra i preferiti.
+        from app.services import giornate_mercato_service as gm
+
+        fuori = gm.clausola_esclusione(gm.recenti(db))
+        if fuori is not None:
+            base = base.where(or_(fuori, rilevanza_service.filtro_rilevanti(Alert.stock_id)))
     count_stmt = select(func.count()).select_from(base.subquery())
     total = int(db.execute(count_stmt).scalar_one())
     # Build ORDER BY: requested column (with NULLS LAST) + stable id tiebreaker.

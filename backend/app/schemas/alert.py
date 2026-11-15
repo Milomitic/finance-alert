@@ -82,6 +82,16 @@ class PlanBriefOut(BaseModel):
     tp2_hit_date: date | None = None
 
 
+class GiornataMercatoOut(BaseModel):
+    """Un giorno in cui i segnali di un verso sono stati il mercato (FA-152)."""
+
+    giorno: date
+    tono: str
+    segnali: int
+    #: Il 95° percentile dei 60 feriali precedenti (minimo 60) che ha superato.
+    soglia: int
+
+
 class AlertConflittoOut(BaseModel):
     alert_id: int
     signal_name: str | None = None

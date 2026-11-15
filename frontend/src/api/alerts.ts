@@ -78,10 +78,24 @@ export interface AlertListParams {
   solo_rilevanti?: boolean;
   /** Solo i titoli negoziabili su eToro (FA-126). */
   solo_etoro?: boolean;
+  /** Toglie le giornate di mercato nel loro verso, tranne sui titoli in
+   *  posizione o fra i preferiti (FA-152). */
+  comprimi_giornate?: boolean;
+  /** Solo stato della pagina Segnali, mai sul filo: chi legge ha chiesto di
+   *  vedere anche le giornate di mercato (`giornate=tutte` nell'URL). */
+  mostra_giornate?: boolean;
   limit?: number;
   offset?: number;
   sort_by?: string;
   sort_dir?: "asc" | "desc";
+}
+
+/** Un giorno in cui i segnali di un verso sono stati il mercato (FA-152). */
+export interface GiornataMercato {
+  giorno: string;
+  tono: string;
+  segnali: number;
+  soglia: number;
 }
 
 /** Day after an ISO date (local calendar). Used to convert the UI's
@@ -110,6 +124,7 @@ function toQuery(params: AlertListParams): string {
   if (params.include_archived) sp.set("include_archived", "true");
   if (params.solo_rilevanti) sp.set("solo_rilevanti", "true");
   if (params.solo_etoro) sp.set("solo_etoro", "true");
+  if (params.comprimi_giornate) sp.set("comprimi_giornate", "true");
   if (params.limit !== undefined) sp.set("limit", String(params.limit));
   if (params.offset !== undefined) sp.set("offset", String(params.offset));
   if (params.sort_by) sp.set("sort_by", params.sort_by);
@@ -144,6 +159,8 @@ export const alerts = {
    *  non portava da nessuna parte, perche la lista e paginata e il segnale che
    *  ha aperto una posizione di due mesi fa non e nella pagina corrente. */
   byId: (id: number, signal?: AbortSignal) => api<Alert>(`/api/alerts/${id}`, { signal }),
+  giornateDiMercato: (signal?: AbortSignal) =>
+    api<GiornataMercato[]>("/api/alerts/giornate-di-mercato", { signal }),
   /** I titoli contati nell'ampiezza di un segnale: stesso detector, stesso
    *  giorno, stessa direzione, archiviati compresi (FA-064). ⚠️ Non un link a
    *  `/alerts` filtrato: quel filtro sulle date legge `triggered_at`, l'ampiezza

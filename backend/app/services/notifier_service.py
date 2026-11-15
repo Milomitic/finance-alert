@@ -272,6 +272,33 @@ def _unisci_conflitti(alerts: list[Alert]) -> list[Alert | tuple[Alert, Alert]]:
     return out
 
 
+_VERSO_PLURALE = {"bull": "rialzisti", "bear": "ribassisti"}
+
+
+def _giorno_utc(quando: datetime) -> date:
+    return (quando if quando.tzinfo is None else quando.astimezone(UTC)).date()
+
+
+def _giornate_del_digest(db: Session, alerts: list[Alert]) -> list[tuple[Any, int]]:
+    """Le giornate di mercato (FA-152) che cadono nei giorni di questi alert,
+    con quanti di questi alert ne fanno parte. Best-effort: un guasto qui non
+    deve togliere il digest."""
+    try:
+        from app.services import giornate_mercato_service as gm  # noqa: PLC0415
+
+        elenco = gm.recenti(db)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"[notifier] giornate di mercato non disponibili: {exc}")
+        return []
+    out = []
+    for g in elenco:
+        n = sum(1 for a in alerts if _giorno_utc(a.emitted_at) == g.giorno
+                and _parse_snapshot(a).get("tone") == g.tono)
+        if n:
+            out.append((g, n))
+    return out
+
+
 def _titolo(v: Alert | tuple[Alert, Alert]) -> int:
     return v.stock_id if isinstance(v, Alert) else v[0].stock_id
 
@@ -450,6 +477,18 @@ def build_digest_message(
         lines.append(f"• {label}: {count}")
     # Gli altri: i segnali sui tuoi titoli sono gia' sopra, non si ripetono.
     altri = [a for a in alerts if a.stock_id not in rilevanti]
+    # FA-152: in una giornata di mercato i segnali di quel verso sono una riga.
+    giornate = _giornate_del_digest(db, alerts)
+    if giornate:
+        lines.append("")
+        for g, n in giornate:
+            nome = (f"{n} segnali {_VERSO_PLURALE[g.tono]}" if n != 1
+                    else f"1 segnale {_VERSO_PLURALE[g.tono][:-1]}a")
+            lines.append(f"📊 Giornata di mercato: {nome} "
+                         f"(oltre il 95° percentile, soglia {g.soglia})")
+        compressi = {(g.giorno, g.tono) for g, _ in giornate}
+        altri = [a for a in altri if (_giorno_utc(a.emitted_at), _parse_snapshot(a).get("tone"))
+                 not in compressi]
     top = altri[:DIGEST_TOP_N]
     if top:
         lines.append("")

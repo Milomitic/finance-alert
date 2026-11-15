@@ -50,3 +50,13 @@ export function useConfluence(days = 7, enabled = true) {
     staleTime: 60_000,
   });
 }
+
+/** Le giornate di mercato recenti (FA-152). Cambiano una volta al giorno. */
+export function useGiornateDiMercato(enabled: boolean) {
+  return useQuery({
+    queryKey: ["alerts", "giornate-di-mercato"],
+    queryFn: ({ signal }) => alerts.giornateDiMercato(signal),
+    enabled,
+    staleTime: 10 * 60_000,
+  });
+}

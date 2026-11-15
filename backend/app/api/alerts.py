@@ -22,6 +22,7 @@ from app.schemas.alert import (
     BulkAction,
     BulkResult,
     DigestResultOut,
+    GiornataMercatoOut,
     ScanAccepted,
     ScanRequest,
     ScanStatusOut,
@@ -388,6 +389,10 @@ def list_alerts(
     sort_dir: str = "desc",
     solo_rilevanti: bool = False,
     solo_etoro: bool = False,
+    #: FA-152: toglie le giornate di mercato nel loro verso, tranne sui
+    #: titoli in posizione o fra i preferiti. Le giornate da
+    #: `/api/alerts/giornate-di-mercato`.
+    comprimi_giornate: bool = False,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> AlertListOut:
@@ -437,12 +442,28 @@ def list_alerts(
         sort_dir=sort_dir,
         solo_rilevanti=solo_rilevanti,
         solo_etoro=solo_etoro,
+        comprimi_giornate=comprimi_giornate,
     )
     return AlertListOut(
         items=[AlertOut(**i) for i in items],
         total=total,
         has_more=has_more,
     )
+
+
+@router.get("/giornate-di-mercato", response_model=list[GiornataMercatoOut])
+def giornate_di_mercato(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[GiornataMercatoOut]:
+    """FA-152: i giorni in cui i segnali di un verso hanno superato il 95°
+    percentile mobile, piu' recenti prima."""
+    from app.services import giornate_mercato_service as gm
+
+    return [
+        GiornataMercatoOut(giorno=g.giorno, tono=g.tono, segnali=g.segnali, soglia=g.soglia)
+        for g in sorted(gm.recenti(db), key=lambda g: (g.giorno, g.tono), reverse=True)
+    ]
 
 
 @router.get("/confluence", response_model=list[ConfluenceOut])

@@ -13,12 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { QueryError } from "@/components/ui/query-error";
-import { useAlertsList, useConfluence } from "@/hooks/useAlerts";
+import { GiornateDiMercato } from "@/components/alert/GiornateDiMercato";
+import { useAlertsList, useConfluence, useGiornateDiMercato } from "@/hooks/useAlerts";
 import { useBulkAlerts, usePatchAlert } from "@/hooks/useAlertMutations";
 import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import {
-  esitoNascostoDallArchivio, filtersFromSearch, ORDINE_PREDEFINITO, searchFromState,
+  comprimeGiornate, esitoNascostoDallArchivio, filtersFromSearch, ORDINE_PREDEFINITO,
+  searchFromState,
 } from "@/lib/alertFilters";
+import { filtriDellaGiornata } from "@/lib/giornateDiMercato";
 
 const PAGE_SIZE = 50;
 
@@ -80,8 +83,12 @@ export function SignalsView() {
     );
   }, [filters, page, sortBy, sortDir, setSearchParams]);
 
+  // FA-152: sull'universo le giornate di mercato escono dalla lista.
+  const comprime = comprimeGiornate(filters);
+  const giornate = useGiornateDiMercato(!filters.solo_rilevanti);
   const list = useAlertsList({
     ...filters,
+    comprimi_giornate: comprime || undefined,
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
     sort_by: sortBy,
@@ -259,6 +266,16 @@ export function SignalsView() {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {!filters.solo_rilevanti && !filters.date_from && !filters.date_to && (
+        <GiornateDiMercato
+          giornate={giornate.data}
+          comprime={comprime}
+          onApri={(g) => { setPage(0); setFilters(filtriDellaGiornata(filters, g)); }}
+          onMostraTutte={() => { setPage(0); setFilters({ ...filters, mostra_giornate: true }); }}
+          onComprimi={() => { setPage(0); setFilters({ ...filters, mostra_giornate: undefined }); }}
+        />
       )}
 
       {selectedIds.size > 0 && (
