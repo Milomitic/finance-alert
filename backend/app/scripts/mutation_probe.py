@@ -290,6 +290,9 @@ ESCLUSI_DAI_BERSAGLI: dict[str, dict[str, str]] = {
             "Importa `fx_service` SOLO come bersaglio di `monkeypatch.setattr`: "
             "sostituisce `to_usd` per fissare il cambio EUR del preventivo eToro "
             "(FA-126), quindi non esegue una riga del modulo.",
+        "tests/test_titolo_confronti.py":
+            "Importa `fx_service` SOLO per sostituire `to_usd` e fissare il "
+            "cambio KRW dei pari (FA-156): non esegue una riga del modulo.",
     },
     "app/services/setup_service.py": {
         "tests/test_seed_e2e_valutazione.py":

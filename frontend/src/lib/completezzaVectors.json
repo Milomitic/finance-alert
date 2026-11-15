@@ -1,0 +1,85 @@
+{
+  "_nota": "Vettori condivisi fra confidenza.ts::completezzaFondamentali e backend/app/services/completezza_service.py (FA-156). Scritti a mano: ogni caso dice perche' c'e'.",
+  "oggi": "2026-11-15",
+  "casi": [
+    {
+      "perche": "nessun dato: null, non zero",
+      "annual": [], "quarterly": [], "earnings": [],
+      "atteso": null
+    },
+    {
+      "perche": "quattro anni completi, niente trimestrali (semestrale europea): 100",
+      "annual": [
+        {"fiscal_year_end": "2025-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2024-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2023-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2022-12-31", "revenue": 1, "net_income": 1, "eps": 1}
+      ],
+      "quarterly": [], "earnings": [],
+      "atteso": 100
+    },
+    {
+      "perche": "due anni senza ricavi su quattro, e un anno mancante pesa tre valori",
+      "annual": [
+        {"fiscal_year_end": "2025-12-31", "revenue": null, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2024-12-31", "revenue": null, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2023-12-31", "revenue": 1, "net_income": 1, "eps": 1}
+      ],
+      "quarterly": [], "earnings": [],
+      "atteso": 58
+    },
+    {
+      "perche": "un risultato futuro non conta; uno passato senza utile riportato si",
+      "annual": [
+        {"fiscal_year_end": "2025-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2024-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2023-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2022-12-31", "revenue": 1, "net_income": 1, "eps": 1}
+      ],
+      "quarterly": [
+        {"fiscal_quarter_end": "2026-09-30", "revenue": 1, "eps": 1}
+      ],
+      "earnings": [
+        {"date": "2026-11-01", "eps_estimate": 1, "eps_reported": null},
+        {"date": "2027-02-01", "eps_estimate": 1, "eps_reported": null}
+      ],
+      "atteso": 94
+    },
+    {
+      "perche": "oltre quattro righe recenti si guardano solo le ultime quattro",
+      "annual": [
+        {"fiscal_year_end": "2025-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2024-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2023-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2022-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2015-12-31", "revenue": null, "net_income": null, "eps": null}
+      ],
+      "quarterly": [
+        {"fiscal_quarter_end": "2026-09-30", "revenue": 1, "eps": 1},
+        {"fiscal_quarter_end": "2026-06-30", "revenue": 1, "eps": 1},
+        {"fiscal_quarter_end": "2026-03-31", "revenue": 1, "eps": 1},
+        {"fiscal_quarter_end": "2025-12-31", "revenue": 1, "eps": 1},
+        {"fiscal_quarter_end": "2020-12-31", "revenue": null, "eps": null}
+      ],
+      "earnings": [],
+      "atteso": 100
+    },
+    {
+      "perche": "trimestrali quasi vuote: 13 valori su 20",
+      "annual": [
+        {"fiscal_year_end": "2025-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2024-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2023-12-31", "revenue": 1, "net_income": 1, "eps": 1},
+        {"fiscal_year_end": "2022-12-31", "revenue": 1, "net_income": 1, "eps": 1}
+      ],
+      "quarterly": [
+        {"fiscal_quarter_end": "2026-09-30", "revenue": 1, "eps": null},
+        {"fiscal_quarter_end": "2026-06-30", "revenue": null, "eps": null},
+        {"fiscal_quarter_end": "2026-03-31", "revenue": null, "eps": null},
+        {"fiscal_quarter_end": "2025-12-31", "revenue": null, "eps": null}
+      ],
+      "earnings": [],
+      "atteso": 65
+    }
+  ]
+}

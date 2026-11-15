@@ -266,6 +266,13 @@ export interface ConsensoPeriodoOut {
   attuale?: number | null;
 }
 
+export interface ContributoOut {
+  pilastro: string;
+  da: number;
+  a: number;
+  contributo: number;
+}
+
 export interface CountBucket {
   label: string;
   count: number;
@@ -777,6 +784,17 @@ export interface FilterOptionsOut {
   industries: string[];
   countries: string[];
   indices: IndexOptionOut[];
+}
+
+export interface FinestraPunteggioOut {
+  giorni: number;
+  dal: string;
+  al: string;
+  da: number;
+  a: number;
+  delta: number;
+  contributi: ContributoOut[];
+  altro: number;
 }
 
 export interface FundamentalsAnnualOut {
@@ -1355,6 +1373,15 @@ export interface MultiTfKpisOut {
   items: TimeframeKpisOut[];
 }
 
+export interface NotaIn {
+  testo: string;
+}
+
+export interface NotaOut {
+  testo?: string;
+  aggiornata_il?: string | null;
+}
+
 export interface NotiziaMiaOut {
   ticker: string;
   rilevanza: string;
@@ -1399,6 +1426,23 @@ export interface OrizzonteCellOut {
 export interface PaginaIn {
   path: string;
   vista?: string | null;
+}
+
+export interface PariOut {
+  base: string;
+  gruppo?: string | null;
+  righe: PariRigaOut[];
+}
+
+export interface PariRigaOut {
+  ticker: string;
+  nome?: string | null;
+  cap_usd?: number | null;
+  qualita?: number | null;
+  tecnico?: number | null;
+  pe?: number | null;
+  crescita_ricavi?: number | null;
+  rendimento_3m?: number | null;
 }
 
 export interface PhaseTimingOut {
@@ -1674,9 +1718,23 @@ export interface QuotaOut {
   su: number;
 }
 
+export interface ReazioneOut {
+  data: string;
+  quando?: string | null;
+  sorpresa_pct?: number | null;
+  reazione_pct: number;
+  cinque_sedute_pct?: number | null;
+  due_sedute?: boolean;
+}
+
 export interface ReazioneRilascioOut {
   data: string;
   rendimento: number;
+}
+
+export interface ReazioniOut {
+  righe: ReazioneOut[];
+  mediana_assoluta_pct?: number | null;
 }
 
 export interface RecentScanOut {
@@ -2352,6 +2410,10 @@ export interface ValidationError {
   type: string;
   input?: unknown;
   ctx?: Record<string, unknown>;
+}
+
+export interface VariazionePunteggioOut {
+  finestre: FinestraPunteggioOut[];
 }
 
 export interface VerificaFonteOut {
