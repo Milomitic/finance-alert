@@ -191,6 +191,9 @@ class StockFilter:
     # ~99% of the universe — useless as a screen.
     signals_within_days: int = 7
     exclude_etf: bool = False         # drop instrument_type='etf' rows
+    #: Solo i titoli con la completezza dei fondamentali sopra la soglia della
+    #: scheda (90%, `completezza_service`). FA-156.
+    solo_dati_completi: bool = False
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -412,6 +415,14 @@ def _apply_filter(stmt, f: StockFilter):
         # ETFs are equities in every other respect (they have metrics +
         # technical scores) — this is a plain instrument_type predicate.
         stmt = stmt.where(Stock.instrument_type != "etf")
+    if f.solo_dati_completi:
+        # Dalla sola cache dei fondamentali: un titolo che la cache non ha
+        # non e' «completo», e resta fuori invece di passare per difetto.
+        from app.services import completezza_service  # noqa: PLC0415
+        from app.services import stock_fundamentals_service as sfs  # noqa: PLC0415
+
+        completi = completezza_service.titoli_completi(set(sfs._CACHE))
+        stmt = stmt.where(Stock.ticker.in_(completi or {""}))
     return stmt
 
 

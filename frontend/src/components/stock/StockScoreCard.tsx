@@ -13,6 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { VariazionePunteggio } from "@/components/stock/VariazionePunteggio";
 import { useScoreHistory } from "@/hooks/useScoreHistory";
 import { useStockScore } from "@/hooks/useStockScore";
 import {
@@ -836,6 +837,8 @@ export function StockScoreCard({ ticker }: Props) {
           />
         ))}
       </div>
+      {/* FA-156: quale pilastro ha mosso il composito a 30 e 90 giorni. */}
+      <VariazionePunteggio ticker={ticker} />
 
       {/* Via la riga «Analisti» e la riga «Governance», su richiesta
           (2026-10-06): il target e la sua variazione stanno ora in cima alla

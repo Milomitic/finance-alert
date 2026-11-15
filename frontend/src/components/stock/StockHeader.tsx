@@ -6,6 +6,7 @@ import { MarketStateBadge } from "@/components/dashboard/MarketStateBadge";
 import { EtfMembershipStrip } from "@/components/stock/EtfMembershipChips";
 import { EtoroMarchio } from "@/components/stock/EtoroMarchio";
 import { IndexMembershipChips } from "@/components/stock/IndexMembershipChips";
+import { NotaTitolo } from "@/components/stock/NotaTitolo";
 import { StellaPreferito } from "@/components/stock/StellaPreferito";
 import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
@@ -173,6 +174,7 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                     {stock.ticker}
                   </span>
                   <StellaPreferito ticker={stock.ticker} />
+                  <NotaTitolo ticker={stock.ticker} />
                   <EtoroMarchio su={suEtoro} />
                 </span>
                 <span className="text-xl text-foreground/80 font-medium truncate" title={stock.name}>

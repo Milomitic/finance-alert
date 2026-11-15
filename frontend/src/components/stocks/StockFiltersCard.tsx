@@ -31,6 +31,8 @@ export interface FiltersState {
   riskTiers: ("conservative" | "moderate" | "aggressive")[];
   /** Tipo strumento: true = escludi le righe ETF/ETN (instrument_type='etf'). */
   excludeEtf: boolean;
+  /** Solo i titoli con i fondamentali completi al 90% o piu' (FA-156). */
+  datiCompleti: boolean;
   /** Min composite score 0–100, or null = no threshold. When set, unscored
    *  stocks are excluded by the backend. */
   minScore: number | null;
@@ -600,7 +602,8 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
     state.riskTiers.length +
     pillarActiveCount +
     (state.marketCapMin != null ? 1 : 0) +
-    (state.marketCapMax != null ? 1 : 0);
+    (state.marketCapMax != null ? 1 : 0) +
+    (state.datiCompleti ? 1 : 0);
 
   const tecniciActive =
     (state.techMin != null ? 1 : 0) +
@@ -642,7 +645,7 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
     const isBool =
       kind === "aboveEma50" || kind === "aboveEma200" ||
       kind === "near52wHigh" || kind === "near52wLow" ||
-      kind === "volSpike" || kind === "excludeEtf";
+      kind === "volSpike" || kind === "excludeEtf" || kind === "datiCompleti";
     onChange({ ...state, [kind]: isBool ? false : null });
   };
 
@@ -751,6 +754,13 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
             onToggle={() => toggleArea("fondamentali")}
           >
             <div className="flex items-center gap-2 flex-wrap">
+              {/* FA-156: i punteggi di un titolo con meta' bilancio mancante
+                  sono stime su poco. Stessa soglia della scheda fondamentali. */}
+              <ToggleChip
+                label="Dati completi"
+                active={state.datiCompleti}
+                onToggle={() => set({ datiCompleti: !state.datiCompleti })}
+              />
               {/* Composite score range: min + max inline. */}
               <div className="inline-flex items-center gap-1 h-9 px-2 rounded border border-input focus-within:ring-1 focus-within:ring-ring">
                 <span className="text-xs text-muted-foreground">Score</span>
@@ -1059,6 +1069,18 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
                 </button>
               </Badge>
             ))}
+            {state.datiCompleti && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                Dati completi
+                <button
+                  onClick={() => removeChip("datiCompleti", "")}
+                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
+                  aria-label="Rimuovi filtro dati completi"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
             {state.excludeEtf && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 Escludi ETF

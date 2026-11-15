@@ -32,6 +32,7 @@ import { useStockDrawings } from "@/hooks/useStockDrawings";
 import { AnalystTargetCard } from "@/components/stock/AnalystTargetCard";
 import { CompanyOverviewCard } from "@/components/stock/CompanyOverviewCard";
 import { DrawingToolbar, type DrawingMode } from "@/components/stock/DrawingToolbar";
+import { ConfrontiTitoloCard } from "@/components/stock/ConfrontiTitoloCard";
 import { FundamentalsCard } from "@/components/stock/FundamentalsCard";
 import { InsidersAnalystCard } from "@/components/stock/InsidersAnalystCard";
 import { InstitutionalHoldersCard } from "@/components/stock/InstitutionalHoldersCard";
@@ -519,6 +520,11 @@ export default function StockDetailPage() {
           </div>
         )}
       </div>
+
+      {/* FA-156: titoli simili e reazioni alle trimestrali, fuori dalla riga
+          dei fondamentali (quella scheda ne fissa l'altezza). Solo per i
+          titoli che hanno fondamentali: un ETF non ha pari ne' trimestrali. */}
+      {schede.fondamentali && <ConfrontiTitoloCard ticker={ticker} />}
 
       {/* The dedicated Alerts + Insiders row that used to live here was
           decomposed: alerts moved next to the company profile (above),

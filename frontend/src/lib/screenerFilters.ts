@@ -7,7 +7,7 @@ import type { FiltersState } from "@/components/stocks/StockFiltersCard";
  *  so presets saved before new filter fields were added stay valid. */
 export const EMPTY_FILTERS: FiltersState = {
   indexCodes: [], sectors: [], industries: [], exchanges: [], countries: [],
-  riskTiers: [], excludeEtf: false, minScore: null, scoreMax: null,
+  riskTiers: [], excludeEtf: false, datiCompleti: false, minScore: null, scoreMax: null,
   profitabilityMin: null, sustainabilityMin: null, growthMin: null,
   valueMin: null, sentimentMin: null,
   techMin: null, postures: [],

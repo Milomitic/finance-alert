@@ -223,6 +223,7 @@ export default function StocksBrowserPage() {
     countries: parseListParam(searchParams, "country"),
     riskTiers: parseRiskList(searchParams),
     excludeEtf: parseBoolParam(searchParams.get("exclude_etf")),
+    datiCompleti: parseBoolParam(searchParams.get("dati_completi")),
     minScore: parseMinScore(searchParams.get("min_score")),
     scoreMax: parseNullableScore(searchParams.get("score_max")),
     profitabilityMin: parseNullableScore(searchParams.get("profitability_min")),
@@ -281,6 +282,7 @@ export default function StocksBrowserPage() {
     state.countries.forEach((v) => sp.append("country", v));
     state.riskTiers.forEach((v) => sp.append("risk", v));
     if (state.excludeEtf) sp.set("exclude_etf", "true");
+    if (state.datiCompleti) sp.set("dati_completi", "true");
     if (state.minScore != null) sp.set("min_score", String(state.minScore));
     if (state.scoreMax != null) sp.set("score_max", String(state.scoreMax));
     if (state.profitabilityMin != null) sp.set("profitability_min", String(state.profitabilityMin));
@@ -412,6 +414,7 @@ export default function StocksBrowserPage() {
     vol_ratio_min: state.volRatioMin ?? undefined,
     volume_min: state.volumeMin ?? undefined,
     exclude_etf: state.excludeEtf || undefined,
+    solo_dati_completi: state.datiCompleti || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
     limit: pageSize,

@@ -130,6 +130,7 @@ def search(
     # ignored when has_signals is false.
     signals_within_days: Annotated[int, Query(ge=1, le=90)] = 7,
     exclude_etf: bool = False,
+    solo_dati_completi: bool = False,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -221,6 +222,7 @@ def search(
             has_signals=has_signals,
             signals_within_days=signals_within_days,
             exclude_etf=exclude_etf,
+            solo_dati_completi=solo_dati_completi,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,

@@ -7,6 +7,7 @@ import type { Stock, StockKpis } from "@/api/types";
 vi.mock("@/hooks/useLiveQuote", () => ({ useLiveQuote: () => ({ data: undefined, isLoading: false }) }));
 vi.mock("@/hooks/useNowTick", () => ({ useNowTick: () => Date.now() }));
 vi.mock("@/components/stock/StellaPreferito", () => ({ StellaPreferito: () => null }));
+vi.mock("@/components/stock/NotaTitolo", () => ({ NotaTitolo: () => null }));
 
 const { StockHeader } = await import("./StockHeader");
 
