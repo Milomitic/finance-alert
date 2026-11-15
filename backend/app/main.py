@@ -39,6 +39,7 @@ from app.api import setups as setups_router
 from app.api import spotlight as spotlight_router
 from app.api import stock_drawings as stock_drawings_router
 from app.api import stocks as stocks_router
+from app.api import studio as studio_router
 from app.api import titolo_confronti as titolo_confronti_router
 from app.api import uso as uso_router
 from app.api.deps import get_current_user, require_json
@@ -730,6 +731,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(auth_router.router)
 app.include_router(stocks_router.router)
 app.include_router(titolo_confronti_router.router)
+app.include_router(studio_router.router)
 app.include_router(catalog_router.router)
 app.include_router(rule_performance_router.router)
 app.include_router(scan_log_router.router)

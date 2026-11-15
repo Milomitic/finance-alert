@@ -18,6 +18,7 @@ const NOMI: Record<string, string> = {
   "/sectors": "Esplora",
   "/sectors/:name": "Dettaglio settore",
   "/calendar": "Calendario",
+  "/studio": "Studio",
   "/institutionals": "Superinvestor",
   "/institutionals/:slug": "Dettaglio fondo",
   "/markets/:symbol": "Dettaglio mercato",

@@ -307,6 +307,31 @@ def esiti_piani() -> Any:
     return sfoltisci(chiama("/api/platform/plan-performance"))
 
 
+@mcp.tool(annotations=SOLA_LETTURA)
+def studio(modello: str, simbolo: str, sedute: int = 5, soglia_pct: float = -10.0,
+           orizzonte: int = 21, tipo: str = "trimestrali", serie_macro: str | None = None) -> Any:
+    """Statistica storica di un simbolo (pagina Studio). modello:
+    - "dopo_movimento": le `orizzonte` sedute dopo ogni variazione di almeno
+      `soglia_pct`% in `sedute` sedute (negativa = un calo);
+    - "stagionalita": rendimento per mese e per giorno della settimana;
+    - "evento": percorso attorno alle trimestrali (tipo="trimestrali") o ai
+      rilasci di una serie FRED (tipo="macro", serie_macro="CPIAUCSL");
+      orizzonte al massimo 10.
+    Ogni risposta ha casi, finestre indipendenti, intervallo e il caso base:
+    confrontare sempre con la base."""
+    s = simbolo.strip().upper()
+    if modello == "dopo_movimento":
+        return chiama("/api/studio/dopo_movimento", {"simbolo": s, "sedute": sedute,
+                                                      "soglia_pct": soglia_pct, "orizzonte": orizzonte})
+    if modello == "stagionalita":
+        return chiama("/api/studio/stagionalita", {"simbolo": s})
+    if modello == "evento":
+        return chiama("/api/studio/evento", {"simbolo": s, "tipo": tipo, "serie_macro": serie_macro,
+                                             "orizzonte": min(orizzonte, 10)})
+    return {"errore": f"modello sconosciuto: {modello}",
+            "modelli": ["dopo_movimento", "stagionalita", "evento"]}
+
+
 #: I simboli non-azionari che l'app sa servire (`LIVE_ASSET_DEFINITIONS` in
 #: backend/app/api/market.py, piu' i futures sugli indici). Il backend rifiuta
 #: gli altri di proposito: qui servono solo a dire cosa chiedere.

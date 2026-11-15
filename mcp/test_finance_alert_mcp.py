@@ -185,3 +185,16 @@ def test_primo_passaggio_rischio_e_confronti_chiamano_le_rotte_giuste(monkeypatc
     assert chiamate[-1][0] == "/api/etoro/rischio"
     c = srv.confronti("aapl")
     assert c["pari"] == {"ok": True} and "404" in c["variazione_punteggio"]
+
+
+def test_studio_sceglie_la_rotta_e_limita_l_orizzonte_dell_evento(monkeypatch) -> None:
+    chiamate = []
+    monkeypatch.setattr(srv, "chiama", lambda p, q=None: chiamate.append((p, q)) or {})
+    srv.studio("evento", " aapl ", orizzonte=30)
+    assert chiamate[-1] == ("/api/studio/evento", {"simbolo": "AAPL", "tipo": "trimestrali",
+                                                   "serie_macro": None, "orizzonte": 10})
+    srv.studio("stagionalita", "^GSPC")
+    assert chiamate[-1][0] == "/api/studio/stagionalita"
+    srv.studio("dopo_movimento", "SOXL", soglia_pct=-20)
+    assert chiamate[-1][1]["soglia_pct"] == -20
+    assert "modelli" in srv.studio("boh", "X")

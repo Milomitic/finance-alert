@@ -13,6 +13,7 @@ import {
   Building2,
   CalendarDays,
   Filter,
+  FlaskConical,
   HeartPulse,
   LayoutDashboard,
   ScanSearch,
@@ -74,6 +75,8 @@ export const NAV_GROUPS: NavGroup[] = [
       // ranking) so that's the label. Filter icon to telegraph the function.
       { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
       { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
+      // FA-157: statistica storica di un simbolo, coi casi e il caso base.
+      { to: "/studio", label: "Studio", icon: FlaskConical, enabled: true },
       { to: "/institutionals", label: "Superinvestor", icon: Building2, enabled: true },
     ],
   },

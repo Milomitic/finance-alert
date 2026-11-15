@@ -58,8 +58,8 @@ def test_ogni_chiave_possibile_entra_nella_colonna() -> None:
     chiavi |= {rotte.rotta_uso("/non/esiste")}
     chiavi.discard(None)
     lunghezza = UsoPagina.__table__.c.rotta.type.length
-    # 6 statiche senza viste, 5 dinamiche, 5 viste, /other.
-    assert len(chiavi) == 17
+    # 7 statiche senza viste (/studio dal 2026-11-15), 5 dinamiche, 5 viste, /other.
+    assert len(chiavi) == 18
     assert max(map(len, chiavi)) <= lunghezza, max(chiavi, key=len)
 
 

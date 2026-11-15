@@ -24,6 +24,7 @@ const SectorsOverviewPage = lazy(() => import("@/pages/SectorsOverviewPage"));
 const DiagnosticsPage = lazy(() => import("@/pages/DiagnosticsPage"));
 const StockDetailPage = lazy(() => import("@/pages/StockDetailPage"));
 const StocksBrowserPage = lazy(() => import("@/pages/StocksBrowserPage"));
+const StudioPage = lazy(() => import("@/pages/StudioPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 /** `/setups` e' diventata una scheda di `/alerts` (2026-09-19) e reindirizza
@@ -96,6 +97,7 @@ export default function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/macro/:seriesId" element={<MacroDetailPage />} />
           <Route path="/stocks" element={<StocksBrowserPage />} />
+          <Route path="/studio" element={<StudioPage />} />
           <Route path="/stocks/:ticker" element={<StockDetailPage />} />
           <Route path="/markets/:symbol" element={<MarketDetailPage />} />
           <Route path="/sectors/:name" element={<SectorDetailPage />} />

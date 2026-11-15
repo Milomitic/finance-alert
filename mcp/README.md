@@ -22,6 +22,7 @@ in rete.
 | `primo_passaggio` | per uno stop e un target qualunque su un simbolo, quante finestre storiche hanno toccato prima l'uno o l'altro |
 | `screener` | lo screener dei titoli coi filtri dell'API |
 | `confronti` | pari, reazioni alle trimestrali e variazione del punteggio di un titolo |
+| `studio` | statistica storica: dopo un movimento, stagionalita', attorno a trimestrali o rilasci macro, sempre col caso base |
 | `storico` | barre giornaliere di un titolo (~10 anni, dal database) o di un mercato (indici, materie prime, crypto: storia completa), per statistiche sul passato |
 
 `storico` restituisce migliaia di righe in forma a colonne: il client le salva

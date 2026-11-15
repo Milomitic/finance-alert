@@ -136,6 +136,10 @@ export function ConfrontiTitoloCard({ ticker }: { ticker: string }) {
         <div className="space-y-2">
           <SectionTitle icon={CalendarClock} label="Reazioni alle trimestrali" />
           <Reazioni ticker={ticker} />
+          <Link to={`/studio?simbolo=${encodeURIComponent(ticker)}&modello=evento`}
+            className="inline-block text-xs font-semibold underline-offset-2 hover:underline">
+            Studia il percorso attorno alle trimestrali
+          </Link>
         </div>
       </CardContent>
     </Card>
