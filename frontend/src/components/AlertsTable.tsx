@@ -35,6 +35,7 @@ import { entryPrice, rendimentoDalSegnale } from "@/lib/alertEntry";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
+import { PastigliaConflitto } from "@/components/alert/SegnaleInConflitto";
 
 /** Toggleable columns for the non-embedded alerts table.
  *  Checkbox + Titolo are always-on (identity + selection).
@@ -625,6 +626,7 @@ export function AlertsTable({
                         <span className="sr-only">preferito</span>
                       </span>
                     )}
+                    <PastigliaConflitto c={a.in_conflitto_con} />
                     {a.name && (
                       <span
                         className="min-w-0 truncate text-xs text-muted-foreground max-w-[220px] leading-tight"

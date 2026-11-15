@@ -64,6 +64,8 @@ _CANONICI = {
     # FA-113: «posizione» o «preferito» se il titolo conta. Anche questo passa
     # dallo stesso serializzatore, quindi la pagina titolo lo riceve gratis.
     "rilevanza",
+    # FA-151: l'alert di verso opposto sullo stesso titolo, stesso serializzatore.
+    "in_conflitto_con",
     # La serie ferma: il servizio la calcolava e `AlertOut` la scartava
     # (trovato da FA-111). Ora arriva.
     "series_stalled", "series_last_bar",

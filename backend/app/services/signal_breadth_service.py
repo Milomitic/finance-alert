@@ -41,6 +41,7 @@ import json
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import case, func, select, tuple_
 from sqlalchemy.orm import Session
@@ -210,3 +211,85 @@ def peers_for(db: Session, alert: Alert) -> list[Peer]:
         Peer(alert_id=aid, stock_id=sid, ticker=t, name=n, sector=s)
         for aid, sid, t, n, s in rows
     ]
+
+
+@dataclass(frozen=True)
+class Conflitto:
+    alert_id: int
+    signal_name: str | None
+    tone: str
+
+
+#: Due alert di verso opposto sullo stesso titolo sono «in conflitto» se sono
+#: NATI a non piu' di tanti giorni di calendario l'uno dall'altro (FA-151).
+GIORNI_CONFLITTO = 1
+_VERSI = ("bull", "bear")
+
+
+def conflitti_per(
+    db: Session, alerts: Sequence[tuple[int, int, str | None, object]],
+) -> dict[int, Conflitto]:
+    """{alert_id: l'alert di verso opposto sullo stesso titolo}.
+
+    `alerts` sono tuple (id, stock_id, tono, emitted_at). La data e' la
+    NASCITA (`emitted_at`), non `signal_date`: quella la riscrive ogni
+    revisione, e due segnali nati a settimane di distanza finirebbero in
+    conflitto perche' entrambi ancora vivi.
+
+    ⚠️ Nessun cambiamento all'emissione: i due alert restano, perche' il
+    magazzino degli esiti li misura separati. Questo e' contesto per chi
+    legge — un titolo che il motore vede salire e scendere lo stesso giorno
+    non sta dicendo niente di netto. `undetermined` e i toni mancanti non
+    entrano: non hanno un verso da contraddire. Gli archiviati CONTANO, per la
+    regola di CLAUDE.md sui campi che scrive l'utente.
+
+    Con piu' candidati si prende quello nato piu' vicino, a parita' il piu'
+    recente: una pastiglia rimanda a UN alert.
+    """
+    mie = [
+        (aid, sid, tono, _giorno(quando)) for aid, sid, tono, quando in alerts
+        if tono in _VERSI and _giorno(quando) is not None
+    ]
+    if not mie:
+        return {}
+    giorni = [g for *_, g in mie]
+    dal = min(giorni) - timedelta(days=GIORNI_CONFLITTO)
+    al = max(giorni) + timedelta(days=GIORNI_CONFLITTO + 1)
+    righe = db.execute(
+        select(Alert.id, Alert.stock_id, _tono_sql, Alert.emitted_at, Alert.signal_name)
+        .where(
+            Alert.stock_id.in_({sid for _, sid, _, _ in mie}),
+            _tono_sql.in_(_VERSI),
+            Alert.emitted_at >= datetime.combine(dal, time.min, UTC),
+            Alert.emitted_at < datetime.combine(al, time.min, UTC),
+        )
+    ).all()
+    per_titolo: dict[int, list[tuple[int, str, date, str | None]]] = defaultdict(list)
+    for aid, sid, tono, quando, nome in righe:
+        g = _giorno(quando)
+        if g is not None:
+            per_titolo[sid].append((aid, tono, g, nome))
+    out: dict[int, Conflitto] = {}
+    for aid, sid, tono, g in mie:
+        opposti = [
+            (abs((go - g).days), -oid, Conflitto(alert_id=oid, signal_name=nome, tone=to))
+            for oid, to, go, nome in per_titolo.get(sid, [])
+            if to != tono and abs((go - g).days) <= GIORNI_CONFLITTO
+        ]
+        if opposti:
+            out[aid] = min(opposti, key=lambda x: (x[0], x[1]))[2]
+    return out
+
+
+def _giorno(quando: object) -> date | None:
+    if isinstance(quando, datetime):
+        q = quando if quando.tzinfo is None else quando.astimezone(UTC)
+        return q.date()
+    if isinstance(quando, date):
+        return quando
+    if isinstance(quando, str) and quando:
+        try:
+            return _giorno(datetime.fromisoformat(quando))
+        except ValueError:
+            return None
+    return None

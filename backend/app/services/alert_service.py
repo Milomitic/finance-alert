@@ -20,7 +20,7 @@ from app.models import (
     StockSetup,
 )
 from app.models.stock_setup import STATUS_CONVERTED
-from app.services import rilevanza_service
+from app.services import rilevanza_service, signal_breadth_service
 
 # ⚠️ Il predicato ha un proprietario unico in `ohlcv_service`, accanto a
 # `not_quarantined_clause` da cui va tenuto distinto: quella porta anche il
@@ -369,12 +369,14 @@ def list_alerts(
     )
     origins = _setup_origins(db, [row[0].id for row in page])
     rilevanti = rilevanza_service.titoli_rilevanti(db) if page else {}
+    conflitti = _conflitti(db, [row[0] for row in page])
     items = [
         _row_to_item(
             row, earnings_by_ticker.get(row[1]), last_bars.get(row[0].stock_id),
             origins.get(row[0].id),
         )
-        | {"rilevanza": rilevanti.get(row[0].stock_id)}
+        | {"rilevanza": rilevanti.get(row[0].stock_id),
+           "in_conflitto_con": conflitti.get(row[0].id)}
         for row in page
     ]
     return items, total, has_more
@@ -582,7 +584,18 @@ def get_alert_detail(db: Session, alert_id: int) -> dict[str, Any] | None:
     return _row_to_item(
         row, earnings.get(row[1]), last_bars.get(row[0].stock_id),
         _setup_origins(db, [row[0].id]).get(row[0].id),
-    )
+    ) | {"in_conflitto_con": _conflitti(db, [row[0]]).get(row[0].id)}
+
+
+def _conflitti(db: Session, alerts: list[Alert]) -> dict[int, dict[str, Any]]:
+    """L'alert di verso opposto sullo stesso titolo, per ciascuno (FA-151)."""
+    trovati = signal_breadth_service.conflitti_per(db, [
+        (a.id, a.stock_id, signal_breadth_service.tone_of(a), a.emitted_at) for a in alerts
+    ])
+    return {
+        aid: {"alert_id": c.alert_id, "signal_name": c.signal_name, "tone": c.tone}
+        for aid, c in trovati.items()
+    }
 
 
 def get_alert(db: Session, alert_id: int) -> Alert | None:

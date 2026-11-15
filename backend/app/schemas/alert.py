@@ -82,6 +82,12 @@ class PlanBriefOut(BaseModel):
     tp2_hit_date: date | None = None
 
 
+class AlertConflittoOut(BaseModel):
+    alert_id: int
+    signal_name: str | None = None
+    tone: str
+
+
 class AlertOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -163,6 +169,10 @@ class AlertOut(BaseModel):
     #: «posizione» o «preferito» se il titolo conta per chi usa l'app
     #: (FA-113, `rilevanza_service`); None per il resto del catalogo.
     rilevanza: str | None = None
+    #: Un alert di verso OPPOSTO sullo stesso titolo, nato entro un giorno
+    #: (FA-151). Contesto, non correzione: i due restano e il magazzino li
+    #: misura separati. None se non c'e'.
+    in_conflitto_con: AlertConflittoOut | None = None
     #: La serie del titolo si e' fermata: il segnale non potra' maturare, e
     #: la data dice quando e' arrivata l'ultima barra.
     #: ⚠️ `_row_to_item` li calcolava da settimane e l'API li SCARTAVA: un

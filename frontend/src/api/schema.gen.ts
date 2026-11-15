@@ -29,6 +29,12 @@ export interface AggregateStatsOut {
   sector_tilt: Record<string, number>;
 }
 
+export interface AlertConflittoOut {
+  alert_id: number;
+  signal_name?: string | null;
+  tone: string;
+}
+
 export interface AlertFiringOut {
   name: string;
   severity?: string | null;
@@ -68,6 +74,7 @@ export interface AlertOut {
   next_earnings_date?: string | null;
   setup_origin?: AlertSetupOriginOut | null;
   rilevanza?: string | null;
+  in_conflitto_con?: AlertConflittoOut | null;
   series_stalled?: boolean;
   series_last_bar?: string | null;
 }

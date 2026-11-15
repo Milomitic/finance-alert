@@ -64,6 +64,7 @@ import {
 } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { ingressiDelPiano, pianoDelSegnale } from "@/lib/tradePlaybook";
+import { RigaConflitto } from "@/components/alert/SegnaleInConflitto";
 
 export type { AlertChartLink };
 
@@ -671,6 +672,11 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
           )}
           {/* Ampiezza prima dello snapshot: dice se leggere i numeri sotto
               come un fatto del titolo o come una condizione di mercato. */}
+          {alert.in_conflitto_con && (
+            <div className="mb-3">
+              <RigaConflitto c={alert.in_conflitto_con} />
+            </div>
+          )}
           <div className="mb-3">
             <SignalBreadthRow
               alertId={alert.id}

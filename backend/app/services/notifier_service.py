@@ -249,6 +249,46 @@ def _riga_alert(a: Alert, stocks_by_id: dict[int, Stock], rilevanza: str | None)
     return line
 
 
+
+def _unisci_conflitti(alerts: list[Alert]) -> list[Alert | tuple[Alert, Alert]]:
+    """FA-151: un alert rialzista e uno ribassista sullo stesso titolo, nella
+    stessa lista, diventano UNA voce. Le liste del digest coprono 24 ore,
+    quindi sono gia' dentro la finestra di un giorno del conflitto. L'ordine
+    e' quello della prima delle due; `undetermined` resta da solo."""
+    out: list[Alert | tuple[Alert, Alert]] = []
+    preso: dict[int, int] = {}       # stock_id -> indice in out di un alert ancora senza coppia
+    for a in alerts:
+        tono = _parse_snapshot(a).get("tone")
+        k = preso.get(a.stock_id)
+        if k is not None and tono in ("bull", "bear"):
+            prima = out[k]
+            if isinstance(prima, Alert) and _parse_snapshot(prima).get("tone") not in (tono, None):
+                out[k] = (prima, a)
+                del preso[a.stock_id]
+                continue
+        if tono in ("bull", "bear") and a.stock_id not in preso:
+            preso[a.stock_id] = len(out)
+        out.append(a)
+    return out
+
+
+def _titolo(v: Alert | tuple[Alert, Alert]) -> int:
+    return v.stock_id if isinstance(v, Alert) else v[0].stock_id
+
+
+def _riga_voce(v: Alert | tuple[Alert, Alert], stocks_by_id: dict[int, Stock],
+               rilevanza: str | None) -> str:
+    if isinstance(v, Alert):
+        return _riga_alert(v, stocks_by_id, rilevanza)
+    a, b = v
+    stock = stocks_by_id.get(a.stock_id)
+    ticker = stock.ticker if stock else f"#{a.stock_id}"
+    segno = f"{_SEGNO_RILEVANZA[rilevanza]} " if rilevanza else ""
+    sa, sb = _parse_snapshot(a), _parse_snapshot(b)
+    return (f"↕️ {segno}{ticker} — in conflitto: {_alert_emoji(a, sa)} {_alert_label(a, sa)} "
+            f"/ {_alert_emoji(b, sb)} {_alert_label(b, sb)}")
+
+
 def _righe_novita(novita: list[Any]) -> list[str]:
     righe = [f"<b>Novità sui tuoi titoli ({len(novita)}):</b>"]
     for nv in novita[:NOVITA_TOP_N]:
@@ -372,10 +412,11 @@ def build_digest_message(
             lines.append("")
         if miei:
             lines.append(f"<b>Segnali sui tuoi titoli ({len(miei)}):</b>")
-            for a in miei[:DIGEST_TOP_N]:
-                lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
-            if len(miei) > DIGEST_TOP_N:
-                lines.append(f"... e altri {len(miei) - DIGEST_TOP_N}.")
+            voci = _unisci_conflitti(miei)
+            for v in voci[:DIGEST_TOP_N]:
+                lines.append(_riga_voce(v, stocks_by_id, rilevanti[_titolo(v)]))
+            if len(voci) > DIGEST_TOP_N:
+                lines.append(f"... e altri {len(voci) - DIGEST_TOP_N}.")
             lines.append("")
         altri = n - len(miei)
         if altri:
@@ -398,10 +439,11 @@ def build_digest_message(
     lines.append("")
     if miei:
         lines.append(f"<b>Sui tuoi titoli ({len(miei)}):</b>")
-        for a in miei[:DIGEST_TOP_N]:
-            lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
-        if len(miei) > DIGEST_TOP_N:
-            lines.append(f"... e altri {len(miei) - DIGEST_TOP_N}.")
+        voci = _unisci_conflitti(miei)
+        for v in voci[:DIGEST_TOP_N]:
+            lines.append(_riga_voce(v, stocks_by_id, rilevanti[_titolo(v)]))
+        if len(voci) > DIGEST_TOP_N:
+            lines.append(f"... e altri {len(voci) - DIGEST_TOP_N}.")
         lines.append("")
     lines.append("<b>Per segnale:</b>")
     for label, count in sorted(counts.items(), key=lambda kv: -kv[1]):
@@ -502,10 +544,11 @@ def notify_signal_alerts(db: Session, alerts: list[Alert]) -> PushResult:
 
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     lines = [f"⚡ <b>Segnali sui tuoi titoli — scan del {now}</b>", ""]
-    for a in scelti[:PUSH_TOP_N]:
-        lines.append(_riga_alert(a, stocks_by_id, rilevanti[a.stock_id]))
-    if len(scelti) > PUSH_TOP_N:
-        lines.append(f"... e altri {len(scelti) - PUSH_TOP_N}.")
+    voci = _unisci_conflitti(scelti)
+    for v in voci[:PUSH_TOP_N]:
+        lines.append(_riga_voce(v, stocks_by_id, rilevanti[_titolo(v)]))
+    if len(voci) > PUSH_TOP_N:
+        lines.append(f"... e altri {len(voci) - PUSH_TOP_N}.")
     lines.append("")
     lines.append(f"🔗 {settings.public_base_url}/alerts")
 

@@ -108,6 +108,7 @@ export type _M9_IndexStatus = Nessuno<SoloNelFrontend<M9.IndexStatus, S.IndexSta
 export type _M9_CatalogStatus = Nessuno<SoloNelFrontend<M9.CatalogStatus, S.CatalogStatusOut>>;
 export type _M9_AlertPeer = Nessuno<SoloNelFrontend<M9.AlertPeer, S.AlertPeerOut>>;
 export type _M9_PlanBrief = Nessuno<SoloNelFrontend<M9.PlanBrief, S.PlanBriefOut>>;
+export type _M9_AlertConflitto = Nessuno<SoloNelFrontend<M9.AlertConflitto, S.AlertConflittoOut>>;
 export type _M9_Alert = Nessuno<SoloNelFrontend<M9.Alert, S.AlertOut>>;
 export type _M9_AlertList = Nessuno<SoloNelFrontend<M9.AlertList, S.AlertListOut>>;
 export type _M9_DigestResult = Nessuno<SoloNelFrontend<M9.DigestResult, S.DigestResultOut>>;

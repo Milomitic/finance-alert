@@ -187,6 +187,12 @@ export interface PlanBrief {
   tp2_hit_date: string | null;
 }
 
+export interface AlertConflitto {
+  alert_id: number;
+  signal_name: string | null;
+  tone: string;
+}
+
 export interface Alert {
   id: number;
   /** «posizione» o «preferito» se il titolo conta per chi usa l'app (FA-113);
@@ -230,6 +236,9 @@ export interface Alert {
   same_day_same_tone?: number | null;
   same_day_same_tone_sector?: number | null;
   same_day_opposite_tone?: number | null;
+  /** Un alert di verso OPPOSTO sullo stesso titolo, nato entro un giorno
+   *  (FA-151). Contesto: i due restano, e il motore li misura separati. */
+  in_conflitto_con?: AlertConflitto | null;
   /** L'esito del PIANO: quale fra stop e target e' stato toccato per primo.
    *
    *  ⚠️ Una domanda DIVERSA da `outcome_*` qui sotto, non la stessa misurata
