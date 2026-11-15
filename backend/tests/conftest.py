@@ -136,6 +136,20 @@ def _reset_scheduler_metrics() -> Iterator[None]:
     _INSTANCE._started.clear()
 
 
+@pytest.fixture(autouse=True)
+def _senza_chiave_finnhub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le chiavi delle fonti esterne del `.env` locale non entrano nei test.
+
+    FA-158: col breaker di Yahoo aperto le quotazioni USA passano da Finnhub
+    se la chiave c'e'. In CI non c'e', in locale si': senza questa riga i test
+    del breaker davano esiti diversi sul portatile e in CI, che e' la forma che
+    questo progetto ha gia' pagato col fuso e col dialetto. I test che vogliono
+    la chiave la impostano da soli."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "finnhub_api_key", "")
+
+
 def _blocked_network_call(*_args, **_kwargs):  # noqa: ANN002, ANN003
     raise AssertionError(
         "test attempted real network I/O — mock it "

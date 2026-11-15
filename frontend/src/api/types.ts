@@ -1129,6 +1129,8 @@ export interface LiveQuote {
    *  "today" candle when this equals today, even at market CLOSED
    *  (provisional/official today close before the EOD scan). */
   as_of_date?: string | null;
+  /** «finnhub» quando Yahoo limita e il prezzo arriva dalla riserva (FA-158). */
+  source?: string | null;
 }
 
 // === Stock scoring ===

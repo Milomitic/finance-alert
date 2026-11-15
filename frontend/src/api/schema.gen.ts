@@ -2531,6 +2531,7 @@ export interface app__schemas__stock_detail__LiveQuoteOut {
   fetched_at?: number;
   error?: string | null;
   as_of_date?: string | null;
+  source?: string | null;
 }
 
 export interface app__schemas__stock_detail__OhlcvBarOut {

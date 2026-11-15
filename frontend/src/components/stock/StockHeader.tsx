@@ -328,6 +328,13 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                 è la base del movimento pre-apertura; intraday è il prezzo
                 di partenza della giornata. Nascosto a mercato chiuso (in
                 quel caso il prezzo mostrato È già la chiusura). */}
+            {/* FA-158: col breaker di Yahoo aperto il prezzo viene da Finnhub,
+                e si dice. */}
+            {liveOk && live.data!.source === "finnhub" && (
+              <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
+                Prezzo da Finnhub (Yahoo non risponde)
+              </div>
+            )}
             {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
               <div
                 className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"

@@ -62,6 +62,8 @@ class LiveQuoteOut(BaseModel):
     # market is CLOSED (provisional/official today close before the EOD
     # scan persists it). None when unknown / breaker fallback.
     as_of_date: str | None = None
+    #: «finnhub» quando Yahoo limita e il prezzo arriva dalla riserva (FA-158).
+    source: str | None = None
 
 
 class LiveQuotesBatchOut(BaseModel):

@@ -56,6 +56,9 @@ class LiveQuote:
     # a "today" candle even when CLOSED (provisional/official today close
     # before the EOD scan persists it). None when unknown.
     as_of_date: str | None = None
+    #: Da dove viene il prezzo quando non e' Yahoo: «finnhub» col breaker
+    #: aperto (FA-158). None = il percorso normale.
+    source: str | None = None
 
 
 # Market hours per region, expressed in the exchange's LOCAL timezone +
@@ -629,7 +632,7 @@ def _fetch_fresh(ticker: str, *, allow_remote_today_fetch: bool = True) -> LiveQ
     from app.services import yfinance_health
 
     if yfinance_health.is_open(yfinance_health.LANE_QUOTES):
-        return _eod_fallback_quote(ticker)
+        return _riserva(ticker) or _eod_fallback_quote(ticker)
 
     # ⚠️ Un ticker in quarantena non si chiede: yfinance risponde con un
     # `AttributeError` sul proprio stato interno ('PriceHistory' object has no
@@ -1018,6 +1021,44 @@ def _quote_from_l2_payload(ticker: str, d: dict[str, Any]) -> LiveQuote:
     )
 
 
+#: Quanto vale una quotazione di riserva prima di richiederla (FA-158).
+RISERVA_TTL = 60.0
+
+
+def _riserva(ticker: str) -> LiveQuote | None:
+    """La quotazione da Finnhub col breaker di Yahoo aperto, o None.
+
+    ⚠️ Con un suo tempo di validita': `_warm_or_eod` restituisce la cache a
+    qualunque eta', quindi senza questo controllo un prezzo di riserva
+    resterebbe a schermo finche' il breaker non si chiude. Solo titoli USA e
+    al piu' `finnhub_quote_service.PER_MINUTO` richieste al minuto: oltre, il
+    chiamante usa il ripiego di prima."""
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
+
+    from app.services import finnhub_quote_service as fq  # noqa: PLC0415
+
+    adesso = time.time()
+    with _CACHE_LOCK:
+        c = _CACHE.get(ticker)
+    if c is not None and c.source == "finnhub" and adesso - c.fetched_at < RISERVA_TTL:
+        return c
+    if not fq.disponibile(ticker):
+        return None
+    d = fq.quota(ticker)
+    if d is None:
+        return None
+    quando = d.pop("quote_time")
+    q = LiveQuote(
+        ticker=ticker, **d, currency="USD", fetched_at=adesso, source="finnhub",
+        market_state="OPEN" if _is_market_open(ticker) else "CLOSED",
+        as_of_date=(datetime.fromtimestamp(quando, ZoneInfo("America/New_York")).date().isoformat()
+                    if quando else None),
+    )
+    with _CACHE_LOCK:
+        _CACHE[ticker] = q
+    return q
+
+
 def _warm_or_eod(ticker: str) -> LiveQuote:
     """Best answer obtainable WITHOUT touching yfinance, in descending
     freshness: TTL-expired cache → last good live quote → persisted L2
@@ -1178,7 +1219,7 @@ def get_quotes_batch(
     from app.services import yfinance_health
     if yfinance_health.is_open(yfinance_health.LANE_QUOTES):
         for t in misses:
-            out[t] = _warm_or_eod(t)
+            out[t] = _riserva(t) or _warm_or_eod(t)
         return out
 
     # allow_remote_today_fetch=False: the batch must NOT fire an on-demand
