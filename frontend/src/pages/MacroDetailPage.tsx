@@ -1,23 +1,12 @@
 import { ArrowLeft, Building2, Globe } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  Bar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 import type { MacroRelease } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
+import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { useMacroDetail } from "@/hooks/useCalendar";
 import { regionFlagAsset, regionLabel } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
@@ -413,68 +402,34 @@ export default function MacroDetailPage() {
             </div>
           ) : (
             <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart
-                  data={plotted}
-                  margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
-                >
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(v: string) => formatMacroDate(v)}
-                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickLine={{ stroke: "hsl(var(--border))" }}
-                    interval="preserveStartEnd"
-                    minTickGap={40}
+              {/* Un livello non parte da zero (forzarcelo schiaccia cinque anni
+                  di occupati in un muro piatto); le barre delle variazioni si'.
+                  Smeraldo sopra la stima, rosa sotto, grigio senza stima:
+                  l'ESITO, non il segno (CLAUDE.md). */}
+              <GraficoSvg
+                dati={plotted as PuntoMacro[]}
+                x={(p) => p.date}
+                formatoX={(v) => formatMacroDate(v)}
+                formatoY={(v) =>
+                  mode === "level" ? formatMacroValue(v, valueKind, sourceScale) : formatVariazioneMacro(v, unita, 1)
+                }
+                riferimenti={mode !== "level" ? [{ y: 0 }] : []}
+                etichetta={mode === "level" ? "Livello dell'indicatore nel tempo" : "Variazioni dell'indicatore nel tempo"}
+                serie={[
+                  mode === "level"
+                    ? { chiave: "value", valore: (p) => p.value, colore: "hsl(var(--primary))", spessore: 2 }
+                    : { chiave: "value", valore: (p) => p.value, colore: "hsl(var(--primary))", tipo: "barre",
+                        coloreBarra: (p) => coloreEsito(p.esito) },
+                ]}
+                tooltip={(p) => (
+                  <ChartTooltip
+                    p={p}
+                    valueKind={valueKind}
+                    sourceScale={sourceScale}
+                    variazione={mode === "level" ? null : unita}
                   />
-                  <YAxis
-                    // Un livello non parte da zero: forzarcelo e' cio' che
-                    // schiaccia cinque anni di occupati in un muro piatto.
-                    domain={mode === "level" ? ["auto", "auto"] : undefined}
-                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={{ stroke: "hsl(var(--border))" }}
-                    tickLine={{ stroke: "hsl(var(--border))" }}
-                    tickFormatter={(v: number) =>
-                      mode === "level" ? formatMacroValue(v, valueKind, sourceScale) : formatVariazioneMacro(v, unita, 1)
-                    }
-                    width={64}
-                  />
-                  <Tooltip
-                    cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
-                    content={
-                      <ChartTooltip
-                        valueKind={valueKind}
-                        sourceScale={sourceScale}
-                        variazione={mode === "level" ? null : unita}
-                      />
-                    }
-                  />
-                  {mode !== "level" && (
-                    <ReferenceLine y={0} stroke="hsl(var(--border))" />
-                  )}
-                  {mode === "level" && (
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={false}
-                      isAnimationActive={false}
-                    />
-                  )}
-                  {mode !== "level" && (
-                  <Bar dataKey="value" radius={[2, 2, 0, 0]}>
-                    {/* Smeraldo sopra la stima, rosa sotto, grigio senza stima:
-                        l'ESITO, non il segno. Il rosso (`destructive`) e'
-                        riservato a cio' che e' rotto (CLAUDE.md). */}
-                    {plotted.map((p, i) => (
-                      <Cell key={i} fill={coloreEsito((p as { esito?: string | null }).esito)} />
-                    ))}
-                  </Bar>
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
+                )}
+              />
             </div>
           )}
         </CardContent>
@@ -648,28 +603,22 @@ function ImportanceStars({ importance }: { importance: "high" | "medium" | "low"
   );
 }
 
-interface ChartTooltipPayloadEntry {
-  payload: { date: string; value: number; period: string; esito?: string | null };
-}
+type PuntoMacro = { date: string; value: number; period: string; esito?: string | null };
 
 function ChartTooltip({
-  active,
-  payload,
+  p,
   valueKind,
   sourceScale,
   variazione = null,
 }: {
-  active?: boolean;
-  payload?: ChartTooltipPayloadEntry[];
+  p: PuntoMacro;
   valueKind: string;
   sourceScale?: string | null;
   /** L'unita' della variazione quando il grafico ne mostra una, null sul livello. */
   variazione?: string | null;
 }) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0].payload;
   return (
-    <div className="rounded border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
+    <div>
       <div className="font-medium">{formatMacroDate(p.date)}</div>
       {p.period && <div className="text-muted-foreground tabular-nums">{p.period}</div>}
       <div className={cn("font-bold tabular-nums mt-0.5", variazione && tonoEsito(p.esito))}>

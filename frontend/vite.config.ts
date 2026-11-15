@@ -33,7 +33,7 @@ export default defineConfig({
         // Split the always-loaded framework libs into their own stable vendor
         // chunk. These rarely change between deploys, so isolating them lets
         // browsers keep them cached across app-code releases. Page-specific
-        // heavy deps (lightweight-charts, recharts) are already isolated by
+        // heavy deps (lightweight-charts) are already isolated by
         // the per-route React.lazy splits in App.tsx, so they don't need
         // manual entries here.
         manualChunks(id) {

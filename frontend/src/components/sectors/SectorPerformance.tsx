@@ -1,16 +1,17 @@
 import { Activity, BellRing, Gauge, LineChart as LineChartIcon, TrendingDown, TrendingUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { Card, CardContent } from "@/components/ui/card";
+import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { InfoHint } from "@/components/ui/info-hint";
 import { SectionTitle } from "@/components/ui/section-title";
 import type { AndamentoSettore, Quota, SectorStockRow, SegnaliSettore } from "@/hooks/useSectorDetail";
 import {
   INTERVALLI,
   type Intervallo,
+  type PuntoGrafico,
   formatRendimento,
   letturaAmpiezza,
   quota,
@@ -104,37 +105,20 @@ export function AndamentoCard({ a, nTitoli }: { a: AndamentoSettore; nTitoli: nu
         </div>
 
         <div className="h-[240px] sm:h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={punti} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis
-                dataKey="data"
-                tickFormatter={dataBreve}
-                minTickGap={40}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={(v: number) => formatRendimento(v)}
-                width={56}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-                domain={["auto", "auto"]}
-              />
-              <ReferenceLine y={0} stroke="hsl(var(--border))" />
-              <Tooltip content={<TooltipAndamento etf={etf} />} />
-              <Line type="monotone" dataKey="spy" stroke={COLORI.spy} strokeWidth={1.5} strokeDasharray="4 3"
-                dot={false} isAnimationActive={false} connectNulls />
-              {etf && (
-                <Line type="monotone" dataKey="etf" stroke={COLORI.etf} strokeWidth={1.5} dot={false}
-                  isAnimationActive={false} connectNulls />
-              )}
-              <Line type="monotone" dataKey="settore" stroke={COLORI.settore} strokeWidth={2.25} dot={false}
-                isAnimationActive={false} connectNulls />
-            </LineChart>
-          </ResponsiveContainer>
+          <GraficoSvg
+            dati={punti}
+            x={(p) => p.data}
+            formatoX={dataBreve}
+            formatoY={(v) => formatRendimento(v)}
+            riferimenti={[{ y: 0 }]}
+            etichetta={`Andamento del settore${etf ? `, di ${etf}` : ""} e dell'S&P 500`}
+            serie={[
+              { chiave: "spy", nome: "S&P 500", valore: (p) => p.spy, colore: COLORI.spy, tratteggio: "4 3", connetti: true },
+              ...(etf ? [{ chiave: "etf", nome: etf, valore: (p: (typeof punti)[number]) => p.etf, colore: COLORI.etf, connetti: true }] : []),
+              { chiave: "settore", nome: "Settore", valore: (p) => p.settore, colore: COLORI.settore, spessore: 2.25, connetti: true },
+            ]}
+            tooltip={(p) => <TooltipAndamento p={p} etf={etf} />}
+          />
         </div>
 
         {/* I rendimenti su sei finestre, e lo scarto dall'S&P 500 sotto. */}
@@ -199,16 +183,10 @@ function RigaRendimenti({ nome, valori, forte }: { nome: string; valori: (number
   );
 }
 
-interface VoceTooltip {
-  payload: { data: string; settore: number | null; etf: number | null; spy: number | null };
-}
-
-function TooltipAndamento({ active, payload, etf }: { active?: boolean; payload?: VoceTooltip[]; etf: string | null }) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0].payload;
+function TooltipAndamento({ p, etf }: { p: PuntoGrafico; etf: string | null }) {
   const righe: [string, number | null][] = [["Settore", p.settore], ...(etf ? [[etf, p.etf] as [string, number | null]] : []), ["S&P 500", p.spy]];
   return (
-    <div className="rounded border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
+    <div>
       <div className="mb-0.5 font-medium">{dataBreve(p.data)}</div>
       {righe.map(([nome, v]) => (
         <div key={nome} className="flex justify-between gap-4 tabular-nums">

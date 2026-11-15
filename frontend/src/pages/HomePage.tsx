@@ -21,9 +21,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 
-// The RSI histogram is the ONLY dashboard consumer of recharts (a ~331KB
-// chunk). Lazy-load it so the landing page's critical path ships without the
-// charting library; the card pops in right after first paint.
+// Il grafico RSI resta caricato pigramente. Era l'unico consumatore di
+// recharts del cruscotto (~331 kB); da FA-137 e' SVG scritto a mano e la
+// libreria non c'e' piu', ma la scheda sta sotto la piega e il caricamento
+// pigro non costa niente.
 const RsiHistogramCard = lazy(() =>
   import("@/components/dashboard/RsiHistogramCard").then((m) => ({
     default: m.RsiHistogramCard,

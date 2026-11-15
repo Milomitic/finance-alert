@@ -1,18 +1,8 @@
 import { LineChart as LineChartIcon, Loader2 } from "lucide-react";
 import { useState } from "react";
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { type EquityFilters, useEquityCurve } from "@/hooks/useEquityCurve";
@@ -30,6 +20,9 @@ import { cn } from "@/lib/utils";
  * It's a growth-of-1 ILLUSTRATION, not a tradeable P&L: one unit per signal,
  * sequential, no overlap/sizing/costs. Labeled as such, in keeping with the
  * platform's "don't oversell the edge" stance. */
+
+const COLORE_ASSOLUTA = "hsl(var(--primary))";
+const COLORE_NEUTRA = "#0d9488";
 
 const nf1 = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -152,50 +145,30 @@ export function EquityCurvePanel() {
             </div>
 
             {/* Curve */}
-            <div className="mt-4 h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 12, fill: "var(--muted-foreground, #6b7280)" }}
-                    minTickGap={40}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12, fill: "var(--muted-foreground, #6b7280)" }}
-                    domain={["auto", "auto"]}
-                    tickFormatter={(v: number) => v.toFixed(2)}
-                    width={44}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--card, #fff)",
-                      border: "1px solid rgba(120,120,120,0.3)",
-                      borderRadius: 8,
-                      fontSize: 12,
-                    }}
-                    formatter={(v) => (typeof v === "number" ? v.toFixed(4) : String(v))}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <ReferenceLine y={1} stroke="rgba(120,120,120,0.5)" strokeDasharray="4 4" />
-                  <Line
-                    type="monotone"
-                    dataKey="equity"
-                    name="Assoluta"
-                    stroke="var(--primary, #2563eb)"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="equity_mkt_neutral"
-                    name="Vs mercato"
-                    stroke="#0d9488"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            {/* La legenda era quella di recharts: ora e' una riga sopra il grafico. */}
+            <div className="mt-4 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-4 rounded" style={{ background: COLORE_ASSOLUTA }} aria-hidden />
+                Assoluta
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-4 rounded" style={{ background: COLORE_NEUTRA }} aria-hidden />
+                Vs mercato
+              </span>
+            </div>
+            <div className="mt-1 h-[280px]">
+              <GraficoSvg
+                dati={data.points}
+                x={(p) => p.date}
+                formatoY={(v) => v.toFixed(2)}
+                riferimenti={[{ y: 1, tratteggio: "4 4" }]}
+                etichetta="Curva di equity ipotetica, assoluta e al netto del mercato"
+                serie={[
+                  { chiave: "equity", nome: "Assoluta", valore: (p) => p.equity, colore: COLORE_ASSOLUTA, spessore: 2 },
+                  { chiave: "equity_mkt_neutral", nome: "Vs mercato", valore: (p) => p.equity_mkt_neutral,
+                    colore: COLORE_NEUTRA, spessore: 2 },
+                ]}
+              />
             </div>
 
             <p className="mt-2 text-xs text-muted-foreground">

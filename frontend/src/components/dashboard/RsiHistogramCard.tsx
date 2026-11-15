@@ -1,11 +1,9 @@
 import { BarChart2 } from "lucide-react";
 import { useMemo, useState } from "react";
-import {
-  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 
 import type { IndexBreadth, RsiDistribution } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
+import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { SectionTitle } from "@/components/ui/section-title";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
@@ -100,34 +98,32 @@ export function RsiHistogramCard({ rsi, indices }: Props) {
         </div>
 
         <div className="flex-1 min-h-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis dataKey="bin" fontSize={12} tickLine={false} axisLine={false} interval={1} />
-              <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} width={28} />
-              <Tooltip
-                contentStyle={{
-                  fontSize: 12,
-                  borderRadius: 6,
-                  border: "1px solid var(--border, #e5e7eb)",
-                  background: "var(--background, #fff)",
-                }}
-                labelFormatter={(label) => `RSI bin ${label}`}
-              />
-              {visibleIndices.map((idx) => (
-                <Line
-                  key={idx.code}
-                  type="monotone"
-                  dataKey={idx.code}
-                  stroke={colorFor(idx.code)}
-                  strokeWidth={2}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
-                  isAnimationActive={false}
-                />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <GraficoSvg
+            dati={data}
+            x={(r) => String(r.bin)}
+            ogniX={2}
+            etichetta="Distribuzione dell'RSI(14) per indice"
+            formatoY={(v) => String(Math.round(v))}
+            serie={visibleIndices.map((idx) => ({
+              chiave: idx.code,
+              nome: getIndexMeta(idx.code).displayCode || idx.code,
+              valore: (r: (typeof data)[number]) => r[idx.code] as number | undefined,
+              colore: colorFor(idx.code),
+              spessore: 2,
+              punti: true,
+            }))}
+            tooltip={(r) => (
+              <>
+                <div className="font-medium">RSI bin {r.bin}</div>
+                {visibleIndices.map((idx) => (
+                  <div key={idx.code} className="flex items-center gap-1.5 tabular-nums">
+                    <span className="inline-block h-2 w-2 rounded-full" style={{ background: colorFor(idx.code) }} />
+                    {getIndexMeta(idx.code).displayCode || idx.code}: {String(r[idx.code] ?? "—")}
+                  </div>
+                ))}
+              </>
+            )}
+          />
         </div>
         <div className="text-[0.6765rem] text-muted-foreground mt-2 italic">
           Y = numero di stock per ciascun bin RSI(14). Bins 0-30 = oversold, 70-100 = overbought.

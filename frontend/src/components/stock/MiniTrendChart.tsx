@@ -1,19 +1,11 @@
 import { currencySymbol } from "@/lib/money";
-import {
-  Bar, CartesianGrid, ComposedChart, Line, ReferenceLine,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
+import { GraficoSvg, type SerieGrafico } from "@/components/ui/grafico-svg";
 
 /* Il grafico trimestrale/annuale della scheda Fondamentali.
  *
- * Vive in un file suo per una ragione misurata, non estetica: e' l'unico
- * consumatore di Recharts sulla pagina di un titolo, e importarlo a livello di
- * modulo trascinava 374 kB grezzi (112 kB gz) nel chunk statico della rotta —
- * il 28% del peso di /stocks/:ticker — per una scheda che sta SOTTO la piega.
- * Il grafico principale della pagina e' lightweight-charts, tutt'altra
- * libreria. Il caricamento pigro lo sposta fuori dal percorso critico senza
- * cambiare nulla di visibile: chi scorre fin la' vede lo scheletro per un
- * istante. */
+ * Vive in un file suo, caricato pigramente: era l'unico consumatore di
+ * Recharts sulla pagina di un titolo (374 kB, il 28% della rotta). Da FA-137
+ * e' disegnato da `components/ui/grafico-svg`, e Recharts non c'e' piu'. */
 
 export interface ChartPoint {
   label: string;
@@ -109,6 +101,16 @@ export default function MiniTrendChart({
       : []),
   ];
 
+  type Riga = (typeof scaled)[number];
+  const serie: SerieGrafico<Riga>[] = [
+    ...(hasEstimate ? [{ chiave: "revenue_est", nome: "Revenue est", valore: (p: Riga) => p.revenue_est,
+      colore: C_REV_EST, tipo: "barre" as const, opacita: 0.45 }] : []),
+    { chiave: "revenue", nome: "Revenue", valore: (p) => p.revenue, colore: C_REV, tipo: "barre" },
+    ...(hasEstimate ? [{ chiave: "eps_est", nome: "EPS est", valore: (p: Riga) => p.eps_est, colore: C_EPS_EST,
+      asse: "dx" as const, tratteggio: "4 3", punti: true }] : []),
+    { chiave: "eps", nome: "EPS", valore: (p) => p.eps, colore: C_EPS, asse: "dx", spessore: 2.5, punti: true },
+  ];
+
   return (
     /* ⚠️ La legenda NON e' piu' `<Legend>` di Recharts, ed e' una scelta di
      * layout, non di stile: Recharts RISERVA al grafico un'altezza pari al
@@ -133,54 +135,30 @@ export default function MiniTrendChart({
         ))}
       </div>
 
-      <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart
-        data={scaled}
-        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-        barCategoryGap="35%"
-        barGap={2}
-      >
-        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-        <XAxis dataKey="label" fontSize={10} tickLine={false} axisLine={false} />
-        <YAxis
-          yAxisId="rev" orientation="left" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `${v.toFixed(0)}B`}
-        />
-        <YAxis
-          yAxisId="eps" orientation="right" fontSize={10} tickLine={false} axisLine={false} width={36}
-          tickFormatter={(v) => `${unit}${v.toFixed(1)}`}
-        />
-        <Tooltip
-          contentStyle={{ fontSize: 12, borderRadius: 6, padding: "4px 8px" }}
-          formatter={(value: unknown, name: unknown) => {
-            const n = typeof value === "number" ? value : Number(value);
-            const nm = String(name ?? "");
-            if (nm === "Revenue" || nm === "Revenue est") return [`${unit}${n.toFixed(1)}B`, nm];
-            if (nm === "EPS" || nm === "EPS est") return [`${unit}${n.toFixed(2)}`, nm];
-            return [String(value), nm];
-          }}
-        />
-        {showZeroLine && (
-          <ReferenceLine yAxisId="eps" y={0} stroke="#64748b" strokeOpacity={0.6}
-            strokeDasharray="2 2" />
+      <GraficoSvg
+        dati={scaled}
+        x={(p) => p.label}
+        formatoY={(v) => `${v.toFixed(0)}B`}
+        formatoYDx={(v) => `${unit}${v.toFixed(1)}`}
+        riferimenti={showZeroLine ? [{ y: 0, asse: "dx", tratteggio: "2 2", colore: "#64748b" }] : []}
+        etichetta="Ricavi in miliardi e utile per azione, per periodo"
+        serie={serie}
+        tooltip={(p) => (
+          <>
+            <div className="font-medium">{p.label}</div>
+            {serie.map((s) => {
+              const v = s.valore(p);
+              if (v == null) return null;
+              const ricavi = s.asse !== "dx";
+              return (
+                <div key={s.chiave} className="tabular-nums">
+                  {s.nome}: {unit}{ricavi ? `${v.toFixed(1)}B` : v.toFixed(2)}
+                </div>
+              );
+            })}
+          </>
         )}
-        {hasEstimate && (
-          <Bar yAxisId="rev" dataKey="revenue_est" name="Revenue est"
-            fill={C_REV_EST} fillOpacity={0.45} radius={[2, 2, 0, 0]} maxBarSize={32} />
-        )}
-        <Bar yAxisId="rev" dataKey="revenue" name="Revenue"
-          fill={C_REV} radius={[2, 2, 0, 0]} maxBarSize={32} />
-        {hasEstimate && (
-          <Line yAxisId="eps" type="monotone" dataKey="eps_est" name="EPS est"
-            stroke={C_EPS_EST} strokeDasharray="4 3" strokeWidth={1.5}
-            dot={{ r: 2, fill: C_EPS_EST, stroke: C_EPS_EST }} />
-        )}
-        <Line yAxisId="eps" type="monotone" dataKey="eps" name="EPS"
-          stroke={C_EPS} strokeWidth={2.5}
-          dot={{ r: 3, fill: C_EPS, stroke: C_EPS }}
-          activeDot={{ r: 5, fill: C_EPS, stroke: "#fff", strokeWidth: 2 }} />
-      </ComposedChart>
-      </ResponsiveContainer>
+      />
     </div>
   );
 }
