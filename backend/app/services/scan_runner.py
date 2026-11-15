@@ -562,6 +562,18 @@ def run_tracked_scan(
         except Exception as plan_exc:  # noqa: BLE001
             db.rollback()
             logger.warning(f"[scan_runner] plan outcome maturation failed (non-fatal): {plan_exc}")
+        # Le uscite alternative in prova silenziosa (FA-141), sui piani a
+        # finestra chiusa. Dopo i piani, perche' ne legge la geometria; a parte,
+        # perche' un suo guasto non deve costare la gara vera.
+        try:
+            # ⚠️ I piani sopra sono scritti con commit=False: senza questo
+            # commit un guasto qui sotto li toglierebbe col rollback.
+            db.commit()
+            from app.services import uscite_ombra_service
+            uscite_ombra_service.matura(db)
+        except Exception as ombra_exc:  # noqa: BLE001
+            db.rollback()
+            logger.warning(f"[scan_runner] shadow exit maturation failed (non-fatal): {ombra_exc}")
         # Auto-archive concluded alerts (outcome matured + signal_date past the
         # confluence window). Runs AFTER mature_outcomes so this scan's freshly
         # matured rows are eligible immediately. Best-effort + gated by

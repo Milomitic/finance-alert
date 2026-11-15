@@ -27,6 +27,7 @@ from app.models.modello_ombra import ModelloOmbra
 from app.models.novita_notificata import NovitaNotificata
 from app.models.ohlcv import OhlcvDaily
 from app.models.plan_outcome import PlanOutcome
+from app.models.plan_outcome_ombra import PlanOutcomeOmbra
 from app.models.position import Position
 from app.models.preferito import Preferito, PreferitoEscluso
 from app.models.price_alert import PriceAlert
@@ -71,6 +72,7 @@ __all__ = [
     "ScanRun",
     "StockSetup",
     "PlanOutcome",
+    "PlanOutcomeOmbra",
     "SignalOutcome",
     "SignalCandidate",
     "EsitoOrizzonte",
