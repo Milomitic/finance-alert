@@ -567,11 +567,15 @@ EQUIVALENTI: dict[str, str] = {
     # ⚠️ Il modulo e' passato da 20 a 47 uccisi su 57. Questi dieci non sono i
     # "difficili": sono quelli che NESSUN test onesto puo' uccidere, perche'
     # fissarli congelerebbe una taratura o proverebbe un caso irraggiungibile.
-    "app/services/signal_outcome_service.py::_load_universe_closes#0  GtE -> Gt":
-        "`OhlcvDaily.date >= since` dove `since` e' gia' il minimo trigger "
-        "MENO dieci giorni di margine: un giorno in piu' o in meno resta "
-        "dentro il margine, e il docstring dimostra che la finestra non cambia "
-        "il riferimento al giorno del segnale.",
+    "app/services/signal_outcome_service.py::_cambiato#0  Gt -> GtE":
+        "Il bordo esatto della tolleranza 1e-12 fra due float: una differenza "
+        "pari alla tolleranza non si produce da due ricalcoli delle stesse "
+        "barre, e fissarla sarebbe una taratura, non un contratto.",
+    "app/services/signal_outcome_service.py::riallinea_esiti#0  10 -> 11":
+        "Il margine prima del primo segnale da cui si caricano le chiusure, la "
+        "stessa forma di `_load_universe_closes`: undici giorni invece di dieci "
+        "caricano qualche barra in piu' che nessun calcolo legge, e l'ancora "
+        "di ogni esito resta il giorno del segnale.",
     "app/services/signal_outcome_service.py::_load_stock_closes#0  900 -> 901":
         "SQLite tronca a 999 parametri legati, e 900 e' il margine sotto quel "
         "tetto. Il vincolo e' `< 999`, non `== 900`: 901 lo soddisfa "

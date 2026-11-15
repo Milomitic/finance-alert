@@ -114,3 +114,61 @@ def test_il_job_salta_durante_una_scansione_e_altrimenti_riallinea(db, monkeypat
     monkeypatch.setattr(scan_lock, "is_running", lambda: False)
     job.run_riallinea_esiti()
     assert chiamate == ["alert", "orizzonti"]
+
+
+# ─── Il contratto del conteggio e del commit ──────────────────────────────
+# Trovati dalla sonda di mutazione: senza questi, un contatore sbagliato, un
+# ritorno anticipato con una sola delle due liste o un commit mancato
+# passavano tutti.
+
+def test_il_conteggio_degli_esaminati_e_esatto(db, monkeypatch):
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 5)
+    _seme(db)
+    sos.mature_outcomes(db)
+    sos.mature_candidate_outcomes(db)
+    assert sos.riallinea_esiti(db) == {
+        "alert_esaminati": 1, "alert_cambiati": 0,
+        "scartati_esaminati": 1, "scartati_cambiati": 0,
+    }
+
+
+def test_con_i_soli_alert_si_riallinea_e_si_salva(db, monkeypatch):
+    """Nessuno scartato: il ritorno anticipato vale solo se mancano ENTRAMBI,
+    e il commit parte anche se e' cambiato uno solo dei due."""
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 5)
+    titoli, _a = _seme(db)
+    db.query(SignalCandidate).delete()
+    db.commit()
+    sos.mature_outcomes(db)
+    o = db.execute(select(SignalOutcome)).scalars().one()
+    prima = o.fwd_return
+    _correggi(db, titoli[0].id, 35, 0.9)
+    out = sos.riallinea_esiti(db)
+    assert (out["alert_cambiati"], out["scartati_esaminati"]) == (1, 0)
+    db.rollback()                  # cio' che non e' stato salvato sparisce qui
+    db.refresh(o)
+    assert o.fwd_return < prima
+
+
+def test_senza_commit_non_si_salva(db, monkeypatch):
+    monkeypatch.setattr(sos, "_horizon_days", lambda _d: 5)
+    titoli, _a = _seme(db)
+    sos.mature_outcomes(db)
+    sos.mature_candidate_outcomes(db)
+    o = db.execute(select(SignalOutcome)).scalars().one()
+    prima = o.fwd_return
+    _correggi(db, titoli[0].id, 35, 0.9)
+    assert sos.riallinea_esiti(db, commit=False)["alert_cambiati"] == 1
+    db.rollback()
+    db.refresh(o)
+    assert o.fwd_return == prima
+
+
+def test_un_valore_che_compare_o_sparisce_e_un_cambiamento():
+    """Un esito che prima non c'era (o non c'e' piu') e' un cambiamento, e due
+    assenze no. Con un solo None il confronto numerico solleverebbe."""
+    assert sos._cambiato(None, 0.1) is True
+    assert sos._cambiato(0.1, None) is True
+    assert sos._cambiato(None, None) is False
+    assert sos._cambiato(0.1, 0.1) is False
+    assert sos._cambiato(0.1, 0.2) is True
