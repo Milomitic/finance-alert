@@ -123,7 +123,7 @@ def controllo(p: PlanOutcome, barre: dict[int, list[Barra]],
         esiti = {v.nome: uo.corri_variante(lato=lato, ingresso=ing, stop=stop, tp1=tp1,
                                            r=k_stop * ac, barre=bb[i + 1:],
                                            orizzonte=p.horizon_days, variante=v)
-                 for v in uo.VARIANTI}
+                 for v in uo.VARIANTI if not v.vol_modello}
         if any(e is None for e in esiti.values()):
             continue
         for nome, e in esiti.items():
@@ -146,7 +146,7 @@ def rapporto(db, *, con_controllo: bool = True) -> dict:
         select(PlanOutcomeOmbra).where(PlanOutcomeOmbra.method_version == ver)
     ).scalars():
         righe[o.alert_id][o.variante] = o.r_multiple
-    complete = [a for a, v in righe.items() if len(v) == len(uo.VARIANTI) and a in piani]
+    complete = [a for a, v in righe.items() if all(n in v for n in uo.SEMPRE) and a in piani]
 
     parita = [abs(righe[a]["attuale"] - piani[a].r_multiple) < 1e-6 for a in complete]
     out: dict = {"versione": ver, "trade": len(complete),
@@ -167,6 +167,8 @@ def rapporto(db, *, con_controllo: bool = True) -> dict:
             continue
         gruppi: dict[tuple[str, int], list[int]] = defaultdict(list)
         for a in complete:
+            if v.nome not in righe[a]:
+                continue
             gruppi[("tutti", piani[a].horizon_days)].append(a)
             gruppi[(piani[a].detector, piani[a].horizon_days)].append(a)
         voci = {}

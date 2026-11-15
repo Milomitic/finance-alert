@@ -55,6 +55,11 @@ class Variante:
     pareggio_dopo_r: float | None = None
     #: A meta' orizzonte si esce se il trade vale meno di tanti R.
     uscita_meta_sotto_r: float | None = None
+    #: FA-155: distanze di stop e target moltiplicate per il fattore di
+    #: volatilita' del modello in prova (`snapshot.first_ombra.vol.fattore`),
+    #: cioe' la stessa geometria in «ATR del modello» invece che nell'ATR.
+    #: Esiste solo per gli alert che il fattore ce l'hanno.
+    vol_modello: bool = False
 
 
 VARIANTI: tuple[Variante, ...] = (
@@ -62,7 +67,12 @@ VARIANTI: tuple[Variante, ...] = (
     Variante("pareggio_1r", pareggio_dopo_r=1.0),
     Variante("pareggio_05r", pareggio_dopo_r=0.5),
     Variante("uscita_meta", uscita_meta_sotto_r=0.25),
+    Variante("vol_modello", vol_modello=True),
 )
+
+#: Le varianti che ogni piano chiuso ha. `vol_modello` no: il modello di
+#: volatilita' esiste dal 2026-09-24 e solo per gli alert nati dopo.
+SEMPRE: tuple[str, ...] = tuple(v.nome for v in VARIANTI if not v.vol_modello)
 
 
 @dataclass(frozen=True)
@@ -113,6 +123,26 @@ def corri_variante(
     return EsitoVariante("scaduto", (ultima.chiusura - ingresso) * segno / r, len(finestra))
 
 
+def _fattori_vol(db: Session, alert_ids: list[int]) -> dict[int, float]:
+    """{alert_id: fattore di volatilita' del modello}, dalla prima emissione."""
+    import json  # noqa: PLC0415
+
+    from app.models import Alert  # noqa: PLC0415
+
+    out: dict[int, float] = {}
+    for i in range(0, len(alert_ids), 900):
+        for aid, snap in db.execute(
+            select(Alert.id, Alert.snapshot).where(Alert.id.in_(alert_ids[i:i + 900]))
+        ).all():
+            try:
+                f = (json.loads(snap or "{}").get("first_ombra") or {}).get("vol", {}).get("fattore")
+            except (ValueError, AttributeError):
+                continue
+            if isinstance(f, (int, float)) and 0.1 <= f <= 10:
+                out[aid] = float(f)
+    return out
+
+
 def versione() -> str:
     return f"{PLAN_METHOD_VERSION}.{VERSIONE_VARIANTI}"
 
@@ -133,6 +163,7 @@ def matura(db: Session, *, commit: bool = True) -> int:
                PlanOutcome.legs_window_complete.is_(True))
         .order_by(PlanOutcome.stock_id, PlanOutcome.alert_id)
     ).scalars().all()
+    fattori = _fattori_vol(db, [p.alert_id for p in piani])
     vecchie = {
         (a, v): riga for riga in db.execute(
             select(PlanOutcomeOmbra).where(PlanOutcomeOmbra.method_version != ver)
@@ -142,7 +173,9 @@ def matura(db: Session, *, commit: bool = True) -> int:
     scritte = 0
     barre_titolo: tuple[int, list[Barra]] | None = None
     for p in piani:
-        mancanti = [v for v in VARIANTI if (p.alert_id, v.nome) not in gia]
+        f_vol = fattori.get(p.alert_id)
+        mancanti = [v for v in VARIANTI if (p.alert_id, v.nome) not in gia
+                    and (not v.vol_modello or f_vol is not None)]
         if not mancanti:
             continue
         if barre_titolo is None or barre_titolo[0] != p.stock_id:
@@ -150,7 +183,10 @@ def matura(db: Session, *, commit: bool = True) -> int:
         dopo = [b for b in barre_titolo[1] if b.data > p.entry_date.isoformat()]
         lato = "long" if p.tone == "bull" else "short"
         for v in mancanti:
-            e = corri_variante(lato=lato, ingresso=p.entry, stop=p.stop, tp1=p.tp1, r=p.r,
+            k = f_vol if v.vol_modello else 1.0
+            e = corri_variante(lato=lato, ingresso=p.entry,
+                               stop=p.entry - (p.entry - p.stop) * k,
+                               tp1=p.entry + (p.tp1 - p.entry) * k, r=p.r * k,
                                barre=dopo, orizzonte=p.horizon_days, variante=v)
             if e is None:
                 continue

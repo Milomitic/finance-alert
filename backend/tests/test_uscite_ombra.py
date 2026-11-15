@@ -1,6 +1,8 @@
 """Uscite alternative del piano in prova silenziosa (FA-141)."""
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from app.models import Alert, OhlcvDaily, PlanOutcome, PlanOutcomeOmbra, Stock
 from app.services import uscite_ombra_service as uo
 from app.services.plan_outcome_service import PLAN_METHOD_VERSION, Barra, corri_la_gara
@@ -114,3 +116,37 @@ def test_matura_scrive_le_quattro_varianti_solo_a_finestra_chiusa(db):
     assert {r.alert_id for r in righe.values()} == {ids[0]}
     assert righe["attuale"].r_multiple == -1.0 and righe["pareggio_1r"].esito == "pareggio"
     assert uo.matura(db) == 0          # idempotente
+
+
+def test_la_variante_del_modello_scala_la_geometria_col_suo_fattore(db):
+    """FA-155: con fattore 2 lo stop e' due volte piu' lontano, quindi il
+    ritorno a 89 che chiude il piano di oggi qui non lo tocca."""
+    import json
+
+    s = Stock(ticker="VOLM", exchange="X", name="Volm")
+    db.add(s)
+    db.flush()
+    giorno = date(2026, 1, 1)
+    for i, (alto, basso, ch) in enumerate([(100, 100, 100)] + [(b.alto, b.basso, b.chiusura) for b in RITORNO]):
+        db.add(OhlcvDaily(stock_id=s.id, date=giorno + timedelta(days=i), open=ch, high=alto,
+                          low=basso, close=ch, volume=1))
+    a = Alert(stock_id=s.id, signal_name="trend_pullback", trigger_price=100.0,
+              triggered_at=datetime(2026, 1, 1, tzinfo=UTC),
+              snapshot=json.dumps({"first_ombra": {"vol": {"fattore": 2.0, "versione": "x"}}}))
+    db.add(a)
+    db.flush()
+    db.add(PlanOutcome(
+        alert_id=a.id, stock_id=s.id, detector="trend_pullback", signal_date=giorno,
+        tone="bull", horizon_days=6, entry_date=giorno, entry=100.0, stop=90.0, tp1=130.0,
+        tp2=None, r=10.0, esito="stop", resolved_date=giorno, bars_to_outcome=3,
+        r_multiple=-1.0, mae_r=1.1, mfe_r=1.2, tp2_reached=False,
+        method_version=PLAN_METHOD_VERSION, legs_window_complete=True,
+        matured_at=datetime.now(UTC)))
+    db.commit()
+    assert uo.matura(db) == 5
+    righe = {r.variante: r for r in db.query(PlanOutcomeOmbra).all()}
+    assert righe["attuale"].esito == "stop"
+    # Stop a 80, target a 160, R = 20: scade alla chiusura dell'ultima barra (95).
+    assert righe["vol_modello"].esito == "scaduto"
+    assert righe["vol_modello"].r_multiple == pytest.approx((95 - 100) / 20)
+    assert uo._fattori_vol(db, [a.id, 999]) == {a.id: 2.0}

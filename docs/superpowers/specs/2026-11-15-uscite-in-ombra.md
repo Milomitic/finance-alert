@@ -75,3 +75,21 @@ condizioni:
 Una variante che non passa si scrive e si chiude. Non si cerca una quinta
 variante dentro gli stessi dati: sarebbe la regola B dello studio
 condizionale.
+
+## La variante del modello di volatilità (FA-155, aggiunta il 2026-11-15)
+
+`vol_modello` usa la regola di oggi, con le distanze di stop e target
+moltiplicate per `snapshot.first_ombra.vol.fattore`. È la stima del modello in
+prova di quanto si muoverà il titolo rispetto al suo ATR, quindi la geometria
+risulta espressa in «ATR del modello» invece che nell'ATR. Esiste solo per gli
+alert che hanno il fattore, cioè quelli nati dal 2026-09-24 in poi.
+
+⚠️ La scala vale per **tutta** la distanza dello stop, anche quando il piano
+la ricava da un livello strutturale (l'invalidazione del detector) e non
+dall'ATR. È un'approssimazione dichiarata. Se la variante supera il criterio,
+prima di adottarla si rifà la geometria dentro `trade_plan`, dove la parte
+strutturale e quella di volatilità sono separate.
+
+Il criterio è quello delle altre varianti, più il vincolo già scritto per
+FA-155: niente prima di marzo 2027, e solo se la lettura dal vivo di
+`rapporto_modelli_ombra` conferma R² > 0 contro l'ATR.
