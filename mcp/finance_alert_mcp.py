@@ -199,11 +199,106 @@ def calendario(giorni: int = 7, tipo: str | None = None) -> Any:
         "kinds": tipo}))
 
 
+def riassumi_cella(c: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Le misure che servono per leggere un tasso: campione, finestre
+    indipendenti, intervallo e verdetto."""
+    if not c:
+        return None
+    return {k: c.get(k) for k in (
+        "n", "effective_n", "horizon_days", "mkt_neutral_hit_rate", "skill_ci_low",
+        "skill_ci_high", "skill_verdict", "abs_hit_rate", "avg_fwd_return",
+        "mkt_neutral_hit_rate_per_giorno", "giorni")}
+
+
 @mcp.tool(annotations=SOLA_LETTURA)
-def prestazioni_detector() -> Any:
+def prestazioni_detector(detector: str | None = None) -> Any:
     """Gli esiti dei segnali per detector, al netto del mercato, con i campioni.
-    Leggere l'intervallo, non il solo tasso: le finestre indipendenti sono poche."""
-    return sfoltisci(chiama("/api/platform/detector-performance"))
+    Senza `detector`: una riga per detector (campione, finestre indipendenti,
+    intervallo, verdetto). Con `detector` (es. "trend_pullback"): il dettaglio
+    per regime, tono, Forza e orizzonte. Leggere l'intervallo, non il solo
+    tasso: le finestre indipendenti sono poche."""
+    d = chiama("/api/platform/detector-performance")
+    righe = d.get("detectors") or []
+    if detector:
+        for r in righe:
+            if r.get("detector") == detector:
+                return sfoltisci(r)
+        return {"errore": f"detector sconosciuto: {detector}",
+                "disponibili": [r.get("detector") for r in righe]}
+    return {"meta": d.get("meta"), "complessivo": riassumi_cella(d.get("overall")),
+            "detector": [{"detector": r.get("detector"), **(riassumi_cella(r.get("total")) or {})}
+                         for r in righe]}
+
+
+@mcp.tool(annotations=SOLA_LETTURA)
+def rischio_posizioni() -> Any:
+    """Il rischio delle posizioni eToro aperte: distanza dallo stop in % e in
+    ATR, frequenza storica di stop e target, esposizione per sottostante (un
+    fondo a leva conta per il suo multiplo), scenario lineare sugli indici,
+    correlazione, costo di tenuta. Statistica storica, non una previsione."""
+    return sfoltisci(chiama("/api/etoro/rischio"))
+
+
+@mcp.tool(annotations=SOLA_LETTURA)
+def primo_passaggio(simbolo: str, stop_pct: float, target_pct: float | None = None,
+                    lato: str = "long", sedute: int = 21) -> Any:
+    """In quante finestre storiche disgiunte il prezzo ha toccato prima lo
+    stop o prima il target, entro `sedute`. Distanze come frazioni del prezzo
+    d'ingresso: stop_pct=0.05 vuol dire stop al 5%. lato: "long" o "short".
+    Null se la storia non basta."""
+    return chiama("/api/etoro/primo-passaggio", {
+        "simbolo": simbolo.strip().upper(), "stop_pct": stop_pct, "target_pct": target_pct,
+        "lato": lato, "sedute": sedute})
+
+
+#: I filtri dello screener che lo strumento espone, coi nomi dell'API.
+FILTRI_SCREENER = (
+    "q", "exchange", "sector", "industry", "country", "index", "risk", "min_score", "score_max",
+    "tech_min", "tech_max", "posture", "rsi_min", "rsi_max", "above_ema50", "above_ema200",
+    "near_52w_high", "near_52w_low", "vol_spike", "market_cap_min", "market_cap_max",
+    "has_signals", "exclude_etf", "solo_dati_completi", "sort_by", "sort_dir",
+)
+
+
+@mcp.tool(annotations=SOLA_LETTURA)
+def screener(filtri: dict[str, Any] | None = None, limite: int = 30) -> Any:
+    """Lo screener dei titoli. `filtri` con i nomi dell'API, per esempio
+    {"sector": ["Technology"], "min_score": 60, "posture": ["Forte"],
+    "sort_by": "composite", "sort_dir": "desc"}. Le capitalizzazioni sono in
+    dollari. Filtri accettati: q, exchange, sector, industry, country, index,
+    risk, min_score, score_max, tech_min, tech_max, posture, rsi_min, rsi_max,
+    above_ema50, above_ema200, near_52w_high, near_52w_low, vol_spike,
+    market_cap_min, market_cap_max, has_signals, exclude_etf,
+    solo_dati_completi, sort_by, sort_dir."""
+    filtri = filtri or {}
+    ignoti = sorted(set(filtri) - set(FILTRI_SCREENER))
+    if ignoti:
+        return {"errore": f"filtri sconosciuti: {ignoti}", "accettati": list(FILTRI_SCREENER)}
+    d = chiama("/api/stocks", {**filtri, "limit": min(max(1, limite), 100)})
+    righe = []
+    for it in d.get("items") or []:
+        st, sc, te, me = (it.get(k) or {} for k in ("stock", "score", "technical", "metrics"))
+        righe.append({"ticker": st.get("ticker"), "nome": st.get("name"), "settore": st.get("sector"),
+                      "qualita": sc.get("composite"), "tecnico": te.get("composite"),
+                      "postura": te.get("posture"), "prezzo": me.get("last_close"),
+                      "variazione_pct": me.get("change_pct"), "rsi": me.get("rsi14")})
+    return {"totale": d.get("total"), "titoli": righe}
+
+
+@mcp.tool(annotations=SOLA_LETTURA)
+def confronti(ticker: str) -> Any:
+    """Un titolo a confronto: i pari (stessa industria, capitalizzazione in
+    dollari piu' vicina), le reazioni del prezzo alle trimestrali passate e
+    quale pilastro ha mosso il punteggio Qualita' a 30 e 90 giorni."""
+    t = ticker.strip().upper()
+    out: dict[str, Any] = {}
+    for chiave, percorso in (("pari", "pari"), ("reazioni_trimestrali", "reazioni-trimestrali"),
+                             ("variazione_punteggio", "variazione-punteggio")):
+        try:
+            out[chiave] = sfoltisci(chiama(f"/api/stocks/{t}/{percorso}"))
+        except ErroreApp as e:
+            out[chiave] = str(e)
+    return out
 
 
 @mcp.tool(annotations=SOLA_LETTURA)

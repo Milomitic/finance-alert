@@ -227,3 +227,36 @@ def test_sotto_pytest_l_avvio_non_lancia_thread_di_riscaldamento(monkeypatch):
     main._warm_sector_performance_on_boot()
     main._warm_premarket_on_boot()
     assert partiti == []
+
+
+def test_l_endpoint_del_primo_passaggio(db, monkeypatch):
+    """FA-159: lo stesso calcolo della scheda, per uno stop qualunque."""
+    from datetime import date, timedelta
+
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_user, get_db
+    from app.main import app
+    from app.models import OhlcvDaily, Stock, User
+
+    s = Stock(ticker="PP", exchange="X", name="PP")
+    u = User(username="pp", password_hash="x")
+    db.add_all([s, u])
+    db.flush()
+    for i in range(400):
+        c = 100.0 + (i % 10)
+        db.add(OhlcvDaily(stock_id=s.id, date=date(2024, 1, 1) + timedelta(days=i), open=c,
+                          high=c + 1, low=c - 1, close=c, volume=1))
+    db.commit()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: u
+    try:
+        c = TestClient(app)
+        r = c.get("/api/etoro/primo-passaggio", params={"simbolo": "pp", "stop_pct": 0.05,
+                                                         "target_pct": 0.05, "sedute": 10})
+        assert r.status_code == 200 and r.json()["finestre"] > 0
+        assert c.get("/api/etoro/primo-passaggio", params={"simbolo": "PP", "stop_pct": 0.05,
+                                                           "lato": "su"}).status_code == 422
+        assert c.get("/api/etoro/primo-passaggio", params={"simbolo": "PP", "stop_pct": 2}).status_code == 422
+    finally:
+        app.dependency_overrides.clear()

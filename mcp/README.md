@@ -16,8 +16,12 @@ in rete.
 | `notizie` | notizie recenti di un titolo |
 | `posizioni_etoro` | conto e posizioni aperte |
 | `calendario` | macro e trimestrali dei prossimi giorni |
-| `prestazioni_detector` | esiti dei segnali al netto del mercato, con i campioni |
+| `prestazioni_detector` | esiti dei segnali al netto del mercato, con i campioni: una riga per detector, il dettaglio con `detector=` |
 | `esiti_piani` | esiti dei piani (stop contro target) in multipli di R |
+| `rischio_posizioni` | rischio delle posizioni eToro: distanza dallo stop, frequenza storica di stop e target, esposizione per sottostante, scenari |
+| `primo_passaggio` | per uno stop e un target qualunque su un simbolo, quante finestre storiche hanno toccato prima l'uno o l'altro |
+| `screener` | lo screener dei titoli coi filtri dell'API |
+| `confronti` | pari, reazioni alle trimestrali e variazione del punteggio di un titolo |
 | `storico` | barre giornaliere di un titolo (~10 anni, dal database) o di un mercato (indici, materie prime, crypto: storia completa), per statistiche sul passato |
 
 `storico` restituisce migliaia di righe in forma a colonne: il client le salva

@@ -610,6 +610,30 @@ def _costo_tenuta(db: Session, p: dict, pos: EtoroPosizione) -> EtoroCostoTenuta
     )
 
 
+@router.get("/primo-passaggio", response_model=EtoroPrimoPassaggioOut | None)
+def primo_passaggio(
+    simbolo: str,
+    lato: str = "long",
+    stop_pct: float = Query(gt=0, lt=1),
+    target_pct: float | None = Query(None, gt=0),
+    sedute: int = Query(21, ge=1, le=252),
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> EtoroPrimoPassaggioOut | None:
+    """FA-159: per uno stop e un target qualunque, in quante finestre storiche
+    disgiunte il prezzo ha toccato prima l'uno o l'altro. Le distanze sono
+    frazioni del prezzo d'ingresso (0,05 = 5%). Barre dal catalogo, o da Yahoo
+    per uno strumento che il catalogo non ha. Null se la storia non basta."""
+    from app.services import rischio_posizioni_service as rp  # noqa: PLC0415
+
+    if lato not in ("long", "short"):
+        raise HTTPException(status_code=422, detail="lato deve essere long o short")
+    s = db.execute(select(Stock).where(Stock.ticker == simbolo.strip().upper()).limit(1)).scalars().first()
+    barre = rp._barre_catalogo(db, s.id) if s is not None else rp._barre_yahoo(simbolo.strip().upper())
+    esito = rp.primo_passaggio(barre, lato, stop_pct, target_pct, sedute)
+    return EtoroPrimoPassaggioOut(**esito) if esito else None
+
+
 @router.get("/rischio", response_model=EtoroRischioOut)
 def rischio(
     db: Session = Depends(get_db),

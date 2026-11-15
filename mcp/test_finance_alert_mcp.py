@@ -133,3 +133,55 @@ def test_storico_di_un_simbolo_sconosciuto_elenca_i_mercati(monkeypatch) -> None
     monkeypatch.setattr(srv, "chiama", finto)
     with pytest.raises(srv.ErroreApp, match=r"\^IXIC"):
         srv.leggi_storico("XYZ")
+
+
+# ─── FA-159 ────────────────────────────────────────────────────────────────
+
+def test_prestazioni_riassunte_e_dettaglio_su_richiesta(monkeypatch) -> None:
+    cella = {"n": 100, "effective_n": 4, "horizon_days": 21, "mkt_neutral_hit_rate": 52.0,
+             "skill_ci_low": 30.0, "skill_ci_high": 70.0, "skill_verdict": "inconclusive",
+             "abs_hit_rate": 55.0, "avg_fwd_return": 0.4, "rumore": "x" * 1000}
+    risposta = {"meta": {"total_rows": 100}, "overall": cella,
+                "detectors": [{"detector": "sr_flip", "total": cella, "by_regime": [cella] * 5}]}
+    monkeypatch.setattr(srv, "chiama", lambda p, q=None: risposta)
+    r = srv.prestazioni_detector()
+    assert r["detector"] == [{"detector": "sr_flip", **srv.riassumi_cella(cella)}]
+    assert r["detector"][0]["effective_n"] == 4 and r["detector"][0]["giorni"] is None
+    assert "rumore" not in str(r)
+    assert srv.prestazioni_detector("sr_flip")["by_regime"]
+    assert srv.prestazioni_detector("nessuno")["disponibili"] == ["sr_flip"]
+
+
+def test_lo_screener_rifiuta_filtri_sconosciuti_e_riassume_le_righe(monkeypatch) -> None:
+    chiamate = []
+
+    def finto(p, q=None):
+        chiamate.append((p, q))
+        return {"total": 1, "items": [{"stock": {"ticker": "AAPL", "name": "Apple", "sector": "Tech"},
+                                       "score": {"composite": 70}, "technical": {"composite": 60, "posture": "Forte"},
+                                       "metrics": {"last_close": 200.0, "change_pct": 1.2, "rsi14": 55}}]}
+    monkeypatch.setattr(srv, "chiama", finto)
+    assert "accettati" in srv.screener({"settore": "x"})
+    r = srv.screener({"min_score": 60, "sector": ["Technology"]}, limite=500)
+    assert r["titoli"][0] == {"ticker": "AAPL", "nome": "Apple", "settore": "Tech", "qualita": 70,
+                              "tecnico": 60, "postura": "Forte", "prezzo": 200.0,
+                              "variazione_pct": 1.2, "rsi": 55}
+    assert chiamate[-1] == ("/api/stocks", {"min_score": 60, "sector": ["Technology"], "limit": 100})
+
+
+def test_primo_passaggio_rischio_e_confronti_chiamano_le_rotte_giuste(monkeypatch) -> None:
+    chiamate = []
+
+    def finto(p, q=None):
+        chiamate.append((p, q))
+        if p.endswith("variazione-punteggio"):
+            raise srv.ErroreApp("404")
+        return {"ok": True}
+    monkeypatch.setattr(srv, "chiama", finto)
+    srv.primo_passaggio(" soxl ", 0.05, 0.1, lato="short", sedute=10)
+    assert chiamate[-1] == ("/api/etoro/primo-passaggio", {"simbolo": "SOXL", "stop_pct": 0.05,
+                                                           "target_pct": 0.1, "lato": "short", "sedute": 10})
+    srv.rischio_posizioni()
+    assert chiamate[-1][0] == "/api/etoro/rischio"
+    c = srv.confronti("aapl")
+    assert c["pari"] == {"ok": True} and "404" in c["variazione_punteggio"]
