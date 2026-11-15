@@ -488,6 +488,16 @@ class PlanPerfMetaOut(BaseModel):
     min_n: int
 
 
+class PlanPerfNettaOut(BaseModel):
+    #: Su quanti trade: solo quelli il cui titolo si negozia su eToro.
+    n: int
+    #: Due commissioni e lo spread: a leva 1 eToro non addebita notti.
+    leva_1: float | None = None
+    #: Lo stesso con le notti alla leva tipica del conto.
+    leva_tipica: float | None = None
+    leva: int | None = None
+
+
 class PlanPerfRowOut(BaseModel):
     detector: str
     n: int
@@ -512,6 +522,9 @@ class PlanPerfRowOut(BaseModel):
     low_confidence: bool
     #: Le righe di questo detector escluse perche' a finestra ancora aperta.
     open_excluded: int = 0
+    #: L'attesa al netto dei costi di eToro (FA-142), sui soli trade il cui
+    #: titolo e' su eToro. None se nessuno lo e'.
+    expectancy_r_netta: PlanPerfNettaOut | None = None
 
 
 class PlanPerformanceOut(BaseModel):

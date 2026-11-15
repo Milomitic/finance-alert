@@ -31,6 +31,12 @@ export function expectancyInterval(row: PlanPerfRow): string {
 
 /** `+0.25R` / `-1.00R`: il segno è sempre esplicito, perché un'attesa senza
  *  segno si legge come un valore assoluto. */
+/** «+0.12R», o «—» se manca. */
+export function formatRSegnato(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}R`;
+}
+
 export function expectancyLabel(row: PlanPerfRow): string {
   return `${row.expectancy_r >= 0 ? "+" : ""}${row.expectancy_r.toFixed(2)}R`;
 }

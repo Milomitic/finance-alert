@@ -40,6 +40,7 @@ const JOB_LABEL: Record<string, string> = {
   health_probes_slow: "Probe salute (set lento)",
   addestra_modelli_ombra: "Addestramento modelli in prova",
   riallinea_esiti: "Riallineamento esiti ai dati correnti",
+  costi_tipici: "Costi tipici eToro per titolo",
   archivia_fondamentali: "Archivio analisti / scoperto / insider",
   archivia_opzioni: "Archivio volatilità implicita (opzioni USA)",
   archivia_consenso_macro: "Archivio consensi macro (Forexfactory)",

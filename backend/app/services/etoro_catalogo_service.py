@@ -171,7 +171,13 @@ def costi(db: Session, ticker: str, *, lato: str, leva: int, importo: float, sto
         except (TypeError, ValueError):
             continue
         valuta = (c.get("currency") or "USD").upper()
-        usd = valore if valuta == "USD" else fx_service.to_usd(valore, valuta)
+        if valuta == "GBX":
+            # ⚠️ I titoli di Londra: eToro da' la notte in pence, che il cambio
+            # non conosce (`GBXUSD=X` non esiste). Senza questa riga la notte
+            # di ogni titolo .L risultava sconosciuta. Misurato il 2026-11-15.
+            usd = fx_service.to_usd(valore / 100.0, "GBP")
+        else:
+            usd = valore if valuta == "USD" else fx_service.to_usd(valore, valuta)
         voci.append(Voce(tipo=c["costType"], importo=valore, valuta=valuta, importo_usd=usd))
     esito = Costi(
         simbolo=riga.simbolo, voci=voci,

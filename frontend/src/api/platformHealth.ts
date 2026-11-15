@@ -446,6 +446,18 @@ export type PlanPerfRow = {
   low_confidence: boolean;
   /** Righe di questo detector escluse perché a finestra ancora aperta. */
   open_excluded: number;
+  /** L'attesa al netto dei costi di eToro (FA-142), sui soli trade il cui
+   *  titolo è su eToro: `n` dice quanti. null se nessuno lo è. */
+  expectancy_r_netta: PlanPerfNetta | null;
+};
+
+export type PlanPerfNetta = {
+  n: number;
+  /** Commissioni andata e ritorno e spread: a leva 1 eToro non addebita notti. */
+  leva_1: number | null;
+  /** Lo stesso con le notti alla leva tipica del conto. */
+  leva_tipica: number | null;
+  leva: number | null;
 };
 
 export type PlanPerformance = { meta: PlanPerfMeta; rows: PlanPerfRow[] };

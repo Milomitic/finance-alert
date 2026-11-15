@@ -92,6 +92,7 @@ export type _M7_DetectorPerformance = Nessuno<SoloNelFrontend<M7.DetectorPerform
 export type _M7_PlanCoverage = Nessuno<SoloNelFrontend<M7.PlanCoverage, S.PlanCoverageOut>>;
 export type _M7_PlanPerfMeta = Nessuno<SoloNelFrontend<M7.PlanPerfMeta, S.PlanPerfMetaOut>>;
 export type _M7_PlanPerfRow = Nessuno<SoloNelFrontend<M7.PlanPerfRow, S.PlanPerfRowOut>>;
+export type _M7_PlanPerfNetta = Nessuno<SoloNelFrontend<M7.PlanPerfNetta, S.PlanPerfNettaOut>>;
 export type _M7_PlanPerformance = Nessuno<SoloNelFrontend<M7.PlanPerformance, S.PlanPerformanceOut>>;
 export type _M7_InfraComponent = Nessuno<SoloNelFrontend<M7.InfraComponent, S.InfraComponentOut>>;
 export type _M7_TargetDown = Nessuno<SoloNelFrontend<M7.TargetDown, S.TargetDownOut>>;

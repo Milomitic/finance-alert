@@ -61,7 +61,38 @@ def _chiusa(riga: PlanOutcome) -> bool:
     return riga.legs_window_complete is True
 
 
-def _cella(detector: str, righe: Sequence[PlanOutcome], min_n: int) -> dict:
+def _netta(righe: Sequence[PlanOutcome], costi: dict, leva: int | None) -> dict | None:
+    """L'attesa al netto dei costi di eToro (FA-142), sui soli trade il cui
+    titolo e' su eToro. A leva 1 commissioni e spread; alla leva tipica anche
+    le notti, contate in giorni di calendario fra ingresso e uscita."""
+    from app.services.costi_tipici_service import costo_in_r  # noqa: PLC0415
+
+    a_uno, a_leva = [], []
+    for r in righe:
+        c = costi.get(r.stock_id)
+        if c is None:
+            continue
+        lato = "long" if r.tone == "bull" else "short"
+        notti = max(0, (r.resolved_date - r.entry_date).days)
+        uno = costo_in_r(costo=c, ingresso=r.entry, r=r.r, lato=lato, notti=notti, con_leva=False)
+        if uno is None:
+            continue
+        a_uno.append(r.r_multiple - uno)
+        con = costo_in_r(costo=c, ingresso=r.entry, r=r.r, lato=lato, notti=notti, con_leva=True)
+        if con is not None:
+            a_leva.append(r.r_multiple - con)
+    if not a_uno:
+        return None
+    return {
+        "n": len(a_uno),
+        "leva_1": sum(a_uno) / len(a_uno),
+        "leva_tipica": sum(a_leva) / len(a_leva) if a_leva else None,
+        "leva": leva,
+    }
+
+
+def _cella(detector: str, righe: Sequence[PlanOutcome], min_n: int,
+           costi: dict | None = None, leva: int | None = None) -> dict:
     """Le misure di un gruppo di righe, calcolate sulle sole finestre CHIUSE.
 
     ⚠️ Il chiamante garantisce che almeno una lo sia: una media di zero righe
@@ -130,6 +161,8 @@ def _cella(detector: str, righe: Sequence[PlanOutcome], min_n: int) -> dict:
         # Le escluse si DICONO: sparire in silenzio sarebbe lo stesso difetto
         # della copertura, con un'altra popolazione.
         "open_excluded": aperte,
+        # FA-142: quanto resta dopo i costi. Sulle stesse righe chiuse.
+        "expectancy_r_netta": _netta(righe, costi or {}, leva),
     }
 
 
@@ -153,7 +186,10 @@ def compute_plan_performance(db: Session, *, min_n: int = _DEFAULT_MIN_N) -> dic
     # media di zero righe — quindi non entra in classifica. Ma NON sparisce:
     # sta in `only_open` col suo conteggio, per la stessa ragione per cui
     # esiste la copertura qui sotto.
-    celle = [_cella(d, rs, min_n) for d, rs in sorted(per_detector.items())
+    from app.services.costi_tipici_service import per_titolo  # noqa: PLC0415
+
+    costi, leva = per_titolo(db)
+    celle = [_cella(d, rs, min_n, costi, leva) for d, rs in sorted(per_detector.items())
              if any(_chiusa(r) for r in rs)]
     celle.sort(key=lambda c: c["expectancy_r"], reverse=True)
     solo_aperte = [

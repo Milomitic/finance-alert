@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.scheduler.jobs.archivia_consenso_macro import run_archivia_consenso_macro
 from app.scheduler.jobs.archivio_non_prezzo import run_archivia_fondamentali, run_archivia_opzioni
 from app.scheduler.jobs.cleanup_orphan_scans_job import run_cleanup_orphan_scans
+from app.scheduler.jobs.costi_tipici import run_costi_tipici
 from app.scheduler.jobs.db_backup import run_db_backup
 from app.scheduler.jobs.dedupe_stocks_job import run_dedupe_stocks
 from app.scheduler.jobs.health_probes_job import (
@@ -146,6 +147,17 @@ def get_scheduler() -> BackgroundScheduler:
             max_instances=1,
             coalesce=True,
             misfire_grace_time=60 * 60 * 12,
+        )
+        # I costi tipici di eToro per l'attesa netta dei piani (FA-142):
+        # venerdi' 17:00, a borse aperte.
+        _scheduler.add_job(
+            run_costi_tipici,
+            trigger=_cron(day_of_week="fri", hour=17, minute=0),
+            id="costi_tipici",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60 * 60 * 6,
         )
         # Gli esiti gia' maturati, ricalcolati dai dati di oggi (FA-164):
         # domenica 06:30, dopo i modelli in prova e senza scansioni.

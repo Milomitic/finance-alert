@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { HintLabel, InfoHint } from "@/components/ui/info-hint";
 import { SectionTitle } from "@/components/ui/section-title";
 import { usePlanPerformance } from "@/hooks/usePlanPerformance";
-import { expectancyInterval, expectancyLabel, verdictTone } from "@/lib/planPerformance";
+import { expectancyInterval, expectancyLabel, formatRSegnato, verdictTone } from "@/lib/planPerformance";
 import { cn } from "@/lib/utils";
 
 /* ─── PlanPerformancePanel — il piano avrebbe pagato? ────────────────────── *
@@ -129,6 +129,7 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
             <tr className="border-b text-left text-xs text-muted-foreground">
               <th className="py-2 pr-3 font-medium">Detector</th>
               <th className="py-2 pr-3 text-right font-medium"><HintLabel text="Il guadagno medio in multipli di R (R = la distanza dello stop). È l'unico numero che aggrega: un tasso di successo del 35% con target a 4:1 batte un 60% a 1:1.">Attesa</HintLabel></th>
+              <th className="py-2 pr-3 text-right font-medium"><HintLabel text={TESTO_NETTO}>Netto</HintLabel></th>
               <th className="py-2 pr-3 text-right font-medium"><HintLabel text="Righe, e fra parentesi le FINESTRE INDIPENDENTI. Due segnali a tre giorni di distanza etichettati a 21 sedute condividono quasi tutta la finestra: non sono due osservazioni.">Campione</HintLabel></th>
               <th className="py-2 pr-3 text-right font-medium">Esiti</th>
               <th className="py-2 text-right font-medium"><HintLabel text="Quante volte lo stop è stato colpito PRIMA di un target che poi è arrivato lo stesso. Quei trade avevano ragione e lo stop era nel posto sbagliato.">Stop stretto</HintLabel></th>
@@ -185,6 +186,9 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
   );
 }
 
+const TESTO_NETTO =
+  "L'attesa dopo i costi di eToro, sui soli trade il cui titolo si negozia lì. Sopra a leva 1: commissione d'apertura e di chiusura e spread. Sotto alla leva tipica del conto, con le notti. Il costo in R pesa di più dove lo stop è vicino: un piano breve paga in R molto più di uno lungo.";
+
 function Riga({ r }: { r: PlanPerfRow }) {
   const tono = verdictTone(r.verdict);
 
@@ -199,6 +203,21 @@ function Riga({ r }: { r: PlanPerfRow }) {
         <div className="text-xs font-normal text-muted-foreground">
           {expectancyInterval(r)}
         </div>
+      </td>
+      <td className="py-2 pr-3 text-right tabular-nums">
+        {r.expectancy_r_netta ? (
+          <>
+            {formatRSegnato(r.expectancy_r_netta.leva_1)}
+            <div className="text-xs text-muted-foreground">
+              {formatRSegnato(r.expectancy_r_netta.leva_tipica)} a ×{r.expectancy_r_netta.leva ?? "?"}
+            </div>
+            {r.expectancy_r_netta.n < r.n && (
+              <div className="text-xs text-muted-foreground">su {r.expectancy_r_netta.n}</div>
+            )}
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </td>
       <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
         {r.n}

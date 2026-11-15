@@ -25,7 +25,7 @@ function riga(over: Partial<PlanPerfRow> = {}): PlanPerfRow {
     expectancy_ci: null, verdict: "inconclusive", win_rate: 25,
     esiti: { tp1: 3, stop: 7, ambigua: 0, scaduto: 2 }, stop_too_tight: 1,
     mae_r_on_wins: 0.2, mfe_r_on_losses: 0.4, median_bars: 6, low_confidence: true,
-    open_excluded: 0, ...over,
+    open_excluded: 0, expectancy_r_netta: null, ...over,
   };
 }
 
@@ -78,5 +78,23 @@ describe("PlanPerformancePanel — le finestre ancora aperte", () => {
     await apri();
     expect(screen.getByText(/7 piani ancora in corso e nessuno a finestra chiusa/)).toBeInTheDocument();
     expect(screen.queryByText(/Nessun esito di piano ancora maturato/)).not.toBeInTheDocument();
+  });
+});
+
+describe("attesa netta (FA-142)", () => {
+  it("mostra il netto a leva 1 e alla leva tipica, e su quanti trade", async () => {
+    dati = base({}, [riga({
+      expectancy_r_netta: { n: 9, leva_1: -0.05, leva_tipica: -0.21, leva: 5 },
+    })]);
+    await apri();
+    expect(screen.getByText("-0.05R")).toBeInTheDocument();
+    expect(screen.getByText(/-0\.21R a ×5/)).toBeInTheDocument();
+    expect(screen.getByText("su 9")).toBeInTheDocument();
+  });
+
+  it("senza titoli su eToro un trattino, non uno zero", async () => {
+    dati = base();
+    await apri();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });

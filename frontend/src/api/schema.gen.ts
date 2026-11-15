@@ -1491,6 +1491,13 @@ export interface PlanPerfMetaOut {
   min_n: number;
 }
 
+export interface PlanPerfNettaOut {
+  n: number;
+  leva_1?: number | null;
+  leva_tipica?: number | null;
+  leva?: number | null;
+}
+
 export interface PlanPerfRowOut {
   detector: string;
   n: number;
@@ -1507,6 +1514,7 @@ export interface PlanPerfRowOut {
   median_bars?: number | null;
   low_confidence: boolean;
   open_excluded?: number;
+  expectancy_r_netta?: PlanPerfNettaOut | null;
 }
 
 export interface PlanPerformanceOut {

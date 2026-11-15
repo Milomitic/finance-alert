@@ -239,3 +239,16 @@ def test_il_dettaglio_del_titolo_porta_su_etoro(client: TestClient, db: Session,
     assert soxl.status_code == 200, soxl.text
     assert soxl.json()["su_etoro"] is True
     assert zzzz.json()["su_etoro"] is False
+
+
+def test_la_notte_in_pence_passa_dalla_sterlina(db: Session, etoro, catalogo, monkeypatch) -> None:
+    """I titoli di Londra: eToro da' la notte in GBX, che il cambio non conosce."""
+    def finto(percorso, corpo, *, op):
+        return {"costs": [{"costType": "transactionFee", "currency": "USD", "value": 1.5},
+                          {"costType": "overnightFee", "currency": "GBX", "value": 120.0}]}
+
+    monkeypatch.setattr(etoro_client, "post_lettura", finto)
+    monkeypatch.setattr(fx_service, "to_usd", lambda v, c: v * 1.3 if c == "GBP" else None)
+    cat.aggiorna(db, adesso=ADESSO)
+    c = cat.costi(db, "SOXL", lato="long", leva=5, importo=500, stop=40.0)
+    assert c.notte_usd == pytest.approx(1.2 * 1.3)
