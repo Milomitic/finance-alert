@@ -604,3 +604,24 @@ perché il piano dica cosa si è deciso e perché.
   sincronizzazione eToro invece che nello sweep; FA-148 esisteva gia' per
   insider e analisti, e si e' aggiunta la regola sui fondi. Nuova FA-165: il
   segmentation fault in CI dei thread d'avvio.
+
+## Stato dopo la fase 4 (2026-11-15)
+
+- **FA-151, FA-152, FA-142**: in produzione. La compressione delle giornate
+  di mercato e' una LETTURA: gli alert restano, si comprimono solo
+  sull'universo e mai sui titoli in posizione o fra i preferiti.
+- **FA-141**: in prova silenziosa, nessuna pastiglia. Il primo rapporto dice
+  che il pareggio dopo +1R migliora quasi della stessa quantita' anche il
+  controllo casuale, cioe' e' un effetto della geometria e non dei segnali;
+  la decisione resta al criterio scritto, non prima del 2027-05-15.
+- **FA-153**: nulla, e di segno opposto. Chiusa.
+- **Trovati strada facendo**: quindici titoli USA abbinati a una cripto nel
+  catalogo eToro (FA-167, chiusa); la notte dei titoli di Londra in GBX
+  sconosciuta al cambio (chiusa in FA-142); i piani a finestra chiusa non
+  vengono riallineati alle barre corrette (FA-168, aperta); la mutazione
+  notturna rossa per i contratti di `riallinea_esiti` non verificati (chiusa).
+- **Deviazione**: i costi tipici leggono la notte long PER TITOLO (il piano
+  diceva per valuta), dopo che un rappresentante anomalo l'aveva data
+  sbagliata a ogni titolo in dollari. Il giro settimanale dura ~50 minuti per
+  i limiti di eToro.
+
