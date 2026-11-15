@@ -625,3 +625,23 @@ perché il piano dica cosa si è deciso e perché.
   sbagliata a ogni titolo in dollari. Il giro settimanale dura ~50 minuti per
   i limiti di eToro.
 
+## Stato dopo le fasi 5 e 6 (2026-11-15)
+
+- **In produzione**: FA-149, FA-156, FA-137, FA-157, FA-158 (riserva Finnhub
+  e yfinance 1.8). FA-159 e' nel repository; il server MCP gira sul PC e vale
+  alla prossima sessione che lo riavvia.
+- **In prova silenziosa**: FA-155, quinta variante delle uscite in ombra.
+- **Chiusa senza codice**: FA-166. Le condizioni d'uso di Borsa Italiana
+  vietano lo scaricamento sistematico e la conservazione su un server.
+- **Esclusa**: FA-160 (decisione dell'utente).
+- **Ferma su una decisione**: FA-161. Misure nel backlog: l'accoppiamento in
+  memoria e' quello della variante da ~6 giorni, e il danno che dovrebbe
+  evitare e' misurato su due sole finestre.
+- **Deviazioni**: la scheda Confronti sta fuori dalla riga dei fondamentali;
+  Top movers resta sull'universo; i grafici sono SVG scritti a mano e non
+  lightweight-charts, che non fa barre per categorie ne' doppio asse.
+- **Trovati strada facendo**: lo strumento MCP `screener` chiamava una rotta
+  inesistente (corretto); la chiave Finnhub del `.env` locale cambiava l'esito
+  dei test del breaker rispetto alla CI (corretto in conftest); npm su Windows
+  ha tolto di nuovo `@emnapi/runtime` (rimessa).
+
