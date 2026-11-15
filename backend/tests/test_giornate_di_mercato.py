@@ -121,3 +121,27 @@ def test_nel_digest_la_giornata_e_una_riga(db, monkeypatch):
     # Un guasto delle giornate non toglie il digest.
     monkeypatch.setattr(gm, "recenti", lambda d: 1 / 0)
     assert "ZZZ" in notifier_service.build_digest_message(db, [giu, su])
+
+
+def test_l_endpoint_elenca_le_giornate_piu_recenti_prima(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_current_user, get_db
+    from app.main import app
+    from app.models import User
+
+    user = User(username="t", password_hash="x")
+    db.add(user)
+    db.commit()
+    monkeypatch.setattr(gm, "recenti", lambda d: [
+        gm.Giornata(date(2026, 11, 5), "bear", 104, 74),
+        gm.Giornata(date(2026, 11, 13), "bull", 90, 70),
+    ])
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        r = TestClient(app).get("/api/alerts/giornate-di-mercato")
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200
+    assert [(g["giorno"], g["tono"]) for g in r.json()] == [("2026-11-13", "bull"), ("2026-11-05", "bear")]
