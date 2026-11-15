@@ -30,7 +30,7 @@ Stime in giorni di lavoro di una sessione; sono ordini di grandezza.
 | 3 | FA-143, 144, 145, 146, 147, 148 | rischio delle posizioni, la capability principale |
 | 4 | FA-141, 142, 151, 152, 153 | resto dei motori |
 | 5 | FA-137, 149, 154, 155, 156 | ricerca sul titolo e cruscotto |
-| 6 | FA-157, 158, 159, 160, 161 | struttura e assistente |
+| 6 | FA-157, 158, 159, 160, 161, 166 | struttura, dati e assistente |
 | — | FA-162 | decisione dell'utente, nessun lavoro finché non c'è |
 
 La fase 1 viene prima del prodotto di proposito: FA-138, 139 e 150 scrivono
@@ -454,6 +454,33 @@ lettura dal vivo conferma R² > 0 contro l'ATR.
   su richiesta (`detector=`); oggi rende 58.000 caratteri.
 - Test nello stile di `test_finance_alert_mcp.py`; tutti gli strumenti nuovi
   in sola lettura.
+
+### FA-166 · Date delle trimestrali europee da fonte ufficiale, pilota Milano (1,5 g)
+
+Aggiunta il 2026-11-15 su richiesta dell'utente. Misurato in produzione
+quel giorno, dalla cache dei fondamentali (Yahoo): la prossima trimestrale
+e' nota per il 98% dei titoli USA ma per il 73% di Milano e Hong Kong; la
+storia dei risultati c'e' per il 36% di Londra (in parte strutturale: molte
+societa' inglesi pubblicano solo la semestrale). Finnhub, gia' configurato,
+risponde 403 su ogni titolo non USA col piano gratuito (provato su UCG.MI,
+ENI.MI, SAP.DE, SHEL.L).
+
+- Pilota sui 41 titoli `.MI`: il calendario degli eventi societari di Borsa
+  Italiana, che gli emittenti italiani sono tenuti a comunicare. Prima di
+  scrivere codice si verificano struttura e stabilita' della pagina e le
+  condizioni d'uso; se non reggono, la voce si chiude qui con la misura.
+- `calendario_ufficiale_service`: una tabella `trimestrali_ufficiali
+  (stock_id, data, tipo, fonte, letto_il)`, job settimanale, una richiesta
+  per titolo distanziata.
+- Precedenza: la data ufficiale vince su quella di Yahoo, che spesso e'
+  stimata. A schermo la fonte accanto alla data («Borsa Italiana» o
+  «Yahoo, stimata»), nel dettaglio titolo, nel calendario e nel brief.
+- Test: la data ufficiale sostituisce quella di Yahoo; una pagina cambiata
+  (nessuna riga letta) fallisce in modo visibile nel registro del job invece
+  di svuotare la tabella.
+- Dopo il pilota, misurata la copertura di Milano, si decide se estendere a
+  Euronext (Parigi, Amsterdam) e Deutsche Boerse. Londra resta fuori: non ha
+  un calendario unico gratuito.
 
 ### FA-160 · Assistente nell'app (4 g)
 
