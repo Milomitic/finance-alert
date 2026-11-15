@@ -67,29 +67,46 @@ def _titoli(db, n=3):
     return out
 
 
-def _finto(chiamate):
+def _finto(chiamate, notte_long=None):
+    notte_long = notte_long or {}
+
     def preventivo(db, ticker, *, lato, leva, importo, stop):
         chiamate.append((ticker, lato, leva))
-        voci = [Voce("transactionFee", 1.5 * leva, "USD", 1.5 * leva),
-                Voce("marketSpread", 0.1 * leva, "USD", 0.1 * leva),
-                Voce("overnightFee", 0.0 if leva == 1 or lato == "short" else 1.5, "USD",
-                     0.0 if leva == 1 or lato == "short" else 1.5)]
+        nozionale = importo * leva
+        notte = 0.0 if lato == "short" else notte_long.get(ticker, 0.000282) * nozionale
+        voci = [Voce("transactionFee", 0.0015 * nozionale, "USD", 0.0015 * nozionale),
+                Voce("marketSpread", 0.0001 * nozionale, "USD", 0.0001 * nozionale),
+                Voce("overnightFee", notte, "USD", notte)]
         return Costi(simbolo=ticker, voci=voci)
     return preventivo
 
 
-def test_l_aggiornamento_chiede_le_notti_una_volta_per_valuta(db):
+def test_la_notte_long_e_del_titolo_e_la_short_della_valuta(db):
+    """Il 2026-11-15 un rappresentante per valuta («A», notte 0,0502%) aveva
+    dato la sua notte a ogni titolo in dollari."""
     _titoli(db)
     chiamate = []
-    out = ct.aggiorna(db, pausa=0, preventivo=_finto(chiamate))
+    out = ct.aggiorna(db, pausa=0, preventivo=_finto(chiamate, {"C0": 0.000502}))
     assert out == {"titoli": 3, "scritti": 3, "falliti": 0, "valute": 2}
-    assert sum(1 for c in chiamate if c[2] == 1) == 3
-    assert sum(1 for c in chiamate if c[2] == 5) == 4      # long e short, per valuta
-    riga = db.query(CostoTipico).first()
-    assert riga.commissione_pct == pytest.approx(0.0015)
-    assert riga.spread_pct == pytest.approx(0.0001)
-    assert riga.notte_long_pct == pytest.approx(1.5 / 5000)
-    assert riga.notte_short_pct == 0.0 and riga.leva == 5
+    assert all(c[2] == 5 for c in chiamate)                 # alla leva tipica
+    assert sum(1 for c in chiamate if c[1] == "long") == 3
+    assert sum(1 for c in chiamate if c[1] == "short") == 3  # <= 5 per valuta
+    righe = {r.stock_id: r for r in db.query(CostoTipico).all()}
+    notti = sorted(round(r.notte_long_pct, 6) for r in righe.values())
+    assert notti == [0.000282, 0.000282, 0.000502]           # l'anomalo resta suo
+    r = next(iter(righe.values()))
+    assert r.commissione_pct == pytest.approx(0.0015)
+    assert r.spread_pct == pytest.approx(0.0001)
+    assert r.notte_short_pct == 0.0 and r.leva == 5
+
+
+def test_la_notte_short_si_misura_su_cinque_titoli_per_valuta(db):
+    _titoli(db, n=8)
+    chiamate = []
+    ct.aggiorna(db, pausa=0, preventivo=_finto(chiamate))
+    corti = [c for c in chiamate if c[1] == "short"]
+    # Due titoli in USD (tutti e due), sei in EUR (solo cinque).
+    assert len(corti) == 2 + 5
 
 
 def test_troppi_fallimenti_di_fila_fermano_il_job(db, monkeypatch):
