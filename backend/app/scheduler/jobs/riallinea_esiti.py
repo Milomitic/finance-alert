@@ -15,6 +15,7 @@ def run_riallinea_esiti() -> None:
     from app.core.db import SessionLocal  # noqa: PLC0415
     from app.services import (  # noqa: PLC0415
         esiti_orizzonti_service,
+        plan_outcome_service,
         scan_lock,
         signal_outcome_service,
     )
@@ -26,6 +27,9 @@ def run_riallinea_esiti() -> None:
     try:
         signal_outcome_service.riallinea_esiti(db)
         esiti_orizzonti_service.riallinea(db)
+        # FA-168: anche i piani a finestra chiusa.
+        esaminati, cambiati = plan_outcome_service.riallinea_piani(db)
+        logger.info(f"[esiti] piani riallineati: {cambiati} su {esaminati}")
     except Exception as exc:  # noqa: BLE001 — never crash the scheduler
         logger.warning(f"[esiti] riallineamento fallito (non fatale): {exc}")
         db.rollback()

@@ -325,6 +325,90 @@ def _invalidazione_dalle_barre(
             "reason": "prezzo sopra il massimo su cui poggia la divergenza"}
 
 
+def _calcola(db: Session, a: Alert, tutte: list[Barra]) -> tuple[str, dict | None]:
+    """L'esito del piano di UN alert sulle barre di oggi: ("ok", valori della
+    riga), ("aperto", None) se la gara non e' risolta, ("niente", None) se non
+    c'e' un piano da misurare. Il proprietario unico della regola: lo usano la
+    maturazione e il riallineamento settimanale (FA-168)."""
+    from app.services.signal_drift_service import _horizon_days
+
+    # ⚠️ Un guasto per riga non deve costare la passata: e' la stessa
+    # forma per cui `ohlcv_service` cattura per titolo dentro il ciclo,
+    # cosi' un ticker morto non ferma gli altri.
+    try:
+        snap = json.loads(a.snapshot) if a.snapshot else {}
+    except (ValueError, TypeError):
+        return "niente", None
+    if not isinstance(snap, dict):
+        return "niente", None
+
+    # ── 1. L'ancora, e la barra da cui si entra ────────────────────
+    # La PRIMA emissione, col ripiego dichiarato su `triggered_at` per i
+    # 116 alert storici (1,3%) che precedono il campo.
+    ancora = _prima_emissione(snap) or a.triggered_at.date()
+
+    # La barra d'ingresso: l'ultima non successiva all'ancora, cioe' quella
+    # il cui prezzo l'alert mostrava quando e' comparso.
+    ingresso = None
+    for b in tutte:
+        if b.data > ancora.isoformat():
+            break
+        ingresso = b
+    if ingresso is None:
+        return "niente", None   # nessuna barra alla prima emissione
+
+    # ── 2. Il piano, costruito su QUEL prezzo ──────────────────────
+    # ⚠️ Non su `a.trigger_price`: quello viene riscritto a ogni revisione
+    # insieme a `triggered_at`, quindi l'esito dipenderebbe dal momento in
+    # cui gira questa passata.
+    piano = costruisci_piano(snap, ingresso.chiusura, a.signal_name)
+    if piano is None and a.signal_date is not None:
+        # Solo per gli alert che un livello nello snapshot non ce l'hanno:
+        # uno emesso dal detector non viene mai scavalcato.
+        livello = _invalidazione_dalle_barre(
+            db, stock_id=a.stock_id, detector=a.signal_name or "",
+            signal_date=a.signal_date, tone=snap.get("tone") or "")
+        if livello is not None:
+            piano = costruisci_piano({**snap, "invalidation": livello},
+                                     ingresso.chiusura, a.signal_name)
+    if piano is None:
+        return "niente", None   # nessun livello strutturale: niente piano
+
+    # ── 3. La gara, dalla barra STRETTAMENTE successiva ────────────
+    # La barra d'ingresso porta massimo e minimo dell'INTERA giornata,
+    # inclusa la parte precedente all'alert: contarla attribuirebbe al
+    # piano un movimento avvenuto prima che l'alert esistesse — un target
+    # «colpito» da un massimo del mattino su un alert comparso la sera — in
+    # modo sistematico e invisibile.
+    barre = [b for b in tutte if b.data > ingresso.data]
+
+    orizzonte = sedute_della_gara(a.signal_name, _horizon_days(a.signal_name or ""))
+    esito = corri_la_gara(piano, barre, orizzonte)
+    if esito is None:
+        return "aperto", None
+
+    valori = dict(
+        stock_id=a.stock_id, detector=a.signal_name or "",
+        signal_date=a.signal_date or ancora, tone=snap.get("tone") or "",
+        horizon_days=orizzonte,
+        entry_date=date.fromisoformat(ingresso.data), entry=piano.entry, stop=piano.stop,
+        tp1=piano.targets[0].price,
+        tp2=piano.targets[1].price if len(piano.targets) > 1 else None,
+        r=piano.r,
+        esito=esito.esito, resolved_date=date.fromisoformat(esito.data),
+        bars_to_outcome=esito.barre, r_multiple=esito.r_multiplo,
+        mae_r=esito.mae_r, mfe_r=esito.mfe_r,
+        tp2_reached=esito.tp2_raggiunto,
+        stop_hit_date=_giorno(esito.data_stop),
+        tp1_hit_date=_giorno(esito.data_tp1),
+        tp2_hit_date=_giorno(esito.data_tp2),
+        method_version=PLAN_METHOD_VERSION,
+        # Le barre coprono l'orizzonte intero: le date sono definitive.
+        legs_window_complete=len(barre) >= orizzonte,
+    )
+    return "ok", valori
+
+
 def mature_plan_outcomes(
     db: Session, *, commit: bool = True,
 ) -> int:
@@ -353,7 +437,6 @@ def mature_plan_outcomes(
     implementazione della stessa regola, e questo repo ha gia' pagato quella
     lezione (la postura duplicata fra `finalize` e `recompute_one`).
     """
-    from app.services.signal_drift_service import _horizon_days
 
     # ⚠️ Candidati: gli alert senza riga, PIU' quelli la cui riga porta una
     # versione di metodo diversa da quella corrente.
@@ -399,98 +482,28 @@ def mature_plan_outcomes(
     scritte = 0
     barre_per_titolo: dict[int, list[Barra]] = {}
     for a in candidati:
-        # ⚠️ Un guasto per riga non deve costare la passata: e' la stessa
-        # forma per cui `ohlcv_service` cattura per titolo dentro il ciclo,
-        # cosi' un ticker morto non ferma gli altri.
-        try:
-            snap = json.loads(a.snapshot) if a.snapshot else {}
-        except (ValueError, TypeError):
-            continue
-        if not isinstance(snap, dict):
-            continue
-
-        # ── 1. L'ancora, e la barra da cui si entra ────────────────────
-        # La PRIMA emissione, col ripiego dichiarato su `triggered_at` per i
-        # 116 alert storici (1,3%) che precedono il campo.
-        ancora = _prima_emissione(snap) or a.triggered_at.date()
         if a.stock_id not in barre_per_titolo:
             # Una voce alla volta: i candidati sono ordinati per titolo, e
             # tenere in memoria le barre di mille titoli sarebbe mezzo giga.
             barre_per_titolo.clear()
             barre_per_titolo[a.stock_id] = _tutte_le_barre(db, a.stock_id)
-        tutte = barre_per_titolo[a.stock_id]
-
-        # La barra d'ingresso: l'ultima non successiva all'ancora, cioe' quella
-        # il cui prezzo l'alert mostrava quando e' comparso.
-        ingresso = None
-        for b in tutte:
-            if b.data > ancora.isoformat():
-                break
-            ingresso = b
-        if ingresso is None:
-            continue   # nessuna barra alla prima emissione: niente da misurare
-
-        # ── 2. Il piano, costruito su QUEL prezzo ──────────────────────
-        # ⚠️ Non su `a.trigger_price`: quello viene riscritto a ogni revisione
-        # insieme a `triggered_at`, quindi l'esito dipenderebbe dal momento in
-        # cui gira questa passata.
-        piano = costruisci_piano(snap, ingresso.chiusura, a.signal_name)
-        if piano is None and a.signal_date is not None:
-            # Solo per gli alert che un livello nello snapshot non ce l'hanno:
-            # uno emesso dal detector non viene mai scavalcato.
-            livello = _invalidazione_dalle_barre(
-                db, stock_id=a.stock_id, detector=a.signal_name or "",
-                signal_date=a.signal_date, tone=snap.get("tone") or "")
-            if livello is not None:
-                piano = costruisci_piano({**snap, "invalidation": livello},
-                                         ingresso.chiusura, a.signal_name)
-        if piano is None:
-            continue   # nessun livello strutturale: niente piano, niente gara
-
-        # ── 3. La gara, dalla barra STRETTAMENTE successiva ────────────
-        # La barra d'ingresso porta massimo e minimo dell'INTERA giornata,
-        # inclusa la parte precedente all'alert: contarla attribuirebbe al
-        # piano un movimento avvenuto prima che l'alert esistesse — un target
-        # «colpito» da un massimo del mattino su un alert comparso la sera — in
-        # modo sistematico e invisibile.
-        barre = [b for b in tutte if b.data > ingresso.data]
-
-        orizzonte = sedute_della_gara(a.signal_name, _horizon_days(a.signal_name or ""))
-        esito = corri_la_gara(piano, barre, orizzonte)
-        if esito is None:
+        stato, valori = _calcola(db, a, barre_per_titolo[a.stock_id])
+        if stato == "niente":
+            continue
+        if stato == "aperto":
             # Ancora aperto, o senza barre. ⚠️ Se c'e' una riga di un metodo
             # RITIRATO, la regola in vigore la contraddice («risolta» contro
             # «aperta»): si toglie, altrimenti resta a farsi leggere come una
             # misura. Successo al passaggio alla "3" (14 righe alla "2"), e al
             # passaggio alla "4" sarebbero state le operazioni in cui lo stop
             # breve piu' largo cambia l'esito. La riga nuova nasce quando la
-            # gara si risolve. Diverso dal `piano is None` sopra, dove la regola
+            # gara si risolve. Diverso dal `piano is None`, dove la regola
             # nuova non dice niente e la misura vecchia resta l'unica.
             if a.id in da_riscrivere:
                 db.execute(delete(PlanOutcome).where(PlanOutcome.alert_id == a.id))
                 da_riscrivere.discard(a.id)
                 scritte += 1
             continue
-
-        valori = dict(
-            stock_id=a.stock_id, detector=a.signal_name or "",
-            signal_date=a.signal_date or ancora, tone=snap.get("tone") or "",
-            horizon_days=orizzonte,
-            entry_date=date.fromisoformat(ingresso.data), entry=piano.entry, stop=piano.stop,
-            tp1=piano.targets[0].price,
-            tp2=piano.targets[1].price if len(piano.targets) > 1 else None,
-            r=piano.r,
-            esito=esito.esito, resolved_date=date.fromisoformat(esito.data),
-            bars_to_outcome=esito.barre, r_multiple=esito.r_multiplo,
-            mae_r=esito.mae_r, mfe_r=esito.mfe_r,
-            tp2_reached=esito.tp2_raggiunto,
-            stop_hit_date=_giorno(esito.data_stop),
-            tp1_hit_date=_giorno(esito.data_tp1),
-            tp2_hit_date=_giorno(esito.data_tp2),
-            method_version=PLAN_METHOD_VERSION,
-            # Le barre coprono l'orizzonte intero: le date sono definitive.
-            legs_window_complete=len(barre) >= orizzonte,
-        )
 
         esistente = da_completare.get(a.id)
         if esistente is not None:
@@ -519,6 +532,64 @@ def mature_plan_outcomes(
         if commit:
             db.commit()
     return scritte
+
+
+def _diverso(vecchio: object, nuovo: object) -> bool:
+    if isinstance(vecchio, float) or isinstance(nuovo, float):
+        if vecchio is None or nuovo is None:
+            return vecchio is not nuovo
+        return abs(float(vecchio) - float(nuovo)) > 1e-9
+    return vecchio != nuovo
+
+
+def riallinea_piani(db: Session, *, commit: bool = True) -> tuple[int, int]:
+    """Ricalcola dalle barre di OGGI i piani a finestra chiusa e aggiorna
+    quelli cambiati (FA-168). Rende (esaminati, cambiati).
+
+    ⚠️ Perche'. La maturazione non riguarda piu' una riga alla versione
+    corrente con la finestra chiusa, ma le barre vengono riscritte anche dopo:
+    riscaricamento dell'ultimo mese, buchi riparati, split. E' lo stesso
+    difetto che FA-164 ha chiuso per `signal_outcomes`, trovato qui dalla
+    parita' delle uscite in ombra (FA-141): un piano scaduto valutato a
+    0,6451 R su una chiusura poi corretta, 0,6445 coi dati di oggi.
+
+    Stessa `_calcola` della maturazione, quindi la stessa regola. Una riga che
+    oggi non si calcola piu' (serie accorciata da una riparazione, gara di
+    nuovo aperta) resta com'era: un riallineamento non cancella misure.
+    Per le righe cambiate si tolgono le varianti in prova silenziosa
+    (`plan_outcomes_ombra`): la passata successiva le rimisura sulla
+    geometria nuova invece di confrontarle con quella vecchia."""
+    from app.models import PlanOutcomeOmbra  # noqa: PLC0415
+
+    righe = {r.alert_id: r for r in db.execute(
+        select(PlanOutcome).where(PlanOutcome.method_version == PLAN_METHOD_VERSION,
+                                  PlanOutcome.legs_window_complete.is_(True))
+    ).scalars()}
+    if not righe:
+        return 0, 0
+    alert = db.execute(
+        select(Alert).where(Alert.id.in_(list(righe))).order_by(Alert.stock_id, Alert.id)
+    ).scalars().all()
+    esaminati = cambiati = 0
+    barre: tuple[int, list[Barra]] | None = None
+    for a in alert:
+        if barre is None or barre[0] != a.stock_id:
+            barre = (a.stock_id, _tutte_le_barre(db, a.stock_id))
+        esaminati += 1
+        stato, valori = _calcola(db, a, barre[1])
+        if stato != "ok":
+            continue
+        riga = righe[a.id]
+        if not any(_diverso(getattr(riga, k), v) for k, v in valori.items()):
+            continue
+        for k, v in valori.items():
+            setattr(riga, k, v)
+        riga.matured_at = datetime.now(UTC)
+        db.execute(delete(PlanOutcomeOmbra).where(PlanOutcomeOmbra.alert_id == a.id))
+        cambiati += 1
+    if cambiati and commit:
+        db.commit()
+    return esaminati, cambiati
 
 
 def _giorno(iso: str | None) -> date | None:
