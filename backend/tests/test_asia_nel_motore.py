@@ -184,8 +184,8 @@ def test_il_seme_NON_risuscita_le_direxion_che_la_potatura_aveva_tolto(db: Sessi
     db.flush()
 
     presenti = set(db.execute(select(Stock.ticker)).scalars())
-    assert "YINN" in presenti
-    for potata in ("YANG", "FAS", "FAZ", "TQQQ", "SQQQ", "DUST", "JNUG", "TMF"):
+    assert {"YINN", "TECL"} <= presenti
+    for potata in ("YANG", "TECS", "FAS", "FAZ", "TQQQ", "SQQQ", "DUST", "JNUG", "TMF"):
         assert potata not in presenti, (
             f"{potata} e' stata risuscitata: il seme sta lavorando per FILE invece che per RIGA"
         )

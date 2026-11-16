@@ -68,7 +68,13 @@ DIREXION_CSV = "direxion_etfs.csv"
 #: allargarlo per comodita': ogni ticker aggiunto qui e' un prodotto a leva che
 #: la potatura aveva tolto. YANG — lo speculare ribassista di YINN — e' fuori
 #: perche' non e' stato chiesto, non perche' sia stato dimenticato.
-SOLO_DA_DIREXION: frozenset[str] = frozenset({"YINN"})
+#:
+#: TECL aggiunta il 2026-11-16 su richiesta dell'utente: e' una posizione
+#: eToro aperta, e fuori dal catalogo il rischio la leggeva da Yahoo a ogni
+#: avvio e il costo di tenuta non aveva preventivo. Verificata prima: 251
+#: barre nell'ultimo anno, nessuna a volume zero, 2514 in dieci anni. TECS,
+#: la speculare ribassista, resta fuori per la stessa ragione di YANG.
+SOLO_DA_DIREXION: frozenset[str] = frozenset({"YINN", "TECL"})
 
 
 def semina(db: Session) -> SeedResult:
