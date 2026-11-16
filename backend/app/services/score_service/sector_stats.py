@@ -181,3 +181,35 @@ def clear_sector_stats_cache() -> None:
     them isolated, and exposed for any future "force fresh medians"
     admin path."""
     _SECTOR_STATS_CACHE.clear()
+
+
+def bundle_dalla_cache(db) -> SectorStatsBundle:
+    """Le mediane di settore della scansione, ricostruite dalla sola cache in
+    memoria dei fondamentali: nessuna chiamata di rete.
+
+    Serve al ricalcolo manuale di un titolo (`POST .../score/recompute`), che
+    prima usava le mediane fisse di ripiego (`sector_stats=None`) e quindi
+    puntava a un altro numero: misurato il 2026-11-16 su 41 titoli, 5 punti di
+    scarto mediano e fino a 11. Stessa `sector_stats_service.compute` della
+    scansione, stesso raggruppamento per settore, stessi soli titoli azionari.
+
+    ⚠️ Non `_build_sector_stats`: il ricalcolo manuale riscarica i fondamentali
+    del titolo, che cambia l'impronta della cache delle mediane; la
+    ricostruzione passerebbe da `get_fundamentals` per ogni titolo, cioe' da
+    Yahoo per quelli scaduti, dentro una richiesta. La cache in memoria copre
+    l'intero catalogo (`hydrate_l1_from_db` all'avvio), ed e' quello che la
+    scansione ha letto per i titoli non scaduti."""
+    by_sector: dict[str, list[Fundamentals]] = {}
+    visti: set[str] = set()
+    for ticker, settore in db.execute(
+        select(Stock.ticker, Stock.sector).where(Stock.instrument_type == "equity")
+    ).all():
+        if ticker in visti:
+            continue
+        visti.add(ticker)
+        f = stock_fundamentals_service._CACHE.get(ticker)
+        if f is None or getattr(f, "error", None):
+            continue
+        by_sector.setdefault(settore or "", []).append(f)
+    return sector_stats_service.compute(by_sector)
+

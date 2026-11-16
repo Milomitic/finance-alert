@@ -414,12 +414,33 @@ def recompute_stock_score(
             f"[score-recompute] unexpected error refreshing fundamentals for {stock.ticker}: {exc}"
         )
 
-    new_score = score_service.compute_score(db, stock)
+    # ⚠️ Lo stesso metodo della scansione (2026-11-16): le mediane di settore
+    # del catalogo invece di quelle fisse di ripiego, e il lisciamento
+    # ancorato al giorno invece che al clic precedente. Prima il pulsante
+    # puntava a un numero diverso (5 punti di scarto mediano, fino a 11) e
+    # ogni clic ci si avvicinava del 60%: dopo una decina il punteggio si
+    # fermava li', e la scansione successiva lo riportava indietro.
+    try:
+        settori = score_service.bundle_dalla_cache(db)
+    except Exception as exc:  # noqa: BLE001 — meglio il ripiego che un 500
+        logger.warning(f"[score-recompute] mediane di settore non disponibili: {exc}")
+        settori = None
+    new_score = score_service.compute_score(db, stock, sector_stats=settori, ancora_del_giorno=True)
     # UPSERT semantics: a row already exists for this stock_id (the GET would
     # have 404'd otherwise, but we still merge defensively for the case where
     # the user hits POST first on a brand-new ticker before any scan ran).
     db.merge(new_score)
     db.commit()
+    # E la stessa seconda passata della scansione: l'annotazione trasversale
+    # (`breakdown._xs`), che con SCORE_ENGINE_XS=1 sostituirebbe anche il
+    # composito. Pochi millisecondi sull'intera sezione salvata.
+    try:
+        score_service._apply_cross_sectional_engine(
+            db, list(db.execute(select(Stock).where(Stock.instrument_type == "equity")).scalars()))
+        db.refresh(new_score)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning(f"[score-recompute] passata trasversale saltata: {exc}")
 
     try:
         breakdown = json.loads(new_score.breakdown or "{}")

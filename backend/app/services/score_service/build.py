@@ -198,7 +198,7 @@ def _build_score(
 _EWMA_ALPHA = 0.6
 
 
-def _apply_turnover_control(db: Session, cs: _ComputedScore) -> None:
+def _apply_turnover_control(db: Session, cs: _ComputedScore, *, ancora_del_giorno: bool = False) -> None:
     """Mutate `cs` in place: EWMA-smooth the composite against the last
     persisted score and apply tier hysteresis. Cold start (no prior row,
     or prior composite null) is a no-op so a fresh universe isn't
@@ -212,7 +212,30 @@ def _apply_turnover_control(db: Session, cs: _ComputedScore) -> None:
         return
     a = _EWMA_ALPHA
     presmooth = cs.composite
-    smoothed = _safe_round(a * presmooth + (1.0 - a) * float(prior.composite), 1)
+    base = float(prior.composite)
+    if ancora_del_giorno:
+        # ⚠️ Il ricalcolo manuale si lisciava contro il proprio risultato
+        # precedente, quindi ogni clic copriva il 60% della distanza restante
+        # e una decina di clic annullavano il lisciamento. Se la riga e' di
+        # OGGI si riparte dall'ancora con cui e' stata lisciata: piu' ricalcoli
+        # nello stesso giorno danno lo stesso numero.
+        oggi = datetime.now(UTC).date()
+        calcolata = prior.computed_at
+        if calcolata is not None and calcolata.tzinfo is None:
+            calcolata = calcolata.replace(tzinfo=UTC)
+        if calcolata is not None and calcolata.astimezone(UTC).date() == oggi:
+            try:
+                t_prec = (json.loads(prior.breakdown or "{}").get("_meta_global") or {}).get("turnover") or {}
+            except (ValueError, TypeError):
+                t_prec = {}
+            if t_prec.get("cold_start"):
+                base = None
+            elif isinstance(t_prec.get("prior_composite"), (int, float)):
+                base = float(t_prec["prior_composite"])
+    if base is None:
+        mg["turnover"] = {"cold_start": True}
+        return
+    smoothed = _safe_round(a * presmooth + (1.0 - a) * base, 1)
     vote = int(
         (cs.breakdown.get("risk_inputs") or {}).get("risk_vote", 0) or 0
     )
@@ -228,7 +251,7 @@ def _apply_turnover_control(db: Session, cs: _ComputedScore) -> None:
     mg["turnover"] = {
         "alpha": a,
         "composite_presmooth": presmooth,
-        "prior_composite": _safe_round(float(prior.composite), 1),
+        "prior_composite": _safe_round(base, 1),
         "smoothed": smoothed,
         "tier_presmooth": tier_presmooth,
         "tier_held": bool(tier_held),
@@ -242,6 +265,7 @@ def compute_score(
     *,
     sector_stats: SectorStatsBundle | None = None,
     bars: list[tuple[float, float, float]] | None = None,
+    ancora_del_giorno: bool = False,
 ) -> StockScore:
     """Compute a fresh StockScore for one stock. NOT persisted.
 
@@ -289,7 +313,7 @@ def compute_score(
     # M3 — EWMA composite smoothing + tier hysteresis (turnover control).
     # Applied here (compute_score has `db`) so it covers BOTH the bulk
     # recompute_all path and the single-stock recompute endpoint.
-    _apply_turnover_control(db, cs)
+    _apply_turnover_control(db, cs, ancora_del_giorno=ancora_del_giorno)
     return StockScore(
         stock_id=cs.stock_id,
         composite=cs.composite,

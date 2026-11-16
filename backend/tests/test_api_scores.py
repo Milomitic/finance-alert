@@ -186,7 +186,7 @@ def test_recompute_returns_fresh_score_and_persists(
     aaa = db.query(Stock).filter_by(ticker="AAA").one()
     fresh.stock_id = aaa.id
 
-    def stub_compute_score(_db, stock, *, sector_stats=None):
+    def stub_compute_score(_db, stock, *, sector_stats=None, ancora_del_giorno=False):
         return fresh
 
     def stub_force_refresh(*_args, **_kw):
@@ -241,7 +241,7 @@ def test_recompute_forces_fundamentals_refresh(
     )
     monkeypatch.setattr(
         "app.api.scores.score_service.compute_score",
-        lambda _db, _s, *, sector_stats=None: fresh,
+        lambda _db, _s, *, sector_stats=None, ancora_del_giorno=False: fresh,
     )
 
     resp = seeded_client.post("/api/stocks/AAA/score/recompute")
@@ -353,7 +353,7 @@ def test_recompute_tolerates_fundamentals_refresh_failure(
     )
     monkeypatch.setattr(
         "app.api.scores.score_service.compute_score",
-        lambda _db, _s, *, sector_stats=None: fresh,
+        lambda _db, _s, *, sector_stats=None, ancora_del_giorno=False: fresh,
     )
 
     resp = seeded_client.post("/api/stocks/AAA/score/recompute")

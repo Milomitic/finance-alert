@@ -110,6 +110,7 @@ from app.services.score_service.sector_stats import (
     _SECTOR_STATS_CACHE,
     _build_sector_stats,
     _sector_stats_cache_key,
+    bundle_dalla_cache,
     clear_sector_stats_cache,
 )
 from app.services.score_service.xs_engine import (
@@ -141,6 +142,7 @@ __all__ = [
     "_blended_lib_multiple",
     "_build_score",
     "_build_sector_stats",
+    "bundle_dalla_cache",
     "_bulk_load_recent_bars",
     "_classify_risk",
     "_compute_volatility_90d",
