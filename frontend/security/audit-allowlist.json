@@ -9,13 +9,5 @@
     "codebase is not exposed, and you named a date to look again. If you",
     "cannot write the `reason` without hedging, upgrade instead."
   ],
-  "allow": [
-    {
-      "id": "GHSA-vfj7-8cjw-p6xm",
-      "package": "braces",
-      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
-      "reason": "The denial of service needs an attacker to supply a deeply nested brace PATTERN to braces' expander. Here braces is reached only through tailwindcss (via micromatch, fast-glob and chokidar), which expands the static `content` globs written in tailwind.config.js (\"./index.html\", \"./src/**/*.{js,ts,jsx,tsx}\") at BUILD time and watches files in dev. No pattern comes from a user or a request: the browser bundle does not contain braces and the backend is Python. It shows up in the production tree only because tailwindcss-animate (a build-time plugin listed under dependencies) declares tailwindcss as a peer. There is no forward fix: 3.0.3 is the latest braces and the advisory lists no patched version; npm's remedy is tailwindcss 4, a major migration.",
-      "review_by": "2026-11-15"
-    }
-  ]
+  "allow": []
 }
