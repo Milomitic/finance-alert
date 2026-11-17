@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import type { SearchParams, SortDir, StockSortBy } from "@/api/stocks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   ColumnVisibilityButton,
 } from "@/components/ui/column-visibility-menu";
@@ -26,7 +27,9 @@ import {
   type FiltersState,
 } from "@/components/stocks/StockFiltersCard";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { useIsBelowMd } from "@/hooks/useMediaQuery";
 import { useNowTick } from "@/hooks/useNowTick";
+import { conteggiFiltri } from "@/lib/screenerFilters";
 import type { ScreenerView } from "@/lib/screenerViews";
 
 /** Allowed page sizes shown in the dropdown. 25 / 50 / 100 / 200. */
@@ -195,6 +198,11 @@ function PaginationStrip({
 }
 
 export default function StocksBrowserPage() {
+  // Su telefono i filtri stanno in un pannello che si apre a richiesta
+  // (C-31): impilati sopra la tabella occupavano oltre una schermata, e dopo
+  // ogni modifica bisognava scorrere per vedere quanti titoli restavano.
+  const sottoMd = useIsBelowMd();
+  const [filtriAperti, setFiltriAperti] = useState(false);
   /** Id dell'etichetta «Righe per pagina», a cui punta il nome accessibile
    *  della tendina. Generato e non scritto a mano: un id fisso duplicato in
    *  due montaggi farebbe puntare `aria-labelledby` al primo nodo trovato. */
@@ -453,6 +461,40 @@ export default function StocksBrowserPage() {
       </Card>
 
       {/* Filters */}
+      {sottoMd ? (
+        <>
+          <Button variant="outline" className="w-full" onClick={() => setFiltriAperti(true)} aria-haspopup="dialog">
+            Filtri{conteggiFiltri(state).totale > 0 ? ` (${conteggiFiltri(state).totale})` : ""}
+          </Button>
+          <Dialog open={filtriAperti} onOpenChange={setFiltriAperti}>
+            <DialogContent className="max-h-[90dvh] gap-0 overflow-y-auto p-0">
+              <DialogTitle className="sr-only">Filtri dello screener</DialogTitle>
+          <StockFiltersCard
+            state={state}
+            onChange={setState}
+            filters={filtersQ.data}
+            view={{
+              sortBy,
+              sortDir,
+              hiddenColumns: [...hiddenColumns],
+              // The TABLE's defaults, not the current sort: a view saved before
+              // sort was recorded must land in a known state rather than inherit
+              // whatever the user happened to have set a moment earlier.
+              defaults: { sortBy: "ticker", sortDir: "asc" },
+              onApply: applySavedView,
+            }}
+          />
+              {/* Il risultato resta a vista mentre si filtra: il totale
+                  arriva dalla stessa interrogazione della tabella. */}
+              <div className="sticky bottom-0 border-t bg-background p-3">
+                <Button className="w-full" onClick={() => setFiltriAperti(false)}>
+                  Mostra {total.toLocaleString("it-IT")} titoli
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
       <StockFiltersCard
         state={state}
         onChange={setState}
@@ -468,6 +510,7 @@ export default function StocksBrowserPage() {
           onApply: applySavedView,
         }}
       />
+      )}
 
       {/* Index panorama header (shown when exactly 1 index is selected).
           Its breadth tiles are clickable filter toggles wired to FiltersState. */}

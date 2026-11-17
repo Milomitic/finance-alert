@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { CATEGORY_LABEL } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
-import { EMPTY_FILTERS } from "@/lib/screenerFilters";
+import { conteggiFiltri, EMPTY_FILTERS } from "@/lib/screenerFilters";
 import {
   parseAll,
   toStored,
@@ -583,49 +583,15 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
 
   const set = (patch: Partial<FiltersState>) => onChange({ ...state, ...patch });
 
-  const pillarActiveCount =
-    (state.profitabilityMin != null ? 1 : 0) +
-    (state.sustainabilityMin != null ? 1 : 0) +
-    (state.growthMin != null ? 1 : 0) +
-    (state.valueMin != null ? 1 : 0) +
-    (state.sentimentMin != null ? 1 : 0);
-
-  // Per-area active counts (drive the badge on each collapsible header).
-  const mercatoActive =
-    state.indexCodes.length + state.sectors.length + state.industries.length +
-    state.exchanges.length + state.countries.length +
-    (state.excludeEtf ? 1 : 0);
-
-  const fondamentaliActive =
-    (state.minScore != null ? 1 : 0) +
-    (state.scoreMax != null ? 1 : 0) +
-    state.riskTiers.length +
-    pillarActiveCount +
-    (state.marketCapMin != null ? 1 : 0) +
-    (state.marketCapMax != null ? 1 : 0) +
-    (state.datiCompleti ? 1 : 0);
-
-  const tecniciActive =
-    (state.techMin != null ? 1 : 0) +
-    state.postures.length +
-    (state.rsiMin != null ? 1 : 0) +
-    (state.rsiMax != null ? 1 : 0) +
-    (state.aboveEma50 ? 1 : 0) +
-    (state.aboveEma200 ? 1 : 0) +
-    (state.near52wHigh ? 1 : 0) +
-    (state.near52wLow ? 1 : 0) +
-    (state.signalsWithinDays != null ? 1 : 0);
-
-  const prezzoVolumeActive =
-    (state.priceMin != null ? 1 : 0) +
-    (state.priceMax != null ? 1 : 0) +
-    (state.changeMin != null ? 1 : 0) +
-    (state.changeMax != null ? 1 : 0) +
-    (state.volSpike ? 1 : 0) +
-    (state.volRatioMin != null ? 1 : 0) +
-    (state.volumeMin != null ? 1 : 0);
-
-  const totalActive = mercatoActive + fondamentaliActive + tecniciActive + prezzoVolumeActive;
+  // Un proprietario solo per i conteggi (`lib/screenerFilters`): li legge
+  // anche il pulsante «Filtri (N)» del telefono (C-31).
+  const conteggi = conteggiFiltri(state);
+  const mercatoActive = conteggi.mercato;
+  const fondamentaliActive = conteggi.fondamentali;
+  const tecniciActive = conteggi.tecnici;
+  const prezzoVolumeActive = conteggi.prezzoVolume;
+  const totalActive = conteggi.totale;
+  const pillarActiveCount = conteggi.pilastri;
 
   const clearAll = () => onChange({ ...EMPTY_FILTERS });
 
