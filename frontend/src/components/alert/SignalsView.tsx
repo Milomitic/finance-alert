@@ -1,4 +1,4 @@
-import { Download, X } from "lucide-react";
+import { Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -217,28 +217,8 @@ export function SignalsView() {
           che governa. */}
       <AlertFilters value={filters} onChange={(v) => { setPage(0); setFilters(v); }} />
 
-      {/* Drill-down chip: shows the cluster ticker currently filtering the
-          table, with an X to go back to the full list. */}
-      {filters.ticker && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">filtro attivo:</span>
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-semibold">
-            {filters.ticker}
-            <button
-              type="button"
-              onClick={() => {
-                setPage(0);
-                setFilters((f) => ({ ...f, ticker: undefined }));
-              }}
-              className="opacity-70 hover:opacity-100 transition-opacity"
-              aria-label="Rimuovi filtro ticker"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        </div>
-      )}
-
+      {/* Il ticker filtrato ha il suo chip nella riga «Attivi» dei filtri:
+          qui sotto ne stava una seconda copia (D-04). */}
       {/* ⚠️ Perche' filtrando «Azzeccato» si vedevano cinque righe.
           Un segnale viene archiviato DA SOLO appena l'esito matura e la data
           esce dalla finestra delle confluenze, e per ogni detector con

@@ -227,9 +227,12 @@ export function AlertFilters({ value, onChange }: Props) {
         }${value.date_to ? `al ${formatShortDate(value.date_to)}` : ""}`.trim()
       : (PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period);
 
+  // «Azzera» torna allo stato con cui la pagina si apre — i tuoi titoli,
+  // segnali attivi — e non all'intero catalogo (D-03): da decine di righe a
+  // migliaia e' l'opposto di cio' che la parola promette.
   const reset = () => {
     setCustomPeriod(false);
-    onChange({ archived: false });
+    onChange({ archived: false, solo_rilevanti: true });
   };
 
   // Friendly label for the currently-selected signal kind.
@@ -250,19 +253,20 @@ export function AlertFilters({ value, onChange }: Props) {
     ? (HORIZON_OPTIONS.find((h) => h.value === value.horizon)?.label ?? value.horizon)
     : null;
 
-  // Count active filters so the header can show a badge. "active" status
-  // is the default and not counted; "archived" counts as 1.
+  // Conta solo cio' che si discosta dall'apertura della pagina (D-03): i tuoi
+  // titoli e i segnali attivi sono il default e non sono «filtri attivi».
+  // Ogni voce contata qui ha il suo chip qui sotto (D-04).
   const activeCount =
     (value.ticker ? 1 : 0) +
     (value.q ? 1 : 0) +
-    (status === "archived" ? 1 : 0) +
+    (status !== "active" ? 1 : 0) +
     (value.rule_kind ? 1 : 0) +
     (value.tone ? 1 : 0) +
     (value.strength_min != null ? 1 : 0) +
     (value.nature ? 1 : 0) +
     (value.outcome ? 1 : 0) +
     (value.horizon ? 1 : 0) +
-    (value.solo_rilevanti || value.solo_etoro ? 1 : 0) +
+    (value.solo_rilevanti ? 0 : 1) +
     (value.date_from || value.date_to ? 1 : 0);
 
   // Nine controls in a grid cost an entire phone screen before the first
@@ -301,7 +305,7 @@ export function AlertFilters({ value, onChange }: Props) {
               {activeCount > 0 && (
                 <Button variant="ghost" size="sm" onClick={reset} className="h-7 text-xs">
                   <X className="h-3 w-3 mr-1" />
-                  Reset
+                  Azzera
                 </Button>
               )}
             </div>
@@ -573,10 +577,34 @@ export function AlertFilters({ value, onChange }: Props) {
                 className="bg-muted text-foreground border-border"
               />
             )}
-            {status === "archived" && (
+            {status !== "active" && (
               <FilterChip
-                label="Solo archiviati"
-                onClear={() => onChange({ ...value, archived: false })}
+                label={status === "archived" ? "Solo archiviati" : "Attivi e archiviati"}
+                onClear={() => onChange({ ...value, archived: false, include_archived: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {!value.solo_rilevanti && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground">Titoli:</span>{" "}
+                    {value.solo_etoro ? "negoziabili su eToro" : "tutto il catalogo"}
+                  </>
+                }
+                onClear={() => onChange({ ...value, solo_rilevanti: true, solo_etoro: undefined })}
+                className="bg-muted text-foreground border-border"
+              />
+            )}
+            {value.nature && (
+              <FilterChip
+                label={
+                  <>
+                    <span className="text-muted-foreground">Natura:</span>{" "}
+                    {value.nature === "inversione" ? "Inversione" : "Continuazione"}
+                  </>
+                }
+                onClear={() => onChange({ ...value, nature: undefined })}
                 className="bg-muted text-foreground border-border"
               />
             )}
