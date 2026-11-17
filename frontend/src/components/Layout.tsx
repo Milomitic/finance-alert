@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
+import { BarraInferiore } from "@/components/BarraInferiore";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UsoPagineReporter } from "@/components/UsoPagineReporter";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
@@ -483,6 +484,10 @@ export default function Layout() {
             <Outlet />
           </ErrorBoundary>
         </main>
+        <BarraInferiore
+          altroAperto={mobileNavOpen}
+          onAltro={() => { previouslyFocusedRef.current = document.activeElement as HTMLElement; setMobileNavOpen(true); }}
+        />
       </div>
       {/* Persistent progress notifications — mounted globally so they
           survive route changes. The user can navigate around while a

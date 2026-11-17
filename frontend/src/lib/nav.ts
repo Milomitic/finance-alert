@@ -122,3 +122,13 @@ export const NAV_GROUPS: NavGroup[] = [
  * divergenza sarebbe muta — una destinazione nuova con il titolo generico,
  * oppure un titolo per una voce che dalla barra e sparita. */
 export const NAV: NavEntry[] = NAV_GROUPS.flatMap((g) => g.items);
+
+/** Le quattro destinazioni di ogni giorno, nella barra in basso sotto `lg`
+ *  (C-68, E-16). DERIVATE da `NAV`, come il titolo della scheda: una voce
+ *  rinominata o tolta dal menu si porta dietro anche la barra. */
+const PERCORSI_PRIMARI = ["/", "/stocks", "/alerts", "/positions"] as const;
+export const NAV_PRIMARIE: NavEntry[] = PERCORSI_PRIMARI.map((to) => {
+  const voce = NAV.find((e) => e.to === to);
+  if (!voce) throw new Error(`destinazione primaria assente dal menu: ${to}`);
+  return voce;
+});

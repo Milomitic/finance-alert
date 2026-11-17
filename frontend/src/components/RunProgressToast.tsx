@@ -341,7 +341,8 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   return (
     <div
       className={cn(
-        "fixed bottom-4 right-4 z-50",
+        // Sopra la barra di navigazione in basso, sotto `lg`.
+        "fixed bottom-[4.5rem] right-4 z-50 lg:bottom-4",
         "w-[min(34rem,calc(100vw-2rem))]",
         "animate-in fade-in slide-in-from-bottom-4 duration-200",
       )}
