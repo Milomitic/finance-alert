@@ -38,6 +38,9 @@ function cl(i: number): Confluence {
 const DODICI = Array.from({ length: 12 }, (_, i) => cl(i + 1));
 
 function monta(onTickerSelect: (t: string) => void = () => {}) {
+  // Le confluenze partono chiuse (D-01): queste prove riguardano le righe,
+  // quindi le aprono come farebbe chi legge, con la scelta ricordata.
+  localStorage.setItem("segnali.confluenze.aperte", "1");
   return render(
     <MemoryRouter>
       <AlertsInsightCard clusters={DODICI} onTickerSelect={onTickerSelect} />

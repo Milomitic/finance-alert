@@ -189,16 +189,19 @@ export function SignalsView() {
           dopo un filtro restano per sezione: partono da un clic. */}
       {primoCaricamento ? (
         <div key="scheletro" className="space-y-4" aria-busy="true">
-          <CardSkeleton label="EFFICACIA DEI SEGNALI" rows={3} strongHeader className="h-[240px]" />
-          <CardSkeleton label="CONFLUENZE ATTIVE" rows={10} strongHeader className="h-[560px]" />
+          {/* Stesso ordine e stesse altezze della pagina vera (D-01): le
+              confluenze chiuse sono una riga, l'efficacia sta in fondo. */}
+          <CardSkeleton label="CONFLUENZE ATTIVE" rows={0} strongHeader className="h-[58px]" />
           <CardSkeleton label="SEGNALI" rows={12} strongHeader className="h-[640px]" />
+          <CardSkeleton label="EFFICACIA DEI SEGNALI" rows={3} strongHeader className="h-[240px]" />
         </div>
       ) : (
       <div key="contenuto" className="space-y-4">
-      {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
-          tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
-      <SignalStatsSection />
-
+      {/* ⚠️ L'efficacia sta IN FONDO, sotto la tabella (D-01, A-37). Stava in
+          cima e la tabella partiva a 1.335px su una finestra di 900 (misurato
+          in produzione il 2026-11-17): la domanda di chi apre la pagina e'
+          «cosa e' scattato», e l'efficacia — tutti gli esiti maturati, che
+          cambiano in settimane — risponde a un'altra. */}
       {/* Confluence digest — always visible above the table (replaced the old
           list/confluence view toggle). Cluster rows drill down into the table. */}
       <AlertsInsightCard
@@ -347,6 +350,10 @@ export function SignalsView() {
           </div>
         </div>
       )}
+
+      {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
+          tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
+      <SignalStatsSection />
 
       </div>
       )}

@@ -1,4 +1,5 @@
 import { Layers, Network, Swords, TrendingDown, TrendingUp } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Confluence } from "@/api/alerts";
@@ -287,6 +288,27 @@ function DetectorMix({ clusters }: { clusters: Confluence[] }) {
   );
 }
 
+/** Le confluenze si aprono a richiesta, e la scelta si ricorda (D-01).
+ *  Aperte di default spingevano la tabella dei segnali oltre la prima
+ *  schermata; chiuse sono una riga che dice gia' quante sono e da che parte. */
+const CHIAVE_APERTE = "segnali.confluenze.aperte";
+
+function leggiAperte(): boolean {
+  try {
+    return localStorage.getItem(CHIAVE_APERTE) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function salvaAperte(v: boolean): void {
+  try {
+    localStorage.setItem(CHIAVE_APERTE, v ? "1" : "0");
+  } catch {
+    /* non salvata: resta la scelta di questa visita */
+  }
+}
+
 export function AlertsInsightCard({
   clusters,
   loading,
@@ -308,18 +330,47 @@ export function AlertsInsightCard({
   const bullPct = nTot ? Math.round((nBull / nTot) * 100) : 0;
   const multiH = clusters.filter((c) => c.multi_horizon).length;
   const contested = clusters.filter((c) => c.contested).length;
+  const [aperte, setAperte] = useState(leggiAperte);
+  const commuta = () => {
+    setAperte((v) => {
+      salvaAperte(!v);
+      return !v;
+    });
+  };
+  const vuote = !loading && clusters.length === 0;
 
   return (
     <Card>
       <CardContent className="p-4">
-        <SectionTitle icon={Network} label={`Confluenze attive (${clusters.length})`} className="mb-3" />
-        {loading ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">Caricamento…</div>
-        ) : clusters.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            Nessuna confluenza attiva: servono almeno 2 segnali concordi sullo stesso titolo.
-          </div>
-        ) : (
+        <SectionTitle
+          icon={Network}
+          label={`Confluenze attive (${loading ? "…" : clusters.length})`}
+          className={aperte && !vuote && !loading ? "mb-3" : undefined}
+          right={
+            loading ? null : vuote ? (
+              // Vuote: una riga sola, non un riquadro alto 120px che dice
+              // «niente» (D-01).
+              <span className="text-xs text-muted-foreground">nessuna: servono 2 segnali concordi su un titolo</span>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="text-xs tabular-nums">
+                  <span className="font-semibold text-emerald-800 dark:text-emerald-400">{nBull} long</span>
+                  <span className="text-muted-foreground"> · </span>
+                  <span className="font-semibold text-rose-600 dark:text-rose-400">{nBear} short</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={commuta}
+                  aria-expanded={aperte}
+                  className="min-h-8 rounded-md border px-2 text-xs font-medium hover:bg-accent"
+                >
+                  {aperte ? "Nascondi" : "Mostra"}
+                </button>
+              </div>
+            )
+          }
+        />
+        {loading || vuote || !aperte ? null : (
           <>
             {/* ⚠️ «Top long» e «Top short» stavano qui, SOPRA una graduatoria
                 che li contiene gia': due elementi ripetuti che occupavano la
