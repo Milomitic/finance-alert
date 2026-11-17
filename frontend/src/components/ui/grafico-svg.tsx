@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { LARGHEZZA_DI_RIPIEGO, tacche } from "@/lib/graficoSvg";
 import { cn } from "@/lib/utils";
@@ -72,13 +72,21 @@ function useLarghezza() {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(LARGHEZZA_DI_RIPIEGO);
   const [h, setH] = useState(0);
-  useEffect(() => {
+  // ⚠️ La misura si prende PRIMA del disegno (A-40). Con il solo osservatore
+  // la prima larghezza era il ripiego da 600px, e se la sua callback tardava
+  // (scheda in background, misurato una volta a 375px) il grafico restava
+  // largo 600 in un contenitore da 289 e perdeva i mesi di destra. In un
+  // layout effect lo stato aggiornato si disegna nello stesso fotogramma.
+  useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(([e]) => {
-      setW(Math.max(120, Math.round(e.contentRect.width)));
-      setH(Math.round(e.contentRect.height));
-    });
+    if (!el) return;
+    const misura = (larghezza: number, altezza: number) => {
+      setW(Math.max(120, Math.round(larghezza)));
+      setH(Math.round(altezza));
+    };
+    if (el.clientWidth > 0) misura(el.clientWidth, el.clientHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => misura(e.contentRect.width, e.contentRect.height));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -138,6 +146,7 @@ export function GraficoSvg<T>({
       <svg
         width={w}
         height={H}
+        style={{ maxWidth: "100%" }}
         viewBox={`0 0 ${w} ${H}`}
         role="img"
         aria-label={etichetta}
