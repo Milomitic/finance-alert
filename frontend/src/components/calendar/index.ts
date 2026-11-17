@@ -1,3 +1,4 @@
+export { AgendaCalendario } from "./AgendaCalendario";
 export { DayCell } from "./DayCell";
 export { DayDetailPanel } from "./DayDetailPanel";
 export { EventChip } from "./EventChip";

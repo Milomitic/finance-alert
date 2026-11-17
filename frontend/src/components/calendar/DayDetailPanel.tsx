@@ -54,21 +54,26 @@ interface DayDetailPanelProps {
   date: string | null;
   events: CalendarEvent[];
   onClose: () => void;
+  /** Falso dentro un foglio che ha gia' la sua «Chiudi»: due bottoni con lo
+   *  stesso nome nello stesso dialogo sono il difetto di E-15. */
+  chiudiProprio?: boolean;
 }
 
-export function DayDetailPanel({ date, events, onClose }: DayDetailPanelProps) {
+export function DayDetailPanel({ date, events, onClose, chiudiProprio = true }: DayDetailPanelProps) {
   if (!date) return null;
-  return <DayDetailContent date={date} events={events} onClose={onClose} />;
+  return <DayDetailContent date={date} events={events} onClose={onClose} chiudiProprio={chiudiProprio} />;
 }
 
 function DayDetailContent({
   date,
   events,
   onClose,
+  chiudiProprio,
 }: {
   date: string;
   events: CalendarEvent[];
   onClose: () => void;
+  chiudiProprio: boolean;
 }) {
   const isToday = isSameISODay(date, todayISO());
   const macros = useMemo(
@@ -175,14 +180,14 @@ function DayDetailContent({
     >
       {/* Header — long date + counts + close button */}
       <header className="relative shrink-0 rounded-t-xl border-b bg-gradient-to-b from-muted/40 to-card px-5 pt-4 pb-3.5">
-        <button
+        {chiudiProprio && <button
           type="button"
           onClick={onClose}
           aria-label="Chiudi pannello"
           className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
           <X className="h-4 w-4" />
-        </button>
+        </button>}
         <div className="text-[0.7647rem] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {isToday ? "Oggi" : "Giornata"}
         </div>

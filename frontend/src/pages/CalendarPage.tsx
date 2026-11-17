@@ -10,6 +10,7 @@ import { useSearchParams } from "react-router-dom";
 
 import type { CalendarEvent, MacroImportance } from "@/api/types";
 import {
+  AgendaCalendario,
   DayDetailPanel,
   FilterStrip,
   type CalendarKindFilter,
@@ -27,7 +28,9 @@ import {
   formatWeekLabel,
   todayISO,
 } from "@/lib/calendarMeta";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { SchedePagina } from "@/components/ui/schede-pagina";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { toLocalIsoDate } from "@/lib/localDate";
 import { cn } from "@/lib/utils";
 
@@ -262,6 +265,20 @@ export default function CalendarPage() {
   );
 
   const isPanelOpen = selectedDate !== null;
+  // Sotto `lg` (1024px) il calendario e' un'agenda e il giorno si apre in un
+  // foglio (D-61, D-62): la griglia a sette colonne li' perdeva i nomi, e il
+  // pannello compariva sotto la griglia, fuori schermo, come se il tocco non
+  // avesse fatto niente. Un ramo in JS e non in CSS: con `hidden` resterebbero
+  // montate due copie, entrambe misurate e lette dagli assistivi.
+  const sottoLg = useMediaQuery("(max-width: 1023px)");
+  // Gli estremi VISIBILI: per il mese solo i suoi giorni, non quelli di bordo
+  // che la griglia mostra per completare le righe.
+  const periodoAgenda = useMemo(() => {
+    if (view === "week") return { da: fromISO, a: toISO };
+    const primo = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const ultimo = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    return { da: toLocalIsoDate(primo), a: toLocalIsoDate(ultimo) };
+  }, [view, fromISO, toISO, cursor]);
 
   return (
     // Full-bleed: the calendar fills the entire available width of
@@ -369,7 +386,16 @@ export default function CalendarPage() {
             Wrapping into one column keeps these aligned with each other
             when the panel is open. */}
         <div className="space-y-5 min-w-0">
-          {view === "week" ? (
+          {sottoLg ? (
+            <AgendaCalendario
+              events={events}
+              daISO={periodoAgenda.da}
+              aISO={periodoAgenda.a}
+              selectedDate={selectedDate}
+              onSelectDate={onSelectDate}
+              isLoading={inAttesa}
+            />
+          ) : view === "week" ? (
             <WeekGrid
               cursor={cursor}
               events={events}
@@ -398,7 +424,7 @@ export default function CalendarPage() {
 
         {/* Detail-panel column — sticky on lg so it stays visible while the
             calendar scrolls; gives the user a stable surface to read. */}
-        {isPanelOpen && (
+        {isPanelOpen && !sottoLg && (
           <div className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-5rem)] min-w-0">
             <DayDetailPanel
               date={selectedDate}
@@ -408,6 +434,14 @@ export default function CalendarPage() {
           </div>
         )}
       </div>
+      {sottoLg && (
+        <Dialog open={isPanelOpen} onOpenChange={(aperto) => { if (!aperto) onCloseDetail(); }}>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto p-0">
+            <DialogTitle className="sr-only">Eventi del giorno</DialogTitle>
+            <DayDetailPanel date={selectedDate} events={selectedDayEvents} onClose={onCloseDetail} chiudiProprio={false} />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
