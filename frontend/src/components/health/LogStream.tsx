@@ -304,6 +304,7 @@ export default function LogStream({
               onChange={(e) => origin.onChange(e.target.value)}
               className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
               title="Quale componente stai guardando"
+              aria-label="Componente"
             >
               <option value="app">App (live)</option>
               {origin.options.map((o) => (
@@ -319,6 +320,7 @@ export default function LogStream({
               onChange={(e) => origin.onWindowChange(Number(e.target.value))}
               className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
               title="Finestra temporale interrogata su Loki"
+              aria-label="Finestra temporale"
             >
               <option value={15}>ultimi 15 min</option>
               <option value={60}>ultima ora</option>
@@ -331,6 +333,7 @@ export default function LogStream({
             onChange={(e) => setLevelFilter(e.target.value)}
             className="rounded-md border bg-background px-2.5 py-1.5 font-medium"
             title="Soglia minima del livello"
+            aria-label="Livello minimo"
           >
             <option value="ALL">Tutti i livelli</option>
             <option value="DEBUG">DEBUG+</option>
@@ -378,6 +381,7 @@ export default function LogStream({
             onClick={onTogglePause}
             className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
             title={paused ? "Riprendi" : "Pausa"}
+            aria-label={paused ? "Riprendi il flusso dei log" : "Metti in pausa il flusso dei log"}
           >
             {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </button>
@@ -386,6 +390,7 @@ export default function LogStream({
             onClick={onClear}
             className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
             title="Pulisci buffer locale"
+            aria-label="Pulisci il buffer locale dei log"
           >
             <Trash2 className="h-4 w-4" />
           </button>

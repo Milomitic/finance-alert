@@ -29,6 +29,7 @@ export function CalibrationPanel() {
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Orizzonte:</span>
               <select
+                aria-label="Orizzonte"
                 value={horizon}
                 onChange={(e) => setHorizon(Number(e.target.value))}
                 className="bg-background border rounded px-2 py-0.5 text-xs"

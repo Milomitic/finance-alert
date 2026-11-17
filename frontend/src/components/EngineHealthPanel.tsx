@@ -57,6 +57,7 @@ export function EngineHealthPanel() {
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Finestra:</span>
               <select
+                aria-label="Finestra"
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
                 className="bg-background border rounded px-2 py-0.5 text-xs"

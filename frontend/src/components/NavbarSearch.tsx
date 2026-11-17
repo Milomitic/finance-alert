@@ -385,6 +385,7 @@ export function NavbarSearch() {
             onClick={() => { setQ(""); setOpen(false); inputRef.current?.focus(); }}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-accent"
             title="Pulisci"
+            aria-label="Cancella la ricerca"
           >
             <X className="h-4 w-4 text-muted-foreground" />
           </button>

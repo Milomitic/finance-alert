@@ -152,30 +152,30 @@ export default function SectorsOverviewPage() {
           Dove guardare oggi, e come si posizionano i settori del catalogo.
         </p>
         <dl className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span>
+          <div>
             <dt className="inline">Stock</dt>{" "}
             <dd className="inline font-medium tabular-nums text-foreground">
               {data.total_stocks.toLocaleString("it-IT")}
             </dd>
-          </span>
-          <span>
+          </div>
+          <div>
             <dt className="inline">Settori</dt>{" "}
             <dd className="inline font-medium tabular-nums text-foreground">
               {data.total_sectors}
             </dd>
-          </span>
-          <span>
+          </div>
+          <div>
             <dt className="inline">Industries</dt>{" "}
             <dd className="inline font-medium tabular-nums text-foreground">
               {data.total_industries}
             </dd>
-          </span>
-          <span>
+          </div>
+          <div>
             <dt className="inline">Score medio universo</dt>{" "}
             <dd className="inline font-medium tabular-nums text-foreground">
               {fmtNum(universeAvgScore, 1)}
             </dd>
-          </span>
+          </div>
         </dl>
       </div>
 

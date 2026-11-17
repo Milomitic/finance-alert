@@ -340,7 +340,7 @@ export default function PositionsPage() {
                             </Button>
                             <button
                               onClick={() => onDelete(p)}
-                              title="Elimina"
+                              title="Elimina" aria-label="Elimina la posizione"
                               className="ml-1 p-1.5 hover:bg-destructive/10 hover:text-destructive rounded align-middle"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -422,7 +422,7 @@ export default function PositionsPage() {
                           <TableCell className="text-right">
                             <button
                               onClick={() => onDelete(p)}
-                              title="Elimina"
+                              title="Elimina" aria-label="Elimina la posizione"
                               className="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

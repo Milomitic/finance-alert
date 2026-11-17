@@ -38,6 +38,7 @@ export function ScanLogPanel() {
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Tipo:</span>
               <select
+                aria-label="Tipo"
                 value={kindFilter}
                 onChange={(e) => setKindFilter(e.target.value as typeof kindFilter)}
                 className="bg-background border rounded px-2 py-0.5 text-xs"

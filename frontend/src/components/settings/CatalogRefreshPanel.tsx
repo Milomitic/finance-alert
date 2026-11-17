@@ -154,6 +154,7 @@ export function CatalogRefreshPanel() {
                           disabled={trigger.isPending}
                           onClick={() => trigger.mutate(idx.index_code)}
                           title={`Refresh ${meta.displayCode}`}
+                          aria-label={`Aggiorna ${meta.displayCode}`}
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </Button>

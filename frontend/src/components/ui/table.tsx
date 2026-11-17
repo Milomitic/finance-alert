@@ -3,18 +3,49 @@ import * as React from "react"
 import { HintLabel } from "@/components/ui/info-hint"
 import { cn } from "@/lib/utils"
 
+/** Vero quando il contenuto e' piu' largo del contenitore (E-04).
+ *
+ *  Una regione che scorre di lato senza nulla di focalizzabile dentro non si
+ *  puo' far scorrere da tastiera: e' `scrollable-region-focusable` della
+ *  linea di base axe. Il `tabIndex` va pero' solo sulle tabelle che scorrono
+ *  davvero, altrimenti ogni tabella diventa una fermata in piu' del Tab. Lo
+ *  stato cambia solo nella callback dell'osservatore, che parte da sola
+ *  alla prima osservazione. */
+function useScorreDiLato(ref: React.RefObject<HTMLDivElement | null>): boolean {
+  const [scorre, setScorre] = React.useState(false)
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(() => setScorre(el.scrollWidth > el.clientWidth + 1))
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => ro.disconnect()
+  }, [ref])
+  return scorre
+}
+
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-auto">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+>(({ className, ...props }, ref) => {
+  const contenitore = React.useRef<HTMLDivElement>(null)
+  const scorre = useScorreDiLato(contenitore)
+  return (
+    <div
+      ref={contenitore}
+      className="relative w-full overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      tabIndex={scorre ? 0 : undefined}
+      role={scorre ? "region" : undefined}
+      aria-label={scorre ? (props["aria-label"] ?? "Tabella, scorre di lato") : undefined}
+    >
+      <table
+        ref={ref}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+})
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<
