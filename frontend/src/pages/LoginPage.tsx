@@ -1,10 +1,11 @@
 import { ArrowRight, ChartNoAxesCombined, Eye, EyeOff, Fingerprint, Layers3, LoaderCircle, ScanLine } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "@/api/client";
 import { useLogin, useMe } from "@/hooks/useAuth";
+import { destinazioneDopoLogin } from "@/lib/dopoLogin";
 import "./LoginPage.css";
 
 /**
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const me = useMe();
   const login = useLogin();
   const navigate = useNavigate();
+  const destinazione = destinazioneDopoLogin(useLocation().state);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -28,8 +30,8 @@ export default function LoginPage() {
   const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (me.data) navigate("/", { replace: true });
-  }, [me.data, navigate]);
+    if (me.data) navigate(destinazione, { replace: true });
+  }, [me.data, navigate, destinazione]);
 
   // Errors only show after a submit attempt (same UX as the old onSubmit mode).
   const usernameError = attempted && !username ? "Inserisci lo username" : null;
@@ -46,7 +48,7 @@ export default function LoginPage() {
     }
     try {
       await login.mutateAsync({ username, password });
-      navigate("/", { replace: true });
+      navigate(destinazione, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setFormError("Credenziali non valide. Controlla username e password e riprova.");
