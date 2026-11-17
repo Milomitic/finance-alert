@@ -39,7 +39,10 @@ export function MonthNav({
   unitLabel,
 }: MonthNavProps) {
   return (
-    <div className="flex items-center gap-1.5">
+    // flex-wrap anche qui (CLAUDE.md: a OGNI livello che puo' diventare una
+    // riga lunga). Con le frecce a 44px su touch la riga sbordava di 7px a
+    // 375px; ora «Oggi» va a capo.
+    <div className="flex flex-wrap items-center gap-1.5">
       <Button
         variant="ghost"
         size="icon"
