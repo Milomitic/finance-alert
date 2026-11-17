@@ -82,6 +82,10 @@ export function MarketChart({
       autoSize: true,
       width: el.clientWidth,
       height: el.clientHeight,
+      // Un dito che parte sul grafico deve scorrere la pagina, non la scala
+      // dei prezzi: la stessa correzione di PriceChart, RsiPanel e MacdPanel,
+      // rimasta fuori da qui (E-25). Il grafico e' alto 460px su un telefono.
+      handleScroll: { vertTouchDrag: false },
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "rgba(115, 115, 115, 1)",

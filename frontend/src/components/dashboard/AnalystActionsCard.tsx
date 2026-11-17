@@ -286,7 +286,7 @@ export function AnalystActionsCard() {
           />
         </div>
         {q.isLoading ? (
-          <ul className="flex-1 min-h-0 overflow-y-auto">
+          <ul className="relative flex-1 min-h-0 overflow-y-auto">
             {Array.from({ length: 10 }).map((_, i) => (
               <RowSkeleton key={i} />
             ))}
@@ -320,7 +320,7 @@ export function AnalystActionsCard() {
             </div>
           </div>
         ) : (
-          <ul className="flex-1 min-h-0 overflow-y-auto">
+          <ul className="relative flex-1 min-h-0 overflow-y-auto">
             {items.map((a, i) => (
               <ActionRow key={`${a.ticker}-${a.date}-${a.firm}-${i}`} a={a} />
             ))}

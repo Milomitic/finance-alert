@@ -120,6 +120,9 @@ export function PicksCard({
             Dati insufficienti
           </div>
         ) : (
+          // Su telefono il nome lungo spingeva la tabella 23px oltre il bordo
+          // (A-39): scorre dentro la sua scheda invece di uscire dalla pagina.
+          <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <tbody>
               {rows.map((r) => (
@@ -147,6 +150,7 @@ export function PicksCard({
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -256,15 +260,25 @@ const MOBILE_COLUMNS: MetricColumn<SectorStockRow>[] = [
   { key: "market_cap", label: "Mkt cap", cell: (r) => fmtMarketCap(r.market_cap) },
 ];
 
+/** Quante aziende mostrare prima di «Mostra tutte» (A-38). Un settore ne ha
+ *  fino a 125: rese tutte, a schede, la pagina era lunga 32.958px su telefono
+ *  (40 schermate) e le sezioni sotto non si raggiungevano. */
+export const AZIENDE_MOSTRATE_PRIMA = 20;
+
 export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("composite");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [tutte, setTutte] = useState(false);
 
   const sorted = useMemo(() => {
     // Slice() so we don't mutate the prop array (React rules + downstream
     // memoisation guarantees in the parent hook).
     return [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir));
   }, [rows, sortKey, sortDir]);
+  // L'ordinamento vale su TUTTE le aziende, il taglio viene dopo: «le prime
+  // 20 per Qualita'» sono davvero le prime 20, non 20 qualsiasi riordinate.
+  const visibili = tutte ? sorted : sorted.slice(0, AZIENDE_MOSTRATE_PRIMA);
+  const nascoste = sorted.length - visibili.length;
 
   function onHeaderClick(col: ColumnSpec) {
     if (col.key === sortKey) {
@@ -325,7 +339,7 @@ export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
             </button>
           </div>
           <MetricCardList
-            rows={sorted}
+            rows={visibili}
             columns={MOBILE_COLUMNS}
             rowKey={(r) => r.ticker}
             identity={(r) => (
@@ -393,12 +407,21 @@ export function SortableStocksTable({ rows }: { rows: SectorStockRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row) => (
+              {visibili.map((row) => (
                 <StockRow key={row.ticker} row={row} />
               ))}
             </tbody>
           </table>
         </div>
+        {(nascoste > 0 || tutte) && sorted.length > AZIENDE_MOSTRATE_PRIMA && (
+          <button
+            type="button"
+            onClick={() => setTutte((t) => !t)}
+            className="mt-3 min-h-[44px] w-full rounded-md border text-sm font-medium hover:bg-accent transition-colors"
+          >
+            {tutte ? `Mostra le prime ${AZIENDE_MOSTRATE_PRIMA}` : `Mostra tutte le ${sorted.length} aziende`}
+          </button>
+        )}
       </CardContent>
     </Card>
   );

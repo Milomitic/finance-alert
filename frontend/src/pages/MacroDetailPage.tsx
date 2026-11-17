@@ -358,8 +358,10 @@ export default function MacroDetailPage() {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
           <CardTitle className="text-base">Storico osservazioni</CardTitle>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
+          {/* flex-wrap a OGNI livello (CLAUDE.md): a 375px i due gruppi
+              insieme uscivano di 40px dal bordo (A-39). */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap gap-1">
               {(["level", "periodo", "anno"] as const).map((m) => (
                 <button
                   key={m}
@@ -376,7 +378,7 @@ export default function MacroDetailPage() {
                 </button>
               ))}
             </div>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {RANGES.map((r) => (
               <button
                 key={r.id}
