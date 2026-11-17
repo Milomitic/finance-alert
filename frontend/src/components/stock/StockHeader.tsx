@@ -62,10 +62,16 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
     .join(" ");
   // Fill area under the line for stronger background presence
   const areaPath = `M0,${H} L${points} L${W},${H} Z`;
-  const stroke = up ? "#17b551" : "#dc2626";
+  // Emerald/rose come il resto dell'app per la direzione: il rosso
+  // `#dc2626` e' quello dei guasti (CLAUDE.md, una palette per significato).
+  const stroke = up ? "#10b981" : "#f43f5e";
   return (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none opacity-50 sm:opacity-100"
+      // Solo il terzo inferiore della scheda (A-48): a tutta altezza l'area
+      // colorata era alta ~350px, la superficie piu' grande della pagina, e
+      // dipingeva il «giu'» dietro nome e prezzo. Il grafico vero ora sta
+      // subito sotto: questo resta un accenno di forma, non un grafico.
+      className="absolute inset-x-0 bottom-0 h-1/3 w-full pointer-events-none opacity-50 sm:opacity-70"
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
       aria-hidden="true"

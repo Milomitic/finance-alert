@@ -69,6 +69,7 @@ import { EtfHoldingsCard } from "@/components/stock/EtfHoldingsCard";
 import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
+import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 
 /** Soglia «oltre il Full HD», in pixel.
  *
@@ -86,6 +87,7 @@ export const OVER_FHD_PX = 1921;
 export default function StockDetailPage() {
   const now = useNowTick(60_000);
   const { ticker = "" } = useParams<{ ticker: string }>();
+  useTitoloScheda(ticker ? ticker.toUpperCase() : null);
   const [searchParams, setSearchParams] = useSearchParams();
   // v2 timeframe vocabulary: default to 1d (was "1y" range). Backend
   // accepts 30m/1h/1d/1w/1m/all, with legacy keys (incl. 4h) still
@@ -372,6 +374,9 @@ export default function StockDetailPage() {
 
   return (
     <div key="pagina" className="space-y-3">
+      {/* Il titolo della pagina per chi la legge con un lettore di schermo
+          (E-01): a schermo il ticker e il nome stanno nell'intestazione. */}
+      <h1 className="sr-only">{d.stock.ticker} · {d.stock.name}</h1>
       {/* Il ritorno al contesto di provenienza.
           Modello copiato da `SectorDetailPage` e `InstitutionalDetailPage`,
           che lo avevano gia: un `<Link>` verso la pagina padre invece di un
@@ -438,100 +443,12 @@ export default function StockDetailPage() {
         </div>
       </div>
 
-      {/* ETF components — renders only for ETFs (null for equities), so
-          for a fund it sits right under the hero as the lead content:
-          per-component weight, trend sparkline, price + day variation. */}
-      <EtfHoldingsCard ticker={ticker} />
-
-      {/* Company overview (left, 67%) + Alert storici (right, 33%).
-          Equal-height row (`items-stretch`, the grid default): the
-          alerts card fills the height set by the company-profile prose
-          and scrolls internally when there are more rows than fit.
-          The profile is the page's lead content and dictates the row
-          height; the alerts card adapts. Stacks vertically below `lg`. */}
-      {/* min-h, not h: un box rigido da 300px dimensionato su una scheda sola
-          faceva traboccare la seconda sopra la riga sotto. Il pavimento
-          conserva le proporzioni dello stato vuoto e la riga cresce solo
-          quando c'e' qualcosa per cui crescere.
-          (La scheda «In formazione» che condivideva questa colonna e' stata
-          rimossa su richiesta: i setup restano su /setups.) */}
-      {/* ⚠️ Montata per intero solo FINO al Full HD. Oltre, i suoi due
-          contenuti sono gia' altrove (il profilo dentro l'intestazione, i
-          segnali sotto gli score) e questa riga resterebbe vuota. Il ramo e'
-          in JS e non in CSS proprio per questo: `hidden` lascerebbe montati
-          due profili e due storici, cioe' due query e due alberi, uno dei
-          quali invisibile ma misurato e letto dagli assistivi. */}
-      {!oltreFhd && (
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:min-h-[300px] [&>*]:min-w-0">
-        {/* Both cards fill the fixed row height (h-full inside each): the
-            profile's prose scrolls internally if its condensed summary still
-            overflows, the alerts card scrolls its rows. AlertsHistory needs a
-            concrete mobile height too, else its `flex-1 min-h-0` pane collapses
-            to 0 without the row's `lg:h-[300px]`. */}
-        <div className="lg:h-full lg:min-h-0">
-          <CompanyOverviewCard ticker={ticker} stock={d.stock} />
-        </div>
-        {/* Same axis, present then past: what is FORMING above what already
-            fired. A flex column so the two share the height explicitly —
-            setups take what they need, the history takes the rest and scrolls.
-            The history keeps a floor so its internal `flex-1 min-h-0` pane
-            can never collapse to zero. */}
-        <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
-          <div className="lg:h-auto lg:flex-1 lg:min-h-[220px]">
-            <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} chart={grafico} />
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
-          Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
-          a 7-column earnings table that needs the breathing room) and the
-          other three each ~22%.
-          Fixed `lg:h-[520px]` row height (was 640): tighter so the row
-          doesn't dominate the viewport. All four cards have proper
-          internal scroll — Fundamentals scrolls its earnings table,
-          Valuation scrolls its now-much-longer metrics list (~50 rows
-          across 2 columns after the yfinance expansion), News scrolls
-          its items, Analyst scrolls its recent actions. */}
-      <div className={cn("grid grid-cols-1 gap-3 lg:h-[520px] [&>*]:min-w-0", rigaSchede)}>
-        {/* Fundamentals: no internal scroll — its earnings table sets
-            the natural height (CLAUDE.md). Leave it auto on mobile.
-            The other three scroll internally so they need an explicit
-            mobile height to not collapse. NewsCard is internally
-            `relative h-full` + absolute-inset child, so a fixed-height
-            wrapper is exactly the containing block it needs. */}
-        {schede.fondamentali && (
-          <div className="lg:h-full lg:min-h-0">
-            <FundamentalsCard ticker={ticker} />
-          </div>
-        )}
-        <div className="lg:h-full lg:min-h-0">
-          <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
-        </div>
-        {schede.news && (
-          <div className="lg:h-full lg:min-h-0">
-            <NewsCard ticker={ticker} />
-          </div>
-        )}
-        {schede.analisti && (
-          <div className="lg:h-full lg:min-h-0">
-            <AnalystTargetCard ticker={ticker} currency={d.stock.currency} />
-          </div>
-        )}
-      </div>
-
-      {/* FA-156: titoli simili e reazioni alle trimestrali, fuori dalla riga
-          dei fondamentali (quella scheda ne fissa l'altezza). Solo per i
-          titoli che hanno fondamentali: un ETF non ha pari ne' trimestrali. */}
-      {schede.fondamentali && <ConfrontiTitoloCard ticker={ticker} />}
-
-      {/* The dedicated Alerts + Insiders row that used to live here was
-          decomposed: alerts moved next to the company profile (above),
-          insiders moved into the right-hand sidebar (below) so the
-          chart can dominate the vertical real estate that the row
-          used to consume. */}
-
+      {/* Il grafico subito sotto l'intestazione (C-39, A-36). Stava all'ottavo
+          posto, dopo profilo, fondamentali, valutazione, notizie, analisti e
+          confronti: misurato in produzione partiva a 2.151px a 1440 e a 6.838px
+          su telefono, sopra la piega solo a 4K. E' cio' per cui si apre la
+          pagina, e lo scheletro di caricamento lo metteva gia' qui: la pagina
+          vera saltava sotto lo scheletro. */}
       {/* min-w-0 on the Card: a grid ITEM defaults to `min-width: auto`, i.e.
           it refuses to shrink below its own min-content. The chart card's
           min-content is the toolbar row, which is wider than a phone — so the
@@ -814,6 +731,100 @@ export default function StockDetailPage() {
           {schede.analisti && <InsidersAnalystCard ticker={ticker} />}
         </div>
       </div>
+
+      {/* ETF components — renders only for ETFs (null for equities), so
+          for a fund it sits right under the hero as the lead content:
+          per-component weight, trend sparkline, price + day variation. */}
+      <EtfHoldingsCard ticker={ticker} />
+
+      {/* Company overview (left, 67%) + Alert storici (right, 33%).
+          Equal-height row (`items-stretch`, the grid default): the
+          alerts card fills the height set by the company-profile prose
+          and scrolls internally when there are more rows than fit.
+          The profile is the page's lead content and dictates the row
+          height; the alerts card adapts. Stacks vertically below `lg`. */}
+      {/* min-h, not h: un box rigido da 300px dimensionato su una scheda sola
+          faceva traboccare la seconda sopra la riga sotto. Il pavimento
+          conserva le proporzioni dello stato vuoto e la riga cresce solo
+          quando c'e' qualcosa per cui crescere.
+          (La scheda «In formazione» che condivideva questa colonna e' stata
+          rimossa su richiesta: i setup restano su /setups.) */}
+      {/* ⚠️ Montata per intero solo FINO al Full HD. Oltre, i suoi due
+          contenuti sono gia' altrove (il profilo dentro l'intestazione, i
+          segnali sotto gli score) e questa riga resterebbe vuota. Il ramo e'
+          in JS e non in CSS proprio per questo: `hidden` lascerebbe montati
+          due profili e due storici, cioe' due query e due alberi, uno dei
+          quali invisibile ma misurato e letto dagli assistivi. */}
+      {!oltreFhd && (
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 lg:min-h-[300px] [&>*]:min-w-0">
+        {/* Both cards fill the fixed row height (h-full inside each): the
+            profile's prose scrolls internally if its condensed summary still
+            overflows, the alerts card scrolls its rows. AlertsHistory needs a
+            concrete mobile height too, else its `flex-1 min-h-0` pane collapses
+            to 0 without the row's `lg:h-[300px]`. */}
+        <div className="lg:h-full lg:min-h-0">
+          <CompanyOverviewCard ticker={ticker} stock={d.stock} />
+        </div>
+        {/* Same axis, present then past: what is FORMING above what already
+            fired. A flex column so the two share the height explicitly —
+            setups take what they need, the history takes the rest and scrolls.
+            The history keeps a floor so its internal `flex-1 min-h-0` pane
+            can never collapse to zero. */}
+        <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
+          <div className="lg:h-auto lg:flex-1 lg:min-h-[220px]">
+            <StockAlertsHistoryCard alerts={d.alerts_history} ticker={ticker} chart={grafico} />
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* Four side-by-side cards: Fundamentals | Valuation+KPIs | News | Analyst.
+          Weighted columns `[1.5fr_1fr_1fr_1fr]` give Fundamentals ~33% (it has
+          a 7-column earnings table that needs the breathing room) and the
+          other three each ~22%.
+          Fixed `lg:h-[520px]` row height (was 640): tighter so the row
+          doesn't dominate the viewport. All four cards have proper
+          internal scroll — Fundamentals scrolls its earnings table,
+          Valuation scrolls its now-much-longer metrics list (~50 rows
+          across 2 columns after the yfinance expansion), News scrolls
+          its items, Analyst scrolls its recent actions. */}
+      <div className={cn("grid grid-cols-1 gap-3 lg:h-[520px] [&>*]:min-w-0", rigaSchede)}>
+        {/* Fundamentals: no internal scroll — its earnings table sets
+            the natural height (CLAUDE.md). Leave it auto on mobile.
+            The other three scroll internally so they need an explicit
+            mobile height to not collapse. NewsCard is internally
+            `relative h-full` + absolute-inset child, so a fixed-height
+            wrapper is exactly the containing block it needs. */}
+        {schede.fondamentali && (
+          <div className="lg:h-full lg:min-h-0">
+            <FundamentalsCard ticker={ticker} />
+          </div>
+        )}
+        <div className="lg:h-full lg:min-h-0">
+          <MicroDataCard ticker={ticker} stock={d.stock} kpis={d.kpis} />
+        </div>
+        {schede.news && (
+          <div className="lg:h-full lg:min-h-0">
+            <NewsCard ticker={ticker} />
+          </div>
+        )}
+        {schede.analisti && (
+          <div className="lg:h-full lg:min-h-0">
+            <AnalystTargetCard ticker={ticker} currency={d.stock.currency} />
+          </div>
+        )}
+      </div>
+
+      {/* FA-156: titoli simili e reazioni alle trimestrali, fuori dalla riga
+          dei fondamentali (quella scheda ne fissa l'altezza). Solo per i
+          titoli che hanno fondamentali: un ETF non ha pari ne' trimestrali. */}
+      {schede.fondamentali && <ConfrontiTitoloCard ticker={ticker} />}
+
+      {/* The dedicated Alerts + Insiders row that used to live here was
+          decomposed: alerts moved next to the company profile (above),
+          insiders moved into the right-hand sidebar (below) so the
+          chart can dominate the vertical real estate that the row
+          used to consume. */}
 
       <PriceAlertDialog
         open={dialogOpen}
