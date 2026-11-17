@@ -22,8 +22,6 @@ const SORGENTI = import.meta.glob("/src/**/*.tsx", {
 
 /** file:frammento della classe -> perche' non serve `relative`. */
 const ECCEZIONI: Record<string, string> = {
-  "AlertDetailDialog.tsx:DialogContent": "il contenuto del dialogo e' `fixed`, quindi gia' posizionato",
-  "SetupDetailDialog.tsx:DialogContent": "il contenuto del dialogo e' `fixed`, quindi gia' posizionato",
   "AlertDetailDialog.tsx:<pre": "testo JSON preformattato, nessuna etichetta dentro",
   "Layout.tsx:<nav": "le etichette nascoste del menu non sono nella parte che scorre",
   "Layout.tsx:<main": "il contenitore di tutta l'app: non va posizionato per una sola lista",
@@ -37,6 +35,9 @@ function contenitoriScoperti(): string[] {
     const nome = file.split("/").pop() ?? file;
     for (const riga of src.split("\n")) {
       if (!/className="[^"]*\boverflow-(y-)?auto\b[^"]*"/.test(riga) || /\brelative\b/.test(riga)) continue;
+      // Il contenuto di un dialogo e' `fixed` (`components/ui/dialog.tsx`),
+      // quindi gia' posizionato, in qualunque file stia.
+      if (riga.includes("<DialogContent")) continue;
       const esente = Object.keys(ECCEZIONI).some((k) => {
         const [f, frammento] = [k.slice(0, k.indexOf(":")), k.slice(k.indexOf(":") + 1)];
         return nome === f && riga.includes(frammento);

@@ -27,6 +27,7 @@ import json
 import random
 import secrets
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -35,6 +36,7 @@ from app.models.alert import Alert
 from app.models.institutional import Institutional
 from app.models.macro import MacroReleaseDate, MacroSeries
 from app.models.ohlcv import OhlcvDaily
+from app.models.position import Position
 from app.models.stock import Stock
 from app.models.user import User
 from app.services.institutional_scraper import ScrapedFiling, ScrapedHolding, ScrapedManager
@@ -373,6 +375,53 @@ def semina_calendario(db, oggi: date) -> int:
     return n
 
 
+def semina_posizioni(db, stocks: list[Stock], oggi: date) -> int:
+    """Due posizioni aperte e una chiusa (E-15, 2026-11-17).
+
+    ⚠️ `/positions` stava a ZERO violazioni in linea di base perche' era
+    VUOTA, non perche' fosse sana: senza righe il gate misurava un messaggio
+    «nessuna posizione», e la tabella che si usa davvero non l'aveva mai
+    vista. Una long e una short aperte, una chiusa: le tre forme che la
+    pagina rende.
+
+    Prezzi relativi all'ultima chiusura SEMINATA del titolo, e date dal
+    calendario dei feriali del seme, mai dall'orologio: un seme che dipende
+    dall'ora della corsa ha gia' fatto arrossire il gate quattro volte
+    (CLAUDE.md). Non tocca `rng`."""
+    if db.query(Position).count() > 0:
+        return 0
+    feriali = _giorni_feriali(oggi, 30)
+    n = 0
+    for s, lato, chiusa in ((stocks[0], "long", False), (stocks[1], "short", False), (stocks[2], "long", True)):
+        ultima = (
+            db.query(OhlcvDaily.close)
+            .filter(OhlcvDaily.stock_id == s.id)
+            .order_by(OhlcvDaily.date.desc())
+            .limit(1)
+            .scalar()
+        )
+        if ultima is None:
+            continue
+        prezzo = Decimal(str(round(float(ultima), 4)))
+        su, giu = Decimal("1.08"), Decimal("0.94")
+        ingresso = prezzo * (Decimal("0.97") if lato == "long" else Decimal("1.03"))
+        db.add(Position(
+            stock_id=s.id,
+            side=lato,
+            entry_price=ingresso.quantize(Decimal("0.0001")),
+            stop_price=(ingresso * (giu if lato == "long" else su)).quantize(Decimal("0.0001")),
+            target_price=(ingresso * (su if lato == "long" else giu)).quantize(Decimal("0.0001")),
+            size=Decimal("10"),
+            opened_at=_ancora(feriali[5]),
+            closed_at=_ancora(feriali[-3]) if chiusa else None,
+            exit_price=(ingresso * Decimal("1.05")).quantize(Decimal("0.0001")) if chiusa else None,
+            exit_reason="target" if chiusa else None,
+        ))
+        n += 1
+    db.flush()
+    return n
+
+
 def main() -> None:
     rng = random.Random(20260912)  # deterministico: un gate che cambia esito da solo non e' un gate
     db = SessionLocal()
@@ -480,6 +529,9 @@ def main() -> None:
                     ))
         # ⚠️ Prima degli istituzionali e senza toccare `rng`, come loro.
         semina_calendario(db, oggi)
+        # Anche le posizioni non toccano `rng`: l'ordine delle estrazioni
+        # sopra resta quello di sempre.
+        semina_posizioni(db, stocks, oggi)
         # ⚠️ Per ULTIMA, e senza toccare `rng`: vedi la sezione FA-068 in cima.
         fondi = semina_istituzionali(db, oggi)
         db.commit()
