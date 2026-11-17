@@ -223,3 +223,35 @@ def test_seminare_due_volte_non_raddoppia(db):
     assert semina_calendario(db, oggi) == 3
     assert semina_calendario(db, oggi) == 0
     assert db.query(MacroReleaseDate).count() == 3
+
+
+def test_le_posizioni_del_seme_sono_le_tre_forme_e_non_si_raddoppiano(db):
+    """E-15: `/positions` stava a zero violazioni perche' era vuota. Il seme
+    mette una long e una short aperte e una chiusa, coi prezzi dall'ultima
+    chiusura seminata; una seconda corsa non ne aggiunge altre."""
+    from decimal import Decimal
+
+    from app.models.ohlcv import OhlcvDaily
+    from app.models.position import Position
+    from app.models.stock import Stock
+    from app.scripts.seed_e2e import semina_posizioni
+
+    oggi = date(2026, 11, 17)
+    titoli = []
+    for i, t in enumerate(("AAA", "BBB", "CCC")):
+        s = Stock(ticker=t, exchange="X", name=t)
+        db.add(s)
+        db.flush()
+        db.add(OhlcvDaily(stock_id=s.id, date=oggi, open=1, high=1, low=1, close=100 + i, volume=1))
+        titoli.append(s)
+    db.flush()
+
+    assert semina_posizioni(db, titoli, oggi) == 3
+    assert semina_posizioni(db, titoli, oggi) == 0
+    pos = {p.stock_id: p for p in db.query(Position).all()}
+    lunga, corta, chiusa = (pos[s.id] for s in titoli)
+    assert (lunga.side, corta.side) == ("long", "short")
+    assert lunga.stop_price < lunga.entry_price < lunga.target_price
+    assert corta.target_price < corta.entry_price < corta.stop_price
+    assert lunga.closed_at is None and chiusa.closed_at is not None
+    assert lunga.entry_price == Decimal("97.0000")

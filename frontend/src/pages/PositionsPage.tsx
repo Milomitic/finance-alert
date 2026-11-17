@@ -94,7 +94,9 @@ function PnlCell({ pct, abs, currency }: { pct: number | null; abs: number | nul
     >
       {fmtPct(pct)}
       {abs != null && (
-        <span className="ml-1 text-xs font-medium opacity-80">
+        {/* Niente `opacity-80`: sul verde scuro portava il testo sotto i 4,5:1
+            (axe, gate del 2026-11-17, la prima volta che il seme aveva righe). */}
+        <span className="ml-1 text-xs font-medium">
           ({formatMoneySigned(abs, currency)})
         </span>
       )}
@@ -289,7 +291,7 @@ export default function PositionsPage() {
                         <TableHead className="text-right">Prezzo</TableHead>
                         <TableHead className="text-right">P&amp;L</TableHead>
                         <TableHead className="text-right">Aperta il</TableHead>
-                        <TableHead className="text-right" />
+                        <TableHead className="text-right"><span className="sr-only">Azioni</span></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -380,7 +382,7 @@ export default function PositionsPage() {
                         <TableHead>Esito</TableHead>
                         <TableHead className="text-right">P&amp;L realizzato</TableHead>
                         <TableHead className="text-right">Chiusa il</TableHead>
-                        <TableHead className="text-right" />
+                        <TableHead className="text-right"><span className="sr-only">Azioni</span></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>

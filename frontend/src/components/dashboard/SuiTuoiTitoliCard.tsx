@@ -22,11 +22,14 @@ import { cn } from "@/lib/utils";
 
 const CHIAVE_TITOLI = "dashboard.suituoititoli.pieni";
 
+/** Senza ricordo si assume che i titoli ci siano: e' il caso di chi usa la
+ *  pagina (posizioni e preferiti), e il gate, col seme che ha posizioni,
+ *  lo misura cosi'. Solo un «0» ricordato accorcia lo scheletro. */
 function leggiAveaTitoli(): boolean {
   try {
-    return localStorage.getItem(CHIAVE_TITOLI) === "1";
+    return localStorage.getItem(CHIAVE_TITOLI) !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
