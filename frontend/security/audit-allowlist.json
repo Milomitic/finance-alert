@@ -9,5 +9,13 @@
     "codebase is not exposed, and you named a date to look again. If you",
     "cannot write the `reason` without hedging, upgrade instead."
   ],
-  "allow": []
+  "allow": [
+    {
+      "id": "GHSA-fc5q-39xc-vjpf",
+      "package": "picomatch",
+      "title": "picomatch vulnerable to ReDoS through single-branch repeated extglobs",
+      "reason": "The ReDoS needs an attacker to supply a crafted extglob PATTERN. In the production tree picomatch is reached only through tailwindcss (via micromatch, anymatch, readdirp, fast-glob, chokidar, tinyglobby, sucrase), which matches the static `content` globs written in tailwind.config.js (\"./index.html\", \"./src/**/*.{js,ts,jsx,tsx}\") at BUILD time and watches files in dev. No pattern comes from a user or a request: the browser bundle does not contain picomatch and the backend is Python. It is in the production tree only because tailwindcss-animate (a build-time plugin under dependencies) declares tailwindcss as a peer, the same path as the braces entry closed on 2026-11-16. There is no forward fix: the advisory range is <=4.0.7 and 4.0.7 is the latest picomatch published (checked 2026-11-17).",
+      "review_by": "2026-12-17"
+    }
+  ]
 }
