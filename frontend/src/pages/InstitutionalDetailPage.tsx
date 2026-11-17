@@ -12,6 +12,7 @@ import { useInstitutionalDetail } from "@/hooks/useInstitutionals";
 import { nextOffset, PAGE_SIZE } from "@/hooks/useInstitutionalHoldings";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 
 /* InstitutionalDetailPage — single portfolio drilldown.
  *
@@ -182,6 +183,7 @@ function HoldingRow({ row }: { row: HoldingDetail }) {
 
 export default function InstitutionalDetailPage() {
   const { slug = "" } = useParams<{ slug: string }>();
+  useTitoloScheda(slug ? decodeURIComponent(slug).replace(/-/g, " ") : null);
   const [searchParams, setSearchParams] = useSearchParams();
   const periodParam = searchParams.get("period") ?? undefined;
   // "Solo variazioni": filtra la tabella holdings alle sole righe con

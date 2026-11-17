@@ -15,6 +15,7 @@ import { formatMacroValue } from "@/lib/macroFormat";
 import { MacroAnalisiCard } from "@/components/macro/MacroAnalisiCard";
 import { formatConsenso } from "@/lib/consensoMacro";
 import { coloreEsito, formatVariazioneMacro, tonoControStima, tonoEsito } from "@/lib/variazioneMacro";
+import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 
 /* ─── /macro/:seriesId — Investing-style indicator detail page ─────────── *
  *
@@ -46,6 +47,7 @@ export default function MacroDetailPage() {
   const navigate = useNavigate();
   const id = seriesId ? parseInt(seriesId, 10) : undefined;
   const detail = useMacroDetail(id);
+  useTitoloScheda(detail.data?.label);
 
   const [range, setRange] = useState<RangeId>("5y");
 

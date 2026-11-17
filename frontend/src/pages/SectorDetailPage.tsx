@@ -27,6 +27,7 @@ import { fmtNum } from "@/lib/format";
 import { getSectorIcon, getSectorIconColor, getSectorTone } from "@/lib/sectorMeta";
 import { formatRendimento, quota, tonoRendimento, variazioneUltimoGiorno } from "@/lib/sectorPerformance";
 import { cn } from "@/lib/utils";
+import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 
 /* Sector recap page — route /sectors/:name.
 
@@ -73,6 +74,7 @@ export default function SectorDetailPage() {
   const { name = "" } = useParams<{ name: string }>();
   const decoded = decodeURIComponent(name);
   const q = useSectorDetail(decoded);
+  useTitoloScheda(decoded);
 
   // `getSectorIcon` is a lookup into a module-level Record<string, LucideIcon>,
   // so this reference is one of a fixed set of components — stable across

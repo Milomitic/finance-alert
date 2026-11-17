@@ -56,10 +56,10 @@ export default function AlertsPage() {
       <div>
         {/* Il titolo e' l'IDENTITA' della destinazione e non cambia con la
             scheda: cio' che appartiene alla vista varia sotto. */}
-        <h2 className="flex items-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+        <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight sm:text-3xl">
           <Bell className="h-7 w-7 text-muted-foreground" aria-hidden />
           Segnali
-        </h2>
+        </h1>
       </div>
 
       {/* Lo stesso componente delle schede di Diagnostica, Superinvestor e

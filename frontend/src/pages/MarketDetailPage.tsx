@@ -32,6 +32,7 @@ import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
+import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 
 /* ─── Per-symbol icon overrides ──────────────────────────────────────────
  *
@@ -94,6 +95,7 @@ export default function MarketDetailPage() {
   const range = searchParams.get("range") ?? "1d";
   const decoded = decodeURIComponent(symbol);
   const q = useMarketDetail(decoded, range);
+  useTitoloScheda(q.data?.name ?? decoded);
 
   // Same convention as StockDetailPage: indicator visibility/style is
   // user-controllable via IndicatorToggles, and the price/RSI/MACD
@@ -167,6 +169,7 @@ export default function MarketDetailPage() {
 
   return (
     <div className="space-y-3">
+      <h1 className="sr-only">{q.data?.name ?? decoded}</h1>
       {/* Il ritorno al contesto di provenienza.
           Modello copiato da `SectorDetailPage` e `InstitutionalDetailPage`,
           che lo avevano gia: un `<Link>` verso la pagina padre invece di un

@@ -152,6 +152,7 @@ export default function StudioPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-3 sm:p-6">
+      <h1 className="sr-only">Studio</h1>
       <Card>
         <CardContent className="space-y-3 p-4">
           <SectionTitle icon={FlaskConical} label="Studio" />

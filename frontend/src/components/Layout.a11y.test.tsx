@@ -92,11 +92,15 @@ describe("la scheda del browser dice quale pagina è aperta", () => {
     expect(document.title).toBe("Segnali · Finance-Alert");
   });
 
-  it("su una rotta di dettaglio resta generico invece di indovinare", () => {
-    // /stocks/NVDA is a stock, not "Screener". A confidently wrong title is
-    // worse than a plain one, so prefix matching is deliberately not used.
+  it("su una rotta di dettaglio il guscio non indovina e lascia il titolo alla pagina", () => {
+    // /stocks/NVDA is a stock, not "Screener": prefix matching resta escluso.
+    // Da C-65 il guscio non scrive nemmeno «Finance-Alert» sulle rotte di
+    // dettaglio, perche' il suo effetto gira DOPO quello della pagina e
+    // cancellerebbe il titolo che la pagina ha scritto (`useTitoloScheda`).
+    document.title = "NVDA · Finance-Alert";
     renderAt("/stocks/NVDA");
-    expect(document.title).toBe("Finance-Alert");
+    expect(document.title).toBe("NVDA · Finance-Alert");
+    expect(document.title).not.toContain("Screener");
   });
 });
 

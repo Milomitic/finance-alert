@@ -221,7 +221,7 @@ export default function PositionsPage() {
       <Card>
         <CardContent className="p-4 flex items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold">Posizioni</h2>
+            <h1 className="text-2xl font-bold">Posizioni</h1>
             <p className="text-sm text-muted-foreground">
               Trade tracciati dal piano operativo dei segnali — {open.length}{" "}
               apert{open.length === 1 ? "a" : "e"} · {closed.length} chius

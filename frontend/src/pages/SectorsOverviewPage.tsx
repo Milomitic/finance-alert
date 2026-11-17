@@ -100,7 +100,7 @@ export default function SectorsOverviewPage() {
     // era un semplice "Caricamento…" testuale.
     return (
       <div key="scheletro" className="space-y-6">
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Esplora</h2>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Esplora</h1>
         {/* Mirrors the real layout: three ranking cards, then the two lenses. */}
         <div className="grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -119,7 +119,7 @@ export default function SectorsOverviewPage() {
   if (isError || !data) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h2>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h1>
         <Card>
           <CardContent className="p-6 space-y-3">
             <p className="text-sm text-destructive">
@@ -144,10 +144,10 @@ export default function SectorsOverviewPage() {
     <div key="pagina" className="space-y-6">
       {/* ─── Header + universe totals on one line ──────────────────── */}
       <div>
-        <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-3">
           <Grid3x3 className="h-7 w-7 text-muted-foreground" aria-hidden />
           Esplora
-        </h2>
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Dove guardare oggi, e come si posizionano i settori del catalogo.
         </p>

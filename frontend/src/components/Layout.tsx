@@ -123,7 +123,7 @@ function NavList({
 function SidebarBrand() {
   return (
     <div className="px-5 py-4">
-      <h1 className="text-base font-semibold">Finance Alert</h1>
+      <p className="text-base font-semibold">Finance Alert</p>
       <p className="text-xs text-muted-foreground">v0.1 — Fase 1</p>
     </div>
   );
@@ -202,6 +202,18 @@ export default function Layout() {
   // segue la cronologia (vedi l'hook).
   const mainRef = useRef<HTMLElement>(null);
   useScrollRestoration(mainRef);
+  // Al cambio di pagina il focus va al contenuto (E-02): restava sul link
+  // del menu appena premuto, e chi naviga da tastiera o con un lettore di
+  // schermo non sapeva che la pagina era cambiata. Non al primo caricamento:
+  // li' il focus e' gia' all'inizio del documento.
+  const primaPagina = useRef(true);
+  useEffect(() => {
+    if (primaPagina.current) {
+      primaPagina.current = false;
+      return;
+    }
+    mainRef.current?.focus({ preventScroll: true });
+  }, [location.pathname]);
   // Desktop sidebar collapse (icon-rail). Persisted so the choice
   // survives reloads. Lazy init reads localStorage once; the effect
   // mirrors every change back. Defaults to expanded.
@@ -223,8 +235,11 @@ export default function Layout() {
     const exact = NAV.find((entry) => entry.to === location.pathname);
     // `/settings` e `/health` ora reindirizzano su `/diagnostics`, che e in
     // NAV: il caso speciale che c'era qui non serve piu.
+    // Solo le voci di menu: le pagine di dettaglio scrivono il proprio titolo
+    // (`useTitoloScheda`), e il loro effetto gira PRIMA di questo, quindi
+    // scrivere qui «Finance-Alert» lo cancellerebbe (C-65).
     const label = exact?.label ?? null;
-    document.title = label ? `${label} · Finance-Alert` : "Finance-Alert";
+    if (label) document.title = `${label} · Finance-Alert`;
   }, [location.pathname]);
 
   useEffect(() => {
@@ -335,7 +350,7 @@ export default function Layout() {
         >
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <h1 className="text-base font-semibold truncate">Finance Alert</h1>
+              <p className="text-base font-semibold truncate">Finance Alert</p>
               <p className="text-xs text-muted-foreground">v0.1 — Fase 1</p>
             </div>
           )}
@@ -458,7 +473,7 @@ export default function Layout() {
             <span className="sr-only sm:not-sr-only">Esci</span>
           </Button>
         </header>
-        <main ref={mainRef} id="contenuto" className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6">
+        <main ref={mainRef} id="contenuto" tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-6 focus:outline-none">
           {/* Keyed by pathname so the boundary is a fresh instance per route:
               boundaries never clear their own error state, so without this a
               single crash would leave every subsequent page blank until a full
