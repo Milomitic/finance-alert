@@ -82,7 +82,10 @@ function BreadthRowSkeleton() {
 
 function AlertsPanelSkeleton() {
   // Alerts panel — single-row, fixed height.
-  return <CardSkeleton label="SEGNALI" rows={8} strongHeader className="lg:h-[420px]" />;
+  // Le stesse altezze del pannello vero (`md:h-[520px] row-full:h-[420px]`):
+  // da quando i segnali stanno in alto, la differenza fra scheletro e
+  // pannello spingeva giu' tutto cio' che sta sotto (CLS 0,38 su tablet).
+  return <CardSkeleton label="SEGNALI" rows={8} strongHeader className="md:h-[520px] row-full:h-[420px]" />;
 }
 
 /**
@@ -242,7 +245,7 @@ function HomePageContent() {
           still: measured, the page grew from 5.4 to 6.0 screens at 1280px, and
           the whole point of moving Segnali up was to make the page shorter. */}
       {summaryData ? (
-        <div className="lg:h-[520px] row-full:h-[420px]">
+        <div className="md:h-[520px] row-full:h-[420px]">
           <AlertsCompactPanel
             topStocks={summaryData.top_stocks_30d}
             recentAlerts={summaryData.recent_alerts}

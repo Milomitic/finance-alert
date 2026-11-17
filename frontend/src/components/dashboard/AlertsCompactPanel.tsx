@@ -77,7 +77,7 @@ export function AlertsCompactPanel({
   alertsLast24h,
 }: Props) {
   return (
-    <Card className="lg:h-full overflow-hidden flex flex-col">
+    <Card className="md:h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         {/* Header — title + 24h badge + "Vedi tutti" link. */}
         <div className="shrink-0 flex items-center gap-3 border-b px-3 bg-muted/30 py-2">
@@ -127,7 +127,7 @@ export function AlertsCompactPanel({
                   doesn't run away — the page scrolls. lg+: fixed-height
                   pane with its own scroll (keeps the 4 columns aligned
                   to the card height). */}
-              <div className="max-h-[55vh] overflow-y-auto lg:max-h-none lg:flex-1 lg:min-h-0">
+              <div className="max-h-[55vh] overflow-y-auto md:max-h-none md:flex-1 md:min-h-0">
                 {col.key === "confluence" && <ConfluenceRows />}
                 {col.key === "top" && <TopStocksTable data={topStocks} />}
                 {col.key === "feed" && <RecentAlertsFeed alerts={recentAlerts} />}

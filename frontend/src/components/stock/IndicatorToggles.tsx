@@ -3,6 +3,7 @@ import { Settings2 } from "lucide-react";
 import type { IndicatorPeriods } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 /**
  * Indicator catalog + per-indicator state (visibility + style).
@@ -183,10 +184,17 @@ export function IndicatorToggles({ state, onChange, periods }: Props) {
             <button
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
-              className="h-full px-2.5 text-sm font-semibold transition-colors flex items-center"
+              className={cn(
+                "h-full px-2.5 text-sm font-semibold transition-colors flex items-center gap-1.5",
+                on ? "text-foreground" : "text-muted-foreground",
+              )}
               title={`${on ? "Nascondi" : "Mostra"} ${live.label} — ${live.description}`}
-              style={{ color: on ? s.color : "var(--muted-foreground, #64748b)" }}
             >
+              {/* Il colore della linea sta nel pallino, non nel testo: scritto
+                  nel colore dell'indicatore su un fondo dello stesso colore il
+                  testo scendeva fino a 1,9:1 (arancio della EMA, misurato con
+                  axe il 2026-11-17). */}
+              {on && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} aria-hidden />}
               {live.label}
             </button>
             <Popover>

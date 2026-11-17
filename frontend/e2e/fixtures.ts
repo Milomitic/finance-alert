@@ -56,7 +56,10 @@ export const expect = test.expect;
  *  arrotondati per difetto perche' i dati vivi variano. */
 export const ROTTE: { path: string; nome: string; minChars: number }[] = [
   { path: "/",                 nome: "Dashboard",     minChars: 600 },
-  { path: "/alerts",           nome: "Segnali",       minChars: 800 },
+  /* 800 fino al 2026-11-17: da D-01 le confluenze sono chiuse di default e
+   * l'efficacia sta sotto la tabella, quindi su telefono la pagina rende
+   * ~640 caratteri (misurato in CI). Una pagina vuota ne rende zero. */
+  { path: "/alerts",           nome: "Segnali",       minChars: 500 },
   { path: "/setups",           nome: "In formazione", minChars: 300 },
   { path: "/positions",        nome: "Posizioni",     minChars: 200 },
   { path: "/stocks",           nome: "Screener",      minChars: 600 },

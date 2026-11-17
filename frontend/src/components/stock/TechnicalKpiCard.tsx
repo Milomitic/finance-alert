@@ -63,11 +63,13 @@ interface Props {
 type ScaleScore = 1 | 2 | 3 | 4 | 5;
 
 const SCALE_BG: Record<ScaleScore, string> = {
-  1: "bg-rose-600/30 text-rose-700 dark:text-rose-300",
+  1: "bg-rose-600/30 text-rose-800 dark:text-rose-300",
   2: "bg-rose-500/15 text-rose-700 dark:text-rose-400",
   3: "text-foreground/70",
   4: "bg-emerald-500/15 text-emerald-800 dark:text-emerald-400",
-  5: "bg-emerald-600/30 text-emerald-800 dark:text-emerald-300",
+  // 800 su questo fondo misurava 4,3:1 (sotto i 4,5 AA, misurato con axe
+  // il 2026-11-17): i due estremi scuriscono di un gradino il testo.
+  5: "bg-emerald-600/30 text-emerald-900 dark:text-emerald-300",
 };
 
 function fmtNum(v: number | null, digits = 1, suffix = ""): string {
