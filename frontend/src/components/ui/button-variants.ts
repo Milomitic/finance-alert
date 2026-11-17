@@ -26,10 +26,12 @@ export const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
+        // `coarse:` = dove c'e' un dito (E-19): 44px, il bersaglio che un
+        // pollice colpisce al primo tentativo. Su desktop resta la densita' di prima.
+        default: "h-9 px-4 py-2 coarse:min-h-11",
+        sm: "h-8 rounded-md px-3 text-xs coarse:min-h-11",
         lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        icon: "h-9 w-9 coarse:min-h-11 coarse:min-w-11",
       },
     },
     defaultVariants: {

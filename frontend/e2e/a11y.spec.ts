@@ -211,6 +211,56 @@ test("axe SA trovare una violazione", async ({ page }, info) => {
   ).toBeGreaterThan(BASE.rotte["/"]?.["button-name"] ?? 0);
 });
 
+/* axe anche sul TELEFONO (E-15), per ora come rapporto.
+ *
+ * La struttura cambia con la larghezza: titoli, menu a tendina, barra in
+ * basso, etichette `sr-only sm:not-sr-only`. Il passaggio desktop sopra non
+ * vede niente di tutto questo. Quattro rotte, quelle di ogni giorno.
+ *
+ * ⚠️ Non e' ancora un cancello, e di proposito: una linea di base si genera
+ * DOVE viene applicata (CLAUDE.md), cioe' dai conteggi di CI, e si congela
+ * dopo DUE corse concordi. Fino ad allora i conteggi si leggono nel log
+ * («[axe mobile]») e nelle annotazioni. */
+test("mobile - rapporto axe sulle rotte di ogni giorno", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "il passaggio desktop e' quello sopra");
+  for (const path of ["/", "/alerts", "/stocks", "/positions"]) {
+    await page.goto(path, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const { conteggi } = await violazioni(page);
+    const riga = `${path}: ${Object.entries(conteggi).map(([id, n]) => `${id} ${n}`).join(", ") || "nessuna violazione"}`;
+    console.log(`[axe mobile] ${riga}`);
+    info.annotations.push({ type: "axe mobile", description: riga });
+  }
+});
+
+/* Un RAPPORTO, non una soglia (E-19): quanti controlli restano sotto i 44px
+ * su telefono, rotta per rotta. 24px e' il minimo di legge che il test sotto
+ * fa rispettare; 44 e' cio' che un pollice colpisce al primo tentativo. Il
+ * numero si legge nel log della corsa e nelle annotazioni del rapporto:
+ * diventa un cancello solo dopo essere stato misurato a un valore stabile
+ * (CLAUDE.md: un cancello che nasce rosso viene spento). */
+test("mobile - rapporto dei bersagli sotto i 44px", async ({ page }, info) => {
+  test.skip(info.project.name !== "mobile", "vale solo sul viewport tattile");
+  for (const path of ["/", "/alerts", "/stocks", "/positions"]) {
+    await page.goto(path, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const [totale, piccoli] = await page.evaluate(() => {
+      const el = Array.from(document.querySelectorAll("main button, main [role=button], main input, main select"))
+        .filter((e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        });
+      return [el.length, el.filter((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width < 44 || r.height < 44;
+      }).length];
+    });
+    const riga = `${path}: ${piccoli} controlli su ${totale} sotto i 44px`;
+    console.log(`[bersagli] ${riga}`);
+    info.annotations.push({ type: "bersagli sotto 44px", description: riga });
+  }
+});
+
 test("mobile - i bersagli tattili dei CONTROLLI sono raggiungibili", async ({ page }, info) => {
   test.skip(info.project.name !== "mobile", "vale solo sul viewport tattile");
   await page.goto("/alerts", { waitUntil: "networkidle" });

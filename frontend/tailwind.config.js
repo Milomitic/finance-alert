@@ -23,6 +23,9 @@ export default {
   		 * width times the column count, plus gaps, plus the sidebar.
   		 */
   		screens: {
+  			// Dove c'e' un dito invece di un puntatore (E-19): i bersagli
+  			// crescono a 44px solo li', su desktop la densita' resta quella.
+  			'coarse': { raw: '(pointer: coarse)' },
   			// Page rows go 2-across. 2×330 + gap + sidebar.
   			'dense-3': '1400px',
   			// Page rows go 4-across. Below this, four dense list cards on one
