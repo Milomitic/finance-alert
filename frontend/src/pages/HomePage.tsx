@@ -216,6 +216,12 @@ function HomePageContent() {
       {/* Preferiti e recenti (FA-112): il gesto piu' frequente dell'app e'
           aprire un titolo, e da qui e' un clic. Una riga di altezza fissa. */}
       <PreferitiStrip />
+      {/* FA-149: cosa succede ai tuoi titoli. Altezza fissa, e PRIMA dei
+          segnali: su telefono il pannello dei segnali non ha un'altezza fissa,
+          e quando stava sopra spingeva giu' questa scheda mentre caricava (CLS
+          0,36 nel gate mobile). Cosi' le sezioni personali stanno insieme
+          (C-04) e la crescita dei segnali sposta solo cio' che e' sotto la piega. */}
+      <SuiTuoiTitoliCard />
       {/* Market-driven rows: each renders its own skeleton while the
           market summary is still in flight (the inline field guards
           double as the TS narrowing — past the validation above a
@@ -263,8 +269,6 @@ function HomePageContent() {
            questo mancava. */
         <MarketError label="dei segnali" onRetry={() => summary.refetch()} />
       ) : null}
-      {/* FA-149: cosa succede ai tuoi titoli. Altezza fissa. */}
-      <SuiTuoiTitoliCard />
       {avvisoMercato}
       {/* PROTOTIPO — il battito dei mercati, dedicato al pre-market e alle ore
           di Wall Street. Sta SOPRA l'intestazione perche' e' la risposta alla
