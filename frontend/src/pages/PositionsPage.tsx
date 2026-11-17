@@ -93,9 +93,9 @@ function PnlCell({ pct, abs, currency }: { pct: number | null; abs: number | nul
       )}
     >
       {fmtPct(pct)}
+      {/* Niente `opacity-80`: sul verde scuro portava il testo sotto i 4,5:1
+          (axe, gate del 2026-11-17, la prima volta che il seme aveva righe). */}
       {abs != null && (
-        {/* Niente `opacity-80`: sul verde scuro portava il testo sotto i 4,5:1
-            (axe, gate del 2026-11-17, la prima volta che il seme aveva righe). */}
         <span className="ml-1 text-xs font-medium">
           ({formatMoneySigned(abs, currency)})
         </span>
