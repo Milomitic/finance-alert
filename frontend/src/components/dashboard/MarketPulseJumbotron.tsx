@@ -156,6 +156,10 @@ const VOLUME_SOTTILE = 10_000;
  *  movers: con quattro si vedeva solo la coda estrema, che e' quasi sempre un
  *  titolo sottile, e il movimento vero del giorno restava sotto il taglio. */
 const RIGHE_MOVERS = 10;
+/** A mercati chiusi le righe sono quelle della scheda «Top movers» qualche
+ *  schermata piu' in basso, sullo stesso dato (C-02): qui ne bastano cinque
+ *  per parte e un rimando, non venti righe ripetute sopra la piega. */
+const RIGHE_SEDUTA = 5;
 
 /** Un movimento grosso in un contesto per lo piu' calmo va notato a colpo
  *  d'occhio: sotto questa soglia le voci della riga di contesto restano tutte
@@ -890,8 +894,8 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
    * riquadro non cambia altezza passando da una fonte all'altra — una fascia
    * che si allunga di duecento pixel quando apre Wall Street sposta tutto
    * quello che sta sotto. */
-  const sedutaSu = (movers?.gainers ?? []).slice(0, RIGHE_MOVERS);
-  const sedutaGiu = (movers?.losers ?? []).slice(0, RIGHE_MOVERS);
+  const sedutaSu = (movers?.gainers ?? []).slice(0, RIGHE_SEDUTA);
+  const sedutaGiu = (movers?.losers ?? []).slice(0, RIGHE_SEDUTA);
 
   const mostraPre = !!pre?.available && (pre.gainers.length > 0 || pre.losers.length > 0);
   const mostraLive =
@@ -1211,6 +1215,9 @@ export function MarketPulseJumbotron({ global, byIndex, computedAt, movers }: Pr
                       flipRef={registraFlip(`seduta-giu:${m.ticker}`)} />
                   ))}
                 </Colonna>
+                <a href="#movers" className="col-span-full text-xs font-medium text-muted-foreground hover:text-foreground hover:underline">
+                  Tutti i movers della seduta ↓
+                </a>
               </div>
             ) : (
               /* PERCHE' non c'e' niente. «Nessun dato» manda a cercare un

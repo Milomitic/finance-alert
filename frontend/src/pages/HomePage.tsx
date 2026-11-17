@@ -1,5 +1,5 @@
 import { AlertCircle, Clock, RefreshCw } from "lucide-react";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 
 import { AlertsCompactPanel } from "@/components/dashboard/AlertsCompactPanel";
 import { BreadthMatrixTable } from "@/components/dashboard/BreadthMatrixTable";
@@ -11,7 +11,7 @@ import { MarketEventsRail } from "@/components/dashboard/MarketEventsRail";
 import { MarketTickerTape } from "@/components/dashboard/MarketTickerTape";
 import { MarketPulseJumbotron } from "@/components/dashboard/MarketPulseJumbotron";
 import { AnalystActionsCard } from "@/components/dashboard/AnalystActionsCard";
-import { ContoEtoroHero } from "@/components/dashboard/ContoEtoroHero";
+import { ContoEtoroHero, ContoEtoroScheletro } from "@/components/dashboard/ContoEtoroHero";
 import { ScanHeaderButton } from "@/components/dashboard/ScanHeaderButton";
 import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
@@ -34,6 +34,7 @@ import { FirstPaintGate } from "@/components/ui/first-paint-gate";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useEtoroVivo } from "@/hooks/useEtoro";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
+import { contoAtteso, ricordaConto } from "@/lib/contoAtteso";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
 /* Each market-driven row has its own skeleton that mirrors the loaded
@@ -93,8 +94,10 @@ function AlertsPanelSkeleton() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
-      <JumbotronRowSkeleton />
+      {/* Lo stesso ordine della pagina vera (A-07): i segnali stanno sopra il
+          battito dei mercati, e lo scheletro li metteva sotto. */}
       <AlertsPanelSkeleton />
+      <JumbotronRowSkeleton />
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
@@ -149,76 +152,46 @@ function HomePageContent() {
   // Il conto eToro in cima (FA-127). La pagina lo ASPETTA: se si sapesse solo
   // dopo se il conto c'e', la sezione comparirebbe spingendo giu' tutto il
   // cruscotto (gate CLS, FA-106). Senza chiavi la risposta e' immediata.
+  // Il conto eToro NON blocca piu' la pagina (A-05). La aspettava per
+  // intero: ~15 s di schede grigie mentre mercato e segnali erano pronti in
+  // pochi millisecondi. Ora il conto tiene il suo posto solo se l'ultima
+  // risposta diceva che c'e' (`contoAtteso`), quindi un conto non configurato
+  // non lascia un buco che poi si chiude (gate CLS, FA-106).
   const etoro = useEtoroVivo();
   const conto = etoro.data?.configurato && etoro.data.valore != null ? etoro.data : null;
+  const [riservaConto] = useState(contoAtteso);
+  const contoNoto = etoro.data != null;
+  const contoPresente = conto != null;
+  useEffect(() => {
+    if (contoNoto) ricordaConto(contoPresente);
+  }, [contoNoto, contoPresente]);
   // The pre-market query no longer lives here: MarketEventsRail owns it,
   // along with the strict `available` gate (US market closed AND cache fresh
-  // AND non-empty) that decides whether the section renders at all. The page
-  // no longer has to reshape its grid around a card that may or may not
-  // appear — the rail is always present and its pre-market section is not.
+  // AND non-empty) that decides whether the section renders at all.
 
-  // Full-page skeleton ONLY while BOTH summaries are still on their
-  // first load with nothing cached (react-query: `isLoading` =
-  // pending first fetch, no cached data). As soon as EITHER resolves
-  // we render the real layout and let the still-loading half show its
-  // own targeted row skeletons below — previously this was an
-  // `isLoading || isLoading` two-stage waterfall that blocked EVERY
-  // card (including the self-fetching discovery cards) behind the
-  // slower of the two queries.
-  if ((market.isLoading && summary.isLoading) || etoro.isLoading) {
+  // Full-page skeleton ONLY while BOTH summaries are still on their first
+  // load with nothing cached. As soon as EITHER resolves the real layout
+  // renders and the still-loading half shows its own targeted skeletons.
+  if (market.isLoading && summary.isLoading) {
     return <DashboardSkeleton />;
   }
 
   const summaryData = summary.data;
 
-  // Market unavailable (no snapshot yet) — still show alerts panel below if summary loaded
-  if (market.isError) {
-    return (
-      <div className="space-y-4">
-        <MarketError onRetry={() => market.refetch()} />
-        {summaryData && (
-          <AlertsCompactPanel
-            topStocks={summaryData.top_stocks_30d}
-            recentAlerts={summaryData.recent_alerts}
-            alertsLast24h={summaryData.kpis.alerts_last_24h}
-            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // The "no scan yet" read is only meaningful once the market query has
-  // actually settled — while it's still in flight `market.data` is
-  // legitimately undefined and we fall through to the layout below,
-  // where the market-driven rows render their own skeletons.
-  if (!market.isLoading && (!market.data || market.data.available === false)) {
-    return (
-      <div className="space-y-4">
-        <MarketUnavailable />
-        {summaryData && (
-          <AlertsCompactPanel
-            topStocks={summaryData.top_stocks_30d}
-            recentAlerts={summaryData.recent_alerts}
-            alertsLast24h={summaryData.kpis.alerts_last_24h}
-            alertsPrev24h={summaryData.kpis.alerts_prev_24h}
-          />
-        )}
-      </div>
-    );
-  }
-
-  // Happy path — `m` is undefined while the market summary is still in
-  // flight (dashboard summary already resolved); the market rows below
-  // then show their targeted skeletons. When it IS settled, validate the
-  // payload with the same defaults-check as before (all fields are
-  // optional in the API type).
-  // Note: `treemap` is no longer required (the treemap card was removed) but the API
-  // continues to populate it; we just don't render it.
+  // ⚠️ Un guasto del riepilogo di mercato toglie SOLO le schede che lo
+  // leggono (C-09). Prima la pagina rendeva il messaggio d'errore e i
+  // segnali, e basta: spariva anche il conto, la prima cosa per cui si apre.
   const m = market.data;
-  if (m && (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors)) {
-    return <MarketError onRetry={() => market.refetch()} />;
-  }
+  const mercatoGuasto =
+    market.isError ||
+    (m != null && m.available !== false && (!m.global || !m.by_index || !m.movers || !m.rsi_distribution || !m.sectors));
+  const mercatoAssente = !market.isLoading && !mercatoGuasto && (!m || m.available === false);
+  const mercato = mercatoGuasto || mercatoAssente ? undefined : m;
+  const avvisoMercato = mercatoGuasto ? (
+    <MarketError onRetry={() => market.refetch()} />
+  ) : mercatoAssente ? (
+    <MarketUnavailable />
+  ) : null;
   const nextScanAt = summaryData?.kpis.next_scan_at ?? null;
 
   return (
@@ -227,71 +200,30 @@ function HomePageContent() {
           commodities, crypto. Runs always (not just during loading).
           Sets the "trading floor" tone for the page — the rest of the
           UI feels static without it. */}
+      {/* Il titolo della pagina (E-01): a schermo la dashboard non ne ha
+          uno in testa, e l'unico h1 era il marchio della barra laterale. */}
+      <h1 className="sr-only">Dashboard</h1>
       <MarketTickerTape />
       {/* Il tuo conto, prima di tutto il resto: quanto vale adesso, come si
           e' mosso, chi lo muove oggi. Altezza fissa per ogni larghezza. */}
-      {conto && <ContoEtoroHero v={conto} />}
-      {/* PROTOTIPO — il battito dei mercati, dedicato al pre-market e alle ore
-          di Wall Street. Sta SOPRA l'intestazione perche' e' la risposta alla
-          domanda per cui questa pagina viene aperta la mattina: cosa sta
-          succedendo adesso. Non fa nessuna richiesta nuova — riusa per chiave
-          le stesse interrogazioni del nastro qui sopra e delle schede sotto. */}
-      <MarketPulseJumbotron
-        global={m?.global}
-        byIndex={m?.by_index}
-        computedAt={m?.computed_at}
-        movers={m?.movers}
-      />
+      {conto ? <ContoEtoroHero v={conto} /> : etoro.isLoading && riservaConto ? <ContoEtoroScheletro /> : null}
       {/* Che cosa e' cambiato dall'ultima visita: il cruscotto si apre ~17
           volte al giorno, e lo stato e' quasi tutto gia' visto. Altezza fissa. */}
       <DallUltimaVisitaStrip />
       {/* Preferiti e recenti (FA-112): il gesto piu' frequente dell'app e'
-          aprire un titolo, e da qui e' un clic. Una riga di altezza fissa:
-          non sposta niente quando la lista arriva. */}
+          aprire un titolo, e da qui e' un clic. Una riga di altezza fissa. */}
       <PreferitiStrip />
-      {/* FA-149: cosa succede ai tuoi titoli, prima del mercato. Altezza fissa. */}
-      <SuiTuoiTitoliCard />
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
-          {/* Nascosto sul telefono: la barra di navigazione dice gia' dove
-              siamo, e su uno schermo stretto questa riga costava ~60px di
-              intestazione prima di qualunque contenuto. */}
-          <h2 className="hidden sm:block text-base font-semibold tracking-tight">
-            Dashboard
-          </h2>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {m?.computed_at && (
-              <CardUpdatedAt
-                updatedAt={m.computed_at}
-                className={m.is_stale ? "text-xs text-amber-700 dark:text-amber-400" : "text-xs"}
-              />
-            )}
-            {nextScanAt && (
-              <>
-                <span className="opacity-50">·</span>
-                <span className="text-blue-600 dark:text-blue-400">
-                  Prossimo scan: {new Date(nextScanAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-        {/* Scan + digest controls — moved here from the hero strip so the
-            hero is all market context. The ScanProgressToast (mounted in
-            Layout) carries the in-flight progress UI. */}
-        {/* Anche i comandi di scan manuale sono da desktop: sono azioni
-            amministrative rare, e sul telefono occupavano una riga intera
-            sopra la prima informazione utile. Gli orari restano. */}
-        <div className="hidden sm:block">
-          <ScanHeaderButton nextScanAt={nextScanAt} />
-        </div>
-      </div>
       {/* Market-driven rows: each renders its own skeleton while the
           market summary is still in flight (the inline field guards
           double as the TS narrowing — past the validation above a
           settled payload always has all of them). */}
-      {/* Segnali, above the fold.
+      {/* Segnali, above the fold — di nuovo (C-01).
+       *
+       * Il commento qui sotto lo diceva da mesi, ma conto, battito,
+       * strisce e «Sui tuoi titoli» erano entrati sopra uno alla volta e il
+       * pannello era sceso a ~1.970px a 1440 (misurato in produzione il
+       * 2026-11-17). Ora sta subito sotto il conto e le due strisce.
+       *
        *
        * The app is called finance-ALERT and this is the panel that says what
        * fired: new signals, the confluence clusters, the names carrying them.
@@ -328,6 +260,56 @@ function HomePageContent() {
            questo mancava. */
         <MarketError label="dei segnali" onRetry={() => summary.refetch()} />
       ) : null}
+      {/* FA-149: cosa succede ai tuoi titoli. Altezza fissa. */}
+      <SuiTuoiTitoliCard />
+      {avvisoMercato}
+      {/* PROTOTIPO — il battito dei mercati, dedicato al pre-market e alle ore
+          di Wall Street. Sta SOPRA l'intestazione perche' e' la risposta alla
+          domanda per cui questa pagina viene aperta la mattina: cosa sta
+          succedendo adesso. Non fa nessuna richiesta nuova — riusa per chiave
+          le stesse interrogazioni del nastro qui sopra e delle schede sotto. */}
+      <MarketPulseJumbotron
+        global={mercato?.global}
+        byIndex={mercato?.by_index}
+        computedAt={mercato?.computed_at}
+        movers={mercato?.movers}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
+          {/* Nascosto sul telefono: la barra di navigazione dice gia' dove
+              siamo, e su uno schermo stretto questa riga costava ~60px di
+              intestazione prima di qualunque contenuto. */}
+          <h2 className="hidden sm:block text-base font-semibold tracking-tight">
+            Dashboard
+          </h2>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {mercato?.computed_at && (
+              <CardUpdatedAt
+                updatedAt={mercato.computed_at}
+                className={mercato.is_stale ? "text-xs text-amber-700 dark:text-amber-400" : "text-xs"}
+              />
+            )}
+            {nextScanAt && (
+              <>
+                <span className="opacity-50">·</span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  Prossimo scan: {new Date(nextScanAt).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+        {/* Scan + digest controls — moved here from the hero strip so the
+            hero is all market context. The ScanProgressToast (mounted in
+            Layout) carries the in-flight progress UI. */}
+        {/* Anche i comandi di scan manuale sono da desktop: sono azioni
+            amministrative rare, e sul telefono occupavano una riga intera
+            sopra la prima informazione utile. Gli orari restano. */}
+        <div className="hidden sm:block">
+          <ScanHeaderButton nextScanAt={nextScanAt} />
+        </div>
+      </div>
       {/* Row 2: same [3fr_2fr] split as HeroStrip — breadth matrix on
           the left (the wider, table-shaped artifact) + live-volume
           movers on the right (vertical list, narrower, polls live
@@ -392,21 +374,22 @@ function HomePageContent() {
        * horizontally — shorter than three stacked cards, which is what a naive
        * `grid-cols-1` fallback produced (measured: the page got TALLER at
        * 1280px than before the change). Below md everything stacks. */}
-      {m?.movers ? (
+      {mercato?.movers ? (
         <div className="grid gap-3 md:grid-cols-2 dense-3:grid-cols-[19fr_19fr_12fr] items-stretch [&>*]:min-w-0">
-          <div className="min-w-0">
-            <TopMoversCard movers={m.movers} computedAt={m.computed_at} layout="stacked" />
+          {/* Ancora del rimando «Tutti i movers» del battito (C-02). */}
+          <div id="movers" className="min-w-0 scroll-mt-20">
+            <TopMoversCard movers={mercato.movers} computedAt={mercato.computed_at} layout="stacked" />
           </div>
           <div className="min-w-0">
-            <LiveVolumeMoversCard movers={m.movers} computedAt={m.computed_at} />
+            <LiveVolumeMoversCard movers={mercato.movers} computedAt={mercato.computed_at} />
           </div>
           <div className="min-w-0 md:col-span-2 dense-3:col-span-1">
-            <MarketEventsRail movers={m.movers} />
+            <MarketEventsRail movers={mercato.movers} />
           </div>
         </div>
-      ) : (
+      ) : market.isLoading ? (
         <SpotlightRowSkeleton />
-      )}
+      ) : null}
       {/* Lower row: breadth matrix (bottom-left, wide 2fr) + RSI + Sectors.
           Three across only at dense-3 (1400px). At lg the two 1fr cards were
           235px, narrower than "Information Technology" needs to render (156px
@@ -421,22 +404,22 @@ function HomePageContent() {
           scendono verso di lei invece del contrario — il suo scroller interno
           gia' esisteva (`max-h-[400px]`), quindi il vincolo non taglia niente
           che non fosse gia' scorribile. */}
-      {m?.by_index && m.rsi_distribution && m.sectors ? (
+      {mercato?.by_index && mercato.rsi_distribution && mercato.sectors ? (
         <div
           id="breadth"
           className="grid grid-cols-1 md:grid-cols-2 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[460px] [&>*]:min-w-0 scroll-mt-4"
         >
-          <div className="lg:h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={m.by_index} /></div>
+          <div className="lg:h-[440px] dense-3:h-full min-h-0"><BreadthMatrixTable data={mercato.by_index} /></div>
           <div className="lg:h-[440px] dense-3:h-full min-h-0">
             <Suspense fallback={<CardSkeleton label="RSI DISTRIBUTION" rows={6} className="h-full" />}>
-              <RsiHistogramCard rsi={m.rsi_distribution} indices={m.by_index} />
+              <RsiHistogramCard rsi={mercato.rsi_distribution} indices={mercato.by_index} />
             </Suspense>
           </div>
-          <div className="lg:h-[440px] dense-3:h-full min-h-0"><SectorsHeatmapCard sectors={m.sectors} /></div>
+          <div className="lg:h-[440px] dense-3:h-full min-h-0"><SectorsHeatmapCard sectors={mercato.sectors} /></div>
         </div>
-      ) : (
+      ) : market.isLoading ? (
         <BreadthRowSkeleton />
-      )}
+      ) : null}
       {/* Alerts (left) + Top Picks (right) on the same row. The two are
           complementary: alerts is "what just happened that needs your
           attention", top picks is "what looks great right now". Putting them

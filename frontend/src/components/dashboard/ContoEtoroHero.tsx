@@ -323,6 +323,20 @@ function Movimenti({ strumenti }: { strumenti: EtoroStrumentoOggi[] }) {
 }
 
 /** `v` arriva dalla home, che lo aspetta prima di disegnarsi. */
+/** Il posto del conto mentre la risposta arriva, alla stessa altezza
+ *  (A-05): il resto della dashboard non aspetta piu' il conto. */
+export function ContoEtoroScheletro() {
+  return (
+    <div
+      className={cn("rounded-xl border bg-card shadow-sm", ALTEZZA)}
+      role="status"
+      aria-label="Caricamento del conto eToro"
+    >
+      <div className="h-full w-full animate-pulse rounded-xl bg-muted/30" />
+    </div>
+  );
+}
+
 export function ContoEtoroHero({ v }: { v: EtoroVivo }) {
   const a = useEtoroAndamento();
   const giornata = v.guadagno_giorno ?? 0;
