@@ -1,144 +1,166 @@
-# Analisi del frontend — 2026-11-17
+# Analisi del frontend e piano — 2026-11-17
 
 Lista dei miglioramenti possibili su grafica, tipografia, UI/UX, interazioni,
-struttura delle pagine e organizzazione degli spazi, desktop e telefono.
+struttura delle pagine e organizzazione degli spazi, dal telefono al 4K, e il
+piano con cui affrontarli.
 
-**273 voci** in quattro rapporti di dettaglio, ognuna con Dove (file:riga) ·
-Problema · Perché conta · Proposta · Impatto · Sforzo:
+**322 voci** in cinque rapporti di dettaglio, ognuna con Dove · Problema ·
+Perché conta · Proposta · Impatto · Sforzo:
 
-| Rapporto | Ambito | Voci |
-|---|---|---|
-| [B — Sistema di design](analisi-frontend-parziali/B-sistema-di-design.md) | tipografia, colore, spaziatura, superfici, componenti, icone, movimento, grafici, tema scuro, stati | 76 |
-| [C — Pagine](analisi-frontend-parziali/C-pagine-home-titoli-mercati.md) | dashboard, screener, dettaglio titolo, mercati e settori, guscio | 71 |
-| [D — Pagine](analisi-frontend-parziali/D-pagine-segnali-posizioni-resto.md) | segnali, posizioni, diagnostica, calendario e macro, superinvestor, studio, login, 404 | 91 |
-| [E — Accessibilità, telefono, prestazioni](analisi-frontend-parziali/E-accessibilita-mobile-prestazioni.md) | a11y, uso a 375 px, prestazioni percepite | 35 |
-
-## Come leggerla, e i suoi limiti
-
-- **Metodo:** lettura del codice di `frontend/src`, con conteggi da script sulle
-  sorgenti. **Niente è stato misurato a schermo**: le posizioni in pixel
-  («il grafico parte a ~1.700 px») sono ricavate dalle classi.
-- **L'analisi dal vivo nel browser non è stata fatta**: copre solo `/login`
-  ([A](analisi-frontend-parziali/A-dal-vivo.md)). Resa reale, tema scuro a
-  schermo e comportamento su un telefono vero restano da guardare.
-- **Verifica:** i rilievi segnati ✔ sono stati ricontrollati sul codice e
-  reggono. Le altre voci non sono state ricontrollate una per una: un
-  riferimento di riga può essere scivolato.
-- **Due voci del rapporto D sono superate** e rettificate in fondo al file:
-  D-02 (i pannelli di efficacia non sono più duplicati in Diagnostica) e D-27
-  (il bottone si chiama «Traccia trade»).
-
-## Il quadro in sei punti
-
-1. **I primitivi esistono e vengono aggirati.** 159 `<button>` a mano contro 50
-   `<Button>`, 49 pastiglie a mano contro un `Badge` usato in 2 file, 34 tabelle
-   a mano, una dozzina di controlli segmentati ricostruiti (B-39, B-41, B-43,
-   B-44). È la causa di quasi tutta l'incoerenza visiva: 19 gradini tipografici
-   fra 9,5 e 15 px, 63 ricette di etichetta maiuscola, 59 anelli di focus
-   (B-01, B-04, B-38).
-2. **Il contenuto principale sta sotto la piega.** Il grafico è l'ottava sezione
-   del dettaglio titolo (C-39 ✔), la lista dei segnali comincia dopo le
-   statistiche e le confluenze (D-01), sulla dashboard i segnali non sono più
-   in alto (C-01).
-3. **Il telefono è servito a metà.** Navigazione solo da menu a tendina (C-68,
-   E-16), bottoni da 34-38 px (E-19), campi sotto 16 px che fanno zoomare iOS
-   (E-20), `100vh` invece di `dvh` (E-17 ✔), tabelle di Segnali e Posizioni
-   senza colonna fissa (E-22, D-35), calendario a sette colonne da ~50 px (D-61).
-4. **Filtri e comandi che non dicono il vero.** «Reset» di Segnali porta a
-   «Tutti i titoli» invece che al predefinito (D-03 ✔), la ricerca dello
-   screener non è un filtro (C-29), tre filtri senza chip (D-04), `confirm()`
-   nativo per chiudere una posizione (D-34), «Pulisci» e «Stop» senza conferma.
-5. **Il tema scuro non è sorvegliato.** Nessun gate gira in scuro, e lì
-   `--primary` è un verde (`141 76% 48%` ✔) che si confonde col «su»; assi e
-   griglie dei grafici sono scritti per il fondo chiaro (B-66, B-67, B-12).
-6. **Lessico e orientamento.** Lo stesso concetto ha quattro nomi (Regola /
-   Tipo segnale / Condizione / Detector, D-05), italiano e inglese mescolati,
-   `1m` = mese e `5m` = minuti (C-43), i dettagli di titolo, mercato e settore
-   senza un titolo di scheda proprio (C-65), otto pagine senza `h1` sotto
-   1024 px (E-01, B-05).
-
-## Le prime 15 priorità
-
-Ordine per resa: impatto sull'uso quotidiano contro sforzo.
-
-| # | Intervento | Voci | Sforzo |
+| Rapporto | Ambito | Metodo | Voci |
 |---|---|---|---|
-| 1 | Blocchi di CSS globale: campi a 16 px su touch, `:focus-visible` unico, `prefers-reduced-motion`, `color-scheme`; `h-dvh` nel guscio e nei dialoghi | E-20, E-17, B-48, B-55, B-68 | S |
-| 2 | Dopo il login tornare alla pagina di partenza (oggi sempre `/` ✔) | D-89 | S |
-| 3 | Filtri di Segnali coerenti: Reset torna al predefinito, conteggio sul differenziale, chip mancanti, via il chip doppio | D-03, D-04 | S |
-| 4 | Grafico del titolo subito sotto l'intestazione | C-39 | M |
-| 5 | Barra di navigazione inferiore su telefono, con aree sicure | C-68, E-16 | M |
-| 6 | Un titolo per pagina: `h1`, `document.title` anche sui dettagli, focus al cambio rotta | C-65, E-01, E-02, B-05 | M |
-| 7 | Segnali: lista prima, confluenze ed efficacia dopo o richiudibili | D-01 | M |
-| 8 | Screener: 10 colonne di default con ticker fisso, ricerca dentro i filtri, viste salvate con nome attivo; filtri in un pannello su telefono | C-27, C-29, C-30, C-31 | M |
-| 9 | Bersagli tattili a 44 px dove c'è un dito, più il rapporto nel gate | E-19 | M |
-| 10 | Prima colonna fissa in Segnali e Posizioni su telefono; poi schede per riga | E-22, D-35 | S poi L |
-| 11 | Numeri che non affermano più di quanto misurano: differenza dalla base senza intervallo (Studio), tassi del Diario su 4-9 casi, Forza colorata come un voto | D-84, D-43, D-08 | S |
-| 12 | Tema scuro misurato: progetto Playwright in scuro, `--primary` non verde, grafici dal tema | B-66, B-67, B-12 | M |
-| 13 | Dashboard riordinata: segnali in alto, un solo «chi si muove», un solo blocco «i miei titoli»; la parte personale non sparisce se il riepilogo di mercato fallisce | C-01, C-02, C-04, C-09 | M |
-| 14 | Posizioni: due portafogli con nome, dialogo vero per chiudere/eliminare, Rischio con gli aggregati in cima | D-31, D-34, D-39 | M |
-| 15 | `Button`, `Badge`, `Input`, `Segmentato` portati sull'uso reale e migrazione per cartella; scala tipografica a sei livelli | B-39…B-43, B-01, B-04 | L |
+| [A — Dal vivo](analisi-frontend-parziali/A-dal-vivo.md) | login, dashboard, poi 14 rotte a sei risoluzioni e tema scuro | browser | 49 |
+| [B — Sistema di design](analisi-frontend-parziali/B-sistema-di-design.md) | tipografia, colore, spaziatura, superfici, componenti, icone, movimento, grafici, tema scuro, stati | codice | 76 |
+| [C — Pagine](analisi-frontend-parziali/C-pagine-home-titoli-mercati.md) | dashboard, screener, dettaglio titolo, mercati e settori, guscio | codice | 71 |
+| [D — Pagine](analisi-frontend-parziali/D-pagine-segnali-posizioni-resto.md) | segnali, posizioni, diagnostica, calendario e macro, superinvestor, studio, login, 404 | codice | 91 |
+| [E — Accessibilità, telefono, prestazioni](analisi-frontend-parziali/E-accessibilita-mobile-prestazioni.md) | a11y, uso a 375px, prestazioni percepite | codice | 35 |
 
-## Quick win (sforzo S)
+## Come leggerla
 
-- `vertTouchDrag: false` in `MarketChart` ✔: l'hanno già gli altri tre grafici (E-25).
-- Tre correzioni che portano la linea di base axe da 23 a 10 nodi: `<span>` nel
-  `<dl>` di `/sectors`, `aria-label` su sei `<select>`, wrapper scorrevole delle
-  tabelle raggiungibile da tastiera (E-09, E-06, E-04).
-- `aria-label` sui bottoni-icona con solo `title`; «Chiudi» al posto di «Close» (E-07).
-- Dollaro scritto a mano sulla dashboard → `lib/money` con la valuta del titolo (C-20).
-- Tre direzioni di mercato ancora in rosso; errori in quattro colori (B-11, B-16).
-- Bordo dei campi più scuro di quello delle schede (B-35).
-- Toast di scansione: le «regole» non esistono più; «Stop» chiede conferma (C-70).
-- Colonna «Segnale» che contiene una data → «Comparso»; un nome solo per il tipo di segnale (D-06, D-05).
-- Icona PWA vera al posto del logo del template Vite (E-26).
-- Tema che segue il sistema alla prima apertura (E-28).
-- Ricerca globale: o cerca i settori o smette di prometterlo (C-69).
-- `.ambient-pulse` è CSS morto (B-59).
+- **B, C, D, E vengono dalla lettura del codice**; **A dal browser**, su un backend
+  locale con una copia migrata del database (dati di metà settembre, conto eToro
+  dal vivo). Risoluzioni: 375×812 (preset telefono), 768×1024, 1440×900,
+  1920×1080, 2560×1440, 3840×2160; tema scuro a 1440.
+- **La passata dal vivo ha confermato le voci principali dei rapporti dal codice**
+  e ne ha corretto due stime: il grafico del titolo a 375px parte a 6.616px, non
+  ~3.900 (C-39); i campi che fanno zoomare iOS sono 1-4 per pagina, non ~20 (E-20).
+- **Resta fuori**: un telefono vero (iOS Safari: zoom, aree sicure, PWA), i grafici
+  a candele in tema scuro, le pagine con i dati di produzione.
+- **Due voci del rapporto D sono superate**: D-02 e D-27, rettificate in fondo al file.
 
-## Per area
+## Il quadro in sette punti
 
-### Grafica e tipografia (rapporto B)
+1. **Il contenuto principale sta sotto la piega, misurato.** Il grafico del titolo
+   è nella prima schermata solo a 3840px; a 1440 parte a 2.087px su 900, a 375 a
+   6.616px (A-36). La tabella dei segnali parte a 915px su 900 (A-37). Il dettaglio
+   di un settore è lungo 32.498px su telefono, 40 schermate (A-38).
+2. **La dashboard aspetta la chiamata più lenta.** Tutta la pagina resta a scheletro
+   finché non risponde il conto eToro (~15s in locale) e, se le API falliscono, lo
+   scheletro non finisce mai, senza messaggio (A-05, A-06). Numeri e ticker
+   troncati a una lettera nelle tessere degli indici e nella classifica (A-09,
+   A-10, A-27).
+3. **I componenti di base esistono e vengono aggirati.** 159 `<button>` a mano
+   contro 50 `<Button>`, 49 pastiglie a mano, 34 tabelle a mano (B-39, B-41, B-44);
+   19 gradini tipografici fra 9,5 e 15px, scritti in px e quindi fermi quando il
+   resto cresce col corpo radice (B-01, A-42).
+4. **Il telefono è servito a metà.** Menu solo a tendina (C-68), 221 bersagli su 225
+   sotto 44px sulla dashboard (A-44), calendario con chip a tre pallini senza nome
+   (A-46), due sbordi stabili su Macro e Settore (A-39).
+5. **Lo schermo grande non è usato.** Da 1920px il corpo radice resta 19px e le pagine
+   non hanno larghezza massima: a 4K la tabella dei segnali stende 11 colonne su
+   3.500px (A-41).
+6. **Comandi e numeri che non dicono il vero.** «Reset» di Segnali porta a «Tutti i
+   titoli» (D-03), dopo il login si torna sempre alla home (D-89), `confirm()`
+   nativo per chiudere una posizione (D-34), differenze e tassi senza campione
+   (D-84, D-43).
+7. **Tema scuro e lessico.** In scuro la selezione è il verde del rialzo (B-67, A-47);
+   lo stesso concetto ha quattro nomi (D-05), italiano e inglese mescolati (A-17),
+   otto pagine su quattordici senza titolo (A-43).
 
-- **Tipografia:** scala a sei livelli con pavimento a 11 px; tre ricette di
-  etichetta al posto di 63 (B-01…B-10).
-- **Colore:** un significato per colore, in due soli file come mappe letterali;
-  oggi ogni famiglia ha 6-10 coppie chiaro/scuro (B-11…B-20).
-- **Spazio:** un contenitore di pagina unico; tre pagine di dettaglio annidano
-  il proprio padding dentro quello di `<main>`; il padding predefinito di `Card`
-  non lo usa quasi nessuno (B-21…B-28).
-- **Superfici:** scala dei raggi, tre livelli di rilievo, anello di focus a 2 px (B-29…B-38).
-- **Icone e movimento:** `[&_svg]:size-4` nei `Button` ignora le misure dei
-  figli; movimento ridotto rispettato da 3 componenti su 64 file (B-49…B-59).
-- **Grafici:** il grafico annotato del segnale ha `viewBox` fisso e testo a 9 px
-  che su telefono scende a ~4 px; `GraficoSvg` si legge solo col mouse (B-60, B-61).
-- **Stati:** l'errore ha cinque forme, il vuoto 38 formulazioni, 268 «—»
-  letterali contro 8 `NoValue` (B-72…B-76).
+## Il piano
 
-### Struttura delle pagine (rapporti C e D)
+Sei fasi, in ordine. Ognuna è un'unità di lavoro con il suo commit e un criterio
+di chiusura **misurabile con la stessa sonda della passata dal vivo**, così la
+chiusura non dipende da un'impressione. Le voci elencate sono quelle da leggere
+nei rapporti prima di cominciare.
 
-- **Dashboard:** C-01…C-26. **Screener:** C-27…C-38. **Dettaglio titolo:** C-39…C-54.
-  **Mercati e settori:** C-55…C-64 (non esiste `/markets` ✔). **Guscio:** C-65…C-71.
-- **Segnali:** D-01…D-30. **Posizioni:** D-31…D-47.
-- **Diagnostica:** D-48…D-60. Il banner «Tutti i sistemi operativi» non guarda
-  l'infrastruttura (D-48); stati di salute in emerald/rose invece di green/red
-  (D-50); circa 30 spiegazioni in `title=` (D-51).
-- **Calendario e macro:** D-61…D-71. **Superinvestor:** D-72…D-80.
-  **Studio:** D-81…D-87. **Login e 404:** D-88…D-91.
+### Fase 0 — Correzioni piccole (FA-171) · sforzo S · una sessione
 
-### Accessibilità, telefono, prestazioni (rapporto E)
+| Intervento | Voci |
+|---|---|
+| CSS globale: campi a 16px su touch, `:focus-visible` unico, `prefers-reduced-motion`, `color-scheme`; `h-dvh` nel guscio e nei dialoghi | E-20, A-45, E-17, B-48, B-55, B-68 |
+| Dopo il login, ritorno alla pagina di partenza | D-89 |
+| Filtri di Segnali: Reset al predefinito, conteggio sul differenziale, chip mancanti, via il chip doppio | D-03, D-04 |
+| I due sbordi a 375px: gruppo «Livello/Sul periodo/Sull'anno» di Macro, tabella del dettaglio settore | A-39 |
+| Dettaglio settore: prime 20 aziende e «mostra tutte» | A-38 |
+| Numeri e ticker interi nelle tessere degli indici, nella classifica qualità e nei top picks | A-09, A-10, A-11, A-27 |
+| `vertTouchDrag: false` in `MarketChart` | E-25 |
+| Linea di base axe da 23 a 10: `<span>` nel `<dl>` di `/sectors`, `aria-label` sui `<select>`, wrapper delle tabelle raggiungibile da tastiera | E-09, E-06, E-04 |
+| Bottoni-icona con nome; «Chiudi» al posto di «Close» | E-07 |
+| Dollaro scritto a mano → `lib/money` con la valuta del titolo | C-20 |
+| Toast di scansione senza «regole» e con conferma su «Stop»; conferma su «Pulisci» del grafico | C-70, C-44 |
+| Icona PWA vera; tema che segue il sistema alla prima apertura | E-26, E-28 |
 
-- **Accessibilità:** E-01…E-15. axe gira solo sul desktop; `/positions` è a zero
-  perché il seme non ha posizioni, non perché è sana (E-15).
-- **Telefono:** E-16…E-29.
-- **Prestazioni:** E-30…E-35. Il peso del bundle è a posto (~203 KB gzip sulla
-  home, 16 rotte in `React.lazy`). Da fare: un solo pool di quotazioni sulla home
-  (oggi cinque chiavi, prezzi diversi per lo stesso ticker, E-31), precaricamento
-  delle rotte (E-30), pausa del nastro (E-33), potatura della cache del service
-  worker (E-27).
+**Chiusura:** zero sbordi a 375-3840 su tutte le 14 rotte; dettaglio settore sotto
+5.000px a 375; linea di base axe stretta dopo due corse concordi di CI.
 
-## Cosa resta da fare sull'analisi
+### Fase 1 — Le pagine principali mostrano prima ciò per cui esistono (FA-172) · M
 
-- Passata dal vivo a 1440 e 375 px, chiaro e scuro, per confermare le stime in
-  pixel e trovare ciò che il codice non mostra.
-- Prova su un iPhone vero per E-18, E-21, E-26, E-31.
+| Intervento | Voci |
+|---|---|
+| Grafico del titolo subito sotto un'intestazione più bassa, senza l'area colorata alta 350px | C-39, A-36, A-48 |
+| Segnali: lista prima; confluenze vuote ridotte a una riga; efficacia dopo o richiudibile | D-01, A-37 |
+| Dashboard: ogni scheda esce dallo scheletro con la propria query, errore visibile con «Riprova»; segnali in alto; un solo «chi si muove», un solo «i miei titoli» | A-05, A-06, A-07, C-01, C-02, C-04, C-09, A-26 |
+| Un titolo per pagina: `h1`, titolo della scheda del browser anche sui dettagli, focus al cambio rotta | C-65, E-01, E-02, A-43 |
+
+**Chiusura:** grafico del titolo entro 900px a 1440 ed entro 1.700px a 375; tabella
+dei segnali entro 900px a 1440; dashboard leggibile in meno di 1s con il conto
+eToro ancora in caricamento; `h1` su 14 rotte su 14.
+
+### Fase 2 — Telefono (FA-173) · M, il calendario L
+
+| Intervento | Voci |
+|---|---|
+| Barra di navigazione inferiore (Dashboard · Screener · Segnali · Posizioni · Altro), con aree sicure | C-68, E-16 |
+| Bersagli a 44px dove c'è un dito (`pointer: coarse`), rapporto nel gate accanto ai 24px | E-19, A-44, A-34 |
+| Prima colonna fissa in Segnali e Posizioni; poi schede per riga | E-22, D-35, A-29 |
+| Calendario: agenda della settimana su telefono, giorno aperto in un foglio | D-61, D-62, A-46 |
+| Filtri dello screener in un pannello con «Mostra N titoli» | C-31 |
+| Grafici SVG: larghezza iniziale reale, mai 600px | A-40 |
+| axe anche sul progetto telefono, posizioni nel seme | E-15 |
+
+**Chiusura:** bersagli sotto 44px sotto il 10% per rotta a 375; nessun chip del
+calendario senza nome; axe verde sul progetto telefono.
+
+### Fase 3 — Sistema di design (FA-174) · L, a ondate per cartella
+
+| Intervento | Voci |
+|---|---|
+| Colori di significato in due soli file (`lib/toni.ts`, `lib/coloriGrafico.ts`), mappe letterali | B-11…B-20 |
+| Scala tipografica a sei livelli in rem, pavimento 11px, tre ricette di etichetta | B-01…B-10, A-42, A-24 |
+| `Button`, `Badge`, `Input`, `Segmentato`, `Table` portati sull'uso reale; migrazione per cartella | B-39…B-47, B-43, B-44 |
+| Superfici: raggi, rilievo, bordi, anello di focus a 2px | B-29…B-38 |
+| Stati: `QueryError` a tre varianti, `StatoVuoto`, `NoValue` con `InfoHint` | B-72…B-76, A-13, A-14 |
+| Schermi larghi: larghezza massima per le pagine a tabella e a testo, terzo gradino del corpo radice | A-41, B-21, B-22 |
+| Grafici leggibili: testo del grafico del segnale a pixel veri, `GraficoSvg` con tastiera | B-60, B-61 |
+
+**Chiusura:** nessun testo sotto 11px a nessuna risoluzione; `<button>` a mano sotto
+20; a 3840 nessuna tabella più larga della larghezza massima.
+
+### Fase 4 — Tema scuro misurato (FA-175) · M
+
+| Intervento | Voci |
+|---|---|
+| `--primary` scuro distinto dal verde «su» | B-67, A-47 |
+| Progetto Playwright in scuro su tre rotte, con linea di base propria | B-66 |
+| Assi, griglie e candele dei grafici dal tema | B-12, B-62…B-65 |
+
+**Chiusura:** gate scuro verde; contrasto AA dei toni calcolato anche sulle varianti scure.
+
+### Fase 5 — Pagine e lessico (FA-176) · M per pagina
+
+| Pagina | Voci |
+|---|---|
+| Screener: 10 colonne di default con ticker fisso, ricerca dentro i filtri, viste salvate con nome | C-27, C-29, C-30, C-33 |
+| Posizioni: due portafogli con nome, dialogo vero per chiudere/eliminare, Rischio con gli aggregati in cima | D-31, D-34, D-36, D-37, D-39 |
+| Diagnostica: banner che guarda anche l'infrastruttura, palette dei guasti, spiegazioni in `InfoHint` | D-48, D-50, D-51, D-54 |
+| Macro: livello e consenso separati, colonne del consenso anche su telefono | D-69 |
+| Studio: esempi d'ingresso, intervallo accanto alla differenza, colori solo dove l'effetto esce dal caso | D-81, D-84, D-85 |
+| Superinvestor: ricerca dei fondi in cima | D-72 |
+| Mercati: pagina `/markets` e sezioni Mercati/Settori nella ricerca globale | C-55, C-69 |
+| Ritorno allo screener con la ricerca di partenza | C-42 |
+| Lessico: un nome per il tipo di segnale, «Comparso» per la data, timeframe non ambigui, italiano ovunque, un formato numerico | D-05, D-06, C-43, A-16, A-17 |
+| Numeri senza campione: Diario eToro, Forza colorata come un voto | D-43, D-08 |
+| Tablet a due colonne per dashboard e dettaglio titolo | A-49 |
+
+**Chiusura:** per pagina, i criteri delle voci.
+
+## Fuori dal piano, deliberatamente
+
+- **Prestazioni del bundle:** a posto (~203 KB gzip sulla home, 16 rotte separate).
+  Il pool unico di quotazioni della home (E-31) va misurato prima dal pannello rete
+  e dal RUM, poi deciso.
+- **Scorrimento del documento invece di `<main>` sotto `lg`** (E-18): da provare su
+  un iPhone vero; cambia il presidio dei traboccamenti scritto in CLAUDE.md.
+- Le voci a impatto basso non citate sopra restano nei rapporti, da prendere quando
+  si lavora sulla pagina che toccano.
