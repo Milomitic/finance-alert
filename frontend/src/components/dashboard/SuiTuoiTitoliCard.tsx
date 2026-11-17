@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Briefcase, CalendarClock, Gavel, Newspaper, Star } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalistaMio, type NotiziaMia, type TrimestraleMia } from "@/api/dashboard";
@@ -19,6 +19,24 @@ import { cn } from "@/lib/utils";
  * ⚠️ Altezza FISSA per sezione, a ogni larghezza: la scheda sta in cima al
  * cruscotto, e crescere quando arrivano i dati spingerebbe giu' tutta la
  * pagina (tetto CLS del gate UI). Le liste scorrono dentro. */
+
+const CHIAVE_TITOLI = "dashboard.suituoititoli.pieni";
+
+function leggiAveaTitoli(): boolean {
+  try {
+    return localStorage.getItem(CHIAVE_TITOLI) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function ricordaAveaTitoli(v: boolean): void {
+  try {
+    localStorage.setItem(CHIAVE_TITOLI, v ? "1" : "0");
+  } catch {
+    /* nessun ricordo: lo scheletro alla prossima apertura e' quello corto */
+  }
+}
 
 const SEZIONE = "h-[148px] md:h-[188px] overflow-y-auto";
 
@@ -118,6 +136,15 @@ export function SuiTuoiTitoliCard() {
   const d = q.data;
   // Fissato al montaggio: «3 h fa» non deve cambiare a ogni render.
   const [adesso] = useState(() => Date.now());
+  // Lo scheletro prende l'altezza che la scheda aveva l'ultima volta. Su
+  // telefono le tre sezioni si impilano (~470px) e il messaggio «nessun
+  // titolo» ne occupa 148: uno scheletro sempre a tre sezioni faceva risalire
+  // tutta la pagina sotto quando arrivava la risposta (CLS 0,15 nel gate).
+  const [aveaTitoli] = useState(leggiAveaTitoli);
+  const titoliNoti = d?.titoli;
+  useEffect(() => {
+    if (titoliNoti != null) ricordaAveaTitoli(titoliNoti > 0);
+  }, [titoliNoti]);
 
   return (
     <Card>
@@ -127,6 +154,8 @@ export function SuiTuoiTitoliCard() {
           <div className="flex h-[148px] md:h-[188px] items-center">
             <QueryError message="dei tuoi titoli" onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
+        ) : !d && !aveaTitoli ? (
+          <div className="h-[148px] md:h-[188px] animate-pulse rounded-md bg-muted/40" aria-hidden />
         ) : !d ? (
           <div className="grid gap-3 md:grid-cols-3" aria-hidden>
             {[0, 1, 2].map((i) => (
