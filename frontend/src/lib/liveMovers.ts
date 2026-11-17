@@ -24,6 +24,7 @@ export function daLiveMover(lm: LiveMover): Mover {
     vol_ratio: lm.vol_ratio ?? null,
     composite: lm.composite ?? null,
     exchange: lm.exchange ?? null,
+    currency: lm.currency ?? null,
     // Il volume e' PARZIALE a mercato aperto: la proiezione a fine giornata
     // va fatta all'istante in cui e' stato letto, non a quello
     // dell'istantanea di mercato, che puo' essere di ieri sera.

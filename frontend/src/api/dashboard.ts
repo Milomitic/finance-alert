@@ -27,6 +27,9 @@ export type AnalystAction = {
   /** «posizione» | «preferito» | null: il titolo e' seguito (FA-113). Le sue
    *  azioni restano nella lista anche oltre il tetto. */
   rilevanza?: "posizione" | "preferito" | null;
+  /** Valuta di quotazione nell'unita' maggiore (C-20); null = sconosciuta,
+   *  e allora il prezzo si mostra senza simbolo. */
+  currency?: string | null;
 };
 
 /** One US pre-market gainer/loser — mirrors backend

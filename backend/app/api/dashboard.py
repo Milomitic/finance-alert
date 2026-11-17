@@ -25,6 +25,7 @@ from app.services import (
     rilevanza_service,
     stats_service,
 )
+from app.services.currency_units import major_unit_currency
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -109,11 +110,12 @@ def get_analyst_actions(
         return []
     # Batch-resolve ticker → name in one query instead of N.
     tickers = {it.ticker for it in items}
-    name_map = dict(
-        db.execute(
-            select(Stock.ticker, Stock.name).where(Stock.ticker.in_(tickers))
+    anagrafica = {
+        t: (nome, valuta)
+        for t, nome, valuta in db.execute(
+            select(Stock.ticker, Stock.name, Stock.currency).where(Stock.ticker.in_(tickers))
         ).all()
-    )
+    }
     # Batch-resolve ticker → latest stored close (for the target's implied
     # upside vs current price). One correlated query for the ~N involved
     # tickers — each stock's most-recent ohlcv_daily bar.
@@ -137,7 +139,7 @@ def get_analyst_actions(
     return [
         AnalystActionOut(
             ticker=it.ticker,
-            name=name_map.get(it.ticker) or it.ticker,
+            name=anagrafica.get(it.ticker, (None, None))[0] or it.ticker,
             date=it.date,
             firm=it.firm,
             to_grade=it.to_grade,
@@ -148,6 +150,7 @@ def get_analyst_actions(
             price_target_action=it.price_target_action,
             from_news=it.from_news,
             current_price=price_map.get(it.ticker),
+            currency=major_unit_currency(anagrafica.get(it.ticker, (None, None))[1]),
             rilevanza=rilevanti.get(it.ticker),
         )
         for it in items

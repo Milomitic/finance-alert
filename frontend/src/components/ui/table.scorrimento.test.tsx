@@ -21,7 +21,8 @@ function simula(contenuto: number, contenitore: number) {
   Object.defineProperty(HTMLElement.prototype, "scrollWidth", { configurable: true, get: () => contenuto });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => contenitore });
   globalThis.ResizeObserver = class {
-    constructor(private cb: ResizeObserverCallback) {}
+    cb: ResizeObserverCallback;
+    constructor(cb: ResizeObserverCallback) { this.cb = cb; }
     observe() { this.cb([], this as unknown as ResizeObserver); }
     unobserve() {}
     disconnect() {}

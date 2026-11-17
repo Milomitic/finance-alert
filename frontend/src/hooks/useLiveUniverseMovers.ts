@@ -16,6 +16,9 @@ export interface LiveMover {
   exchange?: string | null;
   /** Istante della quotazione (ISO, UTC): il riferimento della proiezione. */
   as_of?: string | null;
+  /** Valuta di quotazione nell'unita' maggiore (C-20); null = sconosciuta,
+   *  e allora il prezzo si mostra senza simbolo. */
+  currency?: string | null;
 }
 export interface LiveMoversResponse {
   gainers: LiveMover[];

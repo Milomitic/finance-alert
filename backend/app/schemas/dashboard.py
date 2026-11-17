@@ -91,6 +91,11 @@ class AnalystActionOut(BaseModel):
     # both pence→pounds scaled for .L). Lets the dashboard show the target's
     # implied upside vs the current price. None when no OHLCV is stored.
     current_price: float | None = None
+    # Valuta di quotazione, nell'unita' maggiore (GBp -> GBP), perche' la
+    # dashboard scriveva «$» davanti a ogni prezzo e un terzo del catalogo non
+    # e' in dollari (C-20). None = sconosciuta: il frontend mostra il numero
+    # senza simbolo, mai un dollaro inventato.
+    currency: str | None = None
 
 
 class PremarketMoverOut(BaseModel):

@@ -16,6 +16,7 @@ from app.indicators.rsi import rsi as rsi_indicator
 from app.models import Index, MarketSnapshot, OhlcvDaily, Stock
 from app.models.index import StockIndex
 from app.services import ohlcv_service
+from app.services.currency_units import major_unit_currency
 from app.services.fx_service import to_usd
 
 # Bull (long) leveraged ETFs — 2×/3× daily-reset funds. They swing
@@ -558,6 +559,8 @@ def build_movers(
                 else None
             ),
             "composite": scores.get(m.stock_id),
+            # Valuta del prezzo, nell'unita' maggiore (C-20).
+            "currency": major_unit_currency(m.currency),
         }
 
     # Top 10 by 5-day and 20-day windows for the dashboard "Top movers" picker

@@ -54,42 +54,49 @@ export function SuperinvestorPicksCard() {
                   </span>
                 );
                 return (
+                  /* Due righe per voce (A-11): su una sola, in una scheda da
+                     275px, il valore usciva dal bordo e si leggeva «$70» al
+                     posto di «$700.70B». Prima riga chi e', seconda quanto. */
                   <li
                     key={row.ticker}
                     className={cn(
-                      "flex items-center gap-3 py-1.5 border-t border-border/40",
+                      "flex items-start gap-3 py-1.5 border-t border-border/40",
                       idx === 0 && "border-t-0",
                     )}
                   >
-                    <span className="text-[0.6765rem] text-muted-foreground tabular-nums w-4 shrink-0">
+                    <span className="mt-1 text-[0.6765rem] text-muted-foreground tabular-nums w-4 shrink-0">
                       {idx + 1}
                     </span>
-                    {linkable ? (
-                      <Link
-                        to={`/stocks/${encodeURIComponent(row.ticker)}`}
-                        className="hover:underline shrink-0"
-                      >
-                        {TickerNode}
-                      </Link>
-                    ) : (
-                      <span className="shrink-0">{TickerNode}</span>
-                    )}
-                    <span
-                      className="text-xs text-muted-foreground truncate flex-1 min-w-0"
-                      title={row.company_name ?? ""}
-                    >
-                      {row.company_name ?? "—"}
-                    </span>
-                    {/* Holder count is the headline metric: the more
-                        funds that own it, the more "consensus" the
-                        position. Total $ shown as secondary. */}
-                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 tabular-nums shrink-0">
-                      {row.holder_count}
-                      <span className="ml-0.5 font-normal text-muted-foreground">fondi</span>
-                    </span>
-                    <span className="text-[0.7059rem] text-muted-foreground tabular-nums shrink-0 w-16 text-right">
-                      {fmtBig(row.total_value_usd)}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {linkable ? (
+                          <Link
+                            to={`/stocks/${encodeURIComponent(row.ticker)}`}
+                            className="hover:underline shrink-0"
+                          >
+                            {TickerNode}
+                          </Link>
+                        ) : (
+                          <span className="shrink-0">{TickerNode}</span>
+                        )}
+                        <span
+                          className="text-xs text-muted-foreground truncate min-w-0"
+                          title={row.company_name ?? ""}
+                        >
+                          {row.company_name ?? "—"}
+                        </span>
+                      </div>
+                      {/* Il numero di fondi e' la misura principale: piu'
+                          fondi lo hanno, piu' e' una scelta condivisa. Il
+                          valore totale e' il secondo dato. */}
+                      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 pl-7 text-xs tabular-nums">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                          {row.holder_count}
+                          <span className="ml-0.5 font-normal text-muted-foreground">fondi</span>
+                        </span>
+                        <span className="text-muted-foreground">{fmtBig(row.total_value_usd)}</span>
+                      </div>
+                    </div>
                   </li>
                 );
               })}

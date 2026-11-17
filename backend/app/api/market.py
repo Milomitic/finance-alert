@@ -19,6 +19,7 @@ from app.services import (
     live_universe_sweep_service,
     market_stats_service,
 )
+from app.services.currency_units import major_unit_currency
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -47,6 +48,8 @@ class LiveMoverOut(BaseModel):
     #: Quando e' stata letta la quotazione (UTC): il riferimento della
     #: proiezione del volume, che NON e' l'ora dell'istantanea di mercato.
     as_of: datetime | None = None
+    #: Valuta di quotazione, unita' maggiore (C-20). None = sconosciuta.
+    currency: str | None = None
 
 
 class LiveMoversOut(BaseModel):
@@ -71,10 +74,10 @@ def get_live_movers(
     # OUTER join perche' a un titolo appena entrato possono mancare metriche o
     # punteggio, e allora quella cella resta «—» invece di sparire la riga.
     info = {
-        t: (nome, borsa, media, punteggio)
-        for t, nome, borsa, media, punteggio in db.execute(
+        t: (nome, borsa, media, punteggio, valuta)
+        for t, nome, borsa, media, punteggio, valuta in db.execute(
             select(Stock.ticker, Stock.name, Stock.exchange,
-                   StockMetrics.vol_avg_20, StockScore.composite)
+                   StockMetrics.vol_avg_20, StockScore.composite, Stock.currency)
             .outerjoin(StockMetrics, StockMetrics.stock_id == Stock.id)
             .outerjoin(StockScore, StockScore.stock_id == Stock.id)
             .where(Stock.ticker.in_(tickers))
@@ -84,7 +87,7 @@ def get_live_movers(
     def _rows(rows: list[dict]) -> list[LiveMoverOut]:
         out = []
         for r in rows:
-            nome, borsa, media, punteggio = info.get(r["ticker"], (None, None, None, None))
+            nome, borsa, media, punteggio, valuta = info.get(r["ticker"], (None, None, None, None, None))
             vol = r.get("volume")
             out.append(LiveMoverOut(
                 ticker=r["ticker"], name=nome,
@@ -92,6 +95,7 @@ def get_live_movers(
                 vol_today=vol,
                 vol_ratio=(vol / media) if vol is not None and media else None,
                 composite=punteggio, exchange=borsa,
+                currency=major_unit_currency(valuta),
                 as_of=datetime.fromtimestamp(r["ts"], UTC) if r.get("ts") else None,
             ))
         return out

@@ -18,6 +18,7 @@ import { completaMover, daLiveMover } from "@/lib/liveMovers";
 import { cn } from "@/lib/utils";
 import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtVolume } from "@/lib/volumeFormat";
+import { formatMoney } from "@/lib/money";
 
 interface Props {
   movers: MoversBlock;
@@ -217,7 +218,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
           className="text-[0.7647rem] font-semibold tabular-nums text-foreground/85 text-right"
           title={livePrice != null ? "Prezzo live (polling 15s)" : "Ultima chiusura disponibile"}
         >
-          <FlashValue value={displayPrice} format={(p) => `$${p.toFixed(2)}`} noTween />
+          <FlashValue value={displayPrice} format={(p) => formatMoney(p, m.currency, { decimals: 2 })} noTween />
         </span>
         {/* Col 3: % change — headline metric, sign-coloured. */}
         <span

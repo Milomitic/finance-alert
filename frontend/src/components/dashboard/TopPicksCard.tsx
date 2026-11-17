@@ -7,12 +7,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTopPicks } from "@/hooks/useTopPicks";
-import {
-  RISK_LABEL,
-  RISK_TONE,
-  scoreColor,
-  scoreLabel,
-} from "@/lib/scoreMeta";
+import { scoreColor, scoreLabel } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
 
 type ColumnKey = RiskTier;
@@ -62,19 +57,11 @@ function PickRow({ item }: { item: TopPickItem }) {
         className="flex-1 min-w-0 flex items-center gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors"
       >
         <StockIdentity ticker={item.ticker} name={item.name} forma="riga" />
-        {/* Right-side meta cluster — fixed widths so chip + score
-            line up vertically across rows in the same column.
-            "CONSERVATIVE" used to dictate the row's right edge with
-            its variable text width; fixed slots decouple alignment
-            from per-row text length. */}
-        <span
-          className={cn(
-            "shrink-0 w-[92px] text-center px-1 py-px rounded border text-[0.6765rem] uppercase tracking-wider font-semibold",
-            RISK_TONE[item.risk_tier],
-          )}
-        >
-          {RISK_LABEL[item.risk_tier]}
-        </span>
+        {/* Niente pastiglia del rischio sulla riga (A-10): ogni colonna e'
+            GIA' un livello di rischio, e la sua intestazione lo dice. La
+            pastiglia da 92px ripeteva quell'intestazione su ogni riga e
+            lasciava al titolo una lettera: «E», «A», «M» al posto del ticker
+            e del nome. */}
         <span
           className={cn(
             "text-[0.8235rem] font-bold tabular-nums shrink-0 w-[36px] text-right",
@@ -98,7 +85,6 @@ function RowSkeleton() {
           <div className="h-3.5 w-14 rounded bg-muted/60 animate-pulse" />
           <div className="h-2.5 w-24 rounded bg-muted/40 animate-pulse" />
         </div>
-        <div className="h-3.5 w-16 rounded bg-muted/40 animate-pulse" />
         <div className="h-3.5 w-9 rounded bg-muted/60 animate-pulse" />
       </div>
     </li>

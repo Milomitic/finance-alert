@@ -93,6 +93,11 @@ class MoverOut(BaseModel):
     # card's "Controvalore" ranking. Optional for back-compat.
     dollar_volume: float | None = None
     composite: float | None = None
+    # Valuta di quotazione, nell'unita' maggiore (GBp -> GBP), perche' la
+    # dashboard scriveva «$» davanti a ogni prezzo e un terzo del catalogo non
+    # e' in dollari (C-20). None = sconosciuta: il frontend mostra il numero
+    # senza simbolo, mai un dollaro inventato.
+    currency: str | None = None
     # Listing exchange — frontend scopes the intraday volume projection to
     # US-session exchanges (HK/EU bars are already full-day at snapshot time).
     exchange: str | None = None

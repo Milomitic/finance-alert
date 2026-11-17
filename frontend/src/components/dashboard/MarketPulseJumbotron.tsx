@@ -342,9 +342,11 @@ function IndiceTile({ asset, nome, ampiezza }: {
           allungava i tre riquadri senza aggiungere un numero. Sotto `xl` il
           riquadro e' troppo stretto per due colonne e il tracciato torna
           sotto — una griglia sola, che a una colonna impila da se'. */}
-      <div className="grid min-w-0 gap-x-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,44%)] xl:items-center">
+      <div className="grid min-w-0 gap-x-3 xl:grid-cols-[auto_minmax(0,1fr)] xl:items-center">
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-1.5">
+          {/* Nome e FUT vanno a capo invece di troncarsi (A-27): a 375px il
+              nome aveva 27px e si leggeva «S…», «N…», «D…». */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5">
             {/* La bandiera dice a colpo d'occhio che le tre grandi sono americane,
                 come gia' fanno le voci della riga di contesto qui sotto. */}
             <img
@@ -355,7 +357,7 @@ function IndiceTile({ asset, nome, ampiezza }: {
               style={{ width: "14px", height: "10px", objectFit: "cover" }}
               className="shrink-0 rounded-[1px] shadow-sm"
             />
-            <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {nome}
             </span>
             {suFutures ? (
@@ -381,7 +383,10 @@ function IndiceTile({ asset, nome, ampiezza }: {
                 verso del movimento. `noTween` perche' su una fascia con una
                 ventina di numeri l'interpolazione simultanea costa piu' di quanto
                 renda. */}
-            <span className="truncate text-lg font-bold tabular-nums leading-none sm:text-xl">
+            {/* Mai troncato (A-09): «29.475» tagliato si leggeva «29.47», un
+                numero diverso. La colonna del testo prende la larghezza del
+                valore (`auto` sopra) e il tracciato si adatta a cio' che resta. */}
+            <span className="whitespace-nowrap text-lg font-bold tabular-nums leading-none sm:text-xl">
               {q?.price != null
                 ? <FlashValue value={q.price} format={(v) => formatLivello(v) ?? "—"} noTween />
                 : <NoValue hint={perche(asset, nome)} />}

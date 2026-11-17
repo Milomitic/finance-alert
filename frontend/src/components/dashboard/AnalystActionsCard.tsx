@@ -9,6 +9,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/money";
 
 /* Genuine rating CHANGES only — the card used to be dominated by
  * "Maintain"/"Reiterate" rows (a firm reaffirming, no change) which are
@@ -91,11 +92,14 @@ function PriceTargetChip({ a }: { a: AnalystAction }) {
   if (cur == null) return null;
   const prior = posTarget(a.prior_price_target);
   const tone = priceTargetTone(a.price_target_action);
-  const fmt = Number.isInteger(cur) ? `$${cur}` : `$${cur.toFixed(2)}`;
+  // La valuta del titolo, non un simbolo fisso (C-20): un target su un
+  // titolo di Londra o di Hong Kong usciva in dollari.
+  const fmt = formatMoney(cur, a.currency, { decimals: Number.isInteger(cur) ? 0 : 2 });
+  const tondo = (v: number) => formatMoney(v, a.currency, { decimals: 0 });
   const title =
     prior != null && prior !== cur
-      ? `Target: $${prior.toFixed(0)} → $${cur.toFixed(0)}`
-      : `Target: $${cur.toFixed(0)}`;
+      ? `Target: ${tondo(prior)} → ${tondo(cur)}`
+      : `Target: ${tondo(cur)}`;
   return (
     <span
       className={cn(
@@ -126,7 +130,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
         "shrink-0 w-[52px] text-right tabular-nums text-[0.7059rem] font-semibold",
         up ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
       )}
-      title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale ($${cur.toFixed(2)}) del ${Math.abs(pct).toFixed(1)}%`}
+      title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale (${formatMoney(cur, a.currency, { decimals: 2 })}) del ${Math.abs(pct).toFixed(1)}%`}
     >
       {up ? "+" : ""}
       {pct.toFixed(1)}%

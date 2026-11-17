@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
+import { formatMoney } from "@/lib/money";
 
 /* ─── MarketEventsRail — the deliberately thin one ──────────────────────── *
  *
@@ -136,7 +137,7 @@ export function MarketEventsRail({ movers }: Props) {
                     key={`h-${m.ticker}`}
                     ticker={m.ticker}
                     name={m.name}
-                    value={`$${m.last_close.toFixed(2)}`}
+                    value={formatMoney(m.last_close, m.currency, { decimals: 2 })}
                     tone="pos"
                     title={`${m.name} — nuovo massimo 52 settimane`}
                   />
@@ -146,7 +147,7 @@ export function MarketEventsRail({ movers }: Props) {
                     key={`l-${m.ticker}`}
                     ticker={m.ticker}
                     name={m.name}
-                    value={`$${m.last_close.toFixed(2)}`}
+                    value={formatMoney(m.last_close, m.currency, { decimals: 2 })}
                     tone="neg"
                     title={`${m.name} — nuovo minimo 52 settimane`}
                   />

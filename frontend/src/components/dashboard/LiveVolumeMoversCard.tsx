@@ -15,6 +15,7 @@ import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtDollar, fmtVolume } from "@/lib/volumeFormat";
+import { formatMoney } from "@/lib/money";
 
 type VolMode = "dollar" | "shares";
 
@@ -228,7 +229,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                     >
                       <FlashValue
                         value={displayPrice}
-                        format={(p) => `$${p.toFixed(2)}`}
+                        format={(p) => formatMoney(p, r.currency, { decimals: 2 })}
                         noTween
                       />
                     </div>

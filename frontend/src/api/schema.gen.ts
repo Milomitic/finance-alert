@@ -1093,6 +1093,7 @@ export interface LiveMoverOut {
   composite?: number | null;
   exchange?: string | null;
   as_of?: string | null;
+  currency?: string | null;
 }
 
 export interface LiveMoversOut {
@@ -1350,6 +1351,7 @@ export interface MoverOut {
   vol_20d?: number | null;
   dollar_volume?: number | null;
   composite?: number | null;
+  currency?: string | null;
   exchange?: string | null;
 }
 
@@ -2360,6 +2362,7 @@ export interface TopVolumeOut {
   vol_20d?: number | null;
   dollar_volume?: number | null;
   composite?: number | null;
+  currency?: string | null;
   exchange?: string | null;
 }
 
@@ -2447,6 +2450,7 @@ export interface VolumeSpikeOut {
   vol_20d?: number | null;
   dollar_volume?: number | null;
   composite?: number | null;
+  currency?: string | null;
   exchange?: string | null;
 }
 
@@ -2495,6 +2499,7 @@ export interface app__schemas__dashboard__AnalystActionOut {
   rilevanza?: string | null;
   from_news?: boolean;
   current_price?: number | null;
+  currency?: string | null;
 }
 
 export interface app__schemas__stock_detail__AnalystActionOut {

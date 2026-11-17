@@ -588,6 +588,9 @@ export interface Mover {
    *  mercato: le righe del giro live lo portano, perche' il loro volume e'
    *  della sessione in corso e va proiettato a quell'istante. */
   vol_as_of?: string | null;
+  /** Valuta di quotazione nell'unita' maggiore (C-20); null = sconosciuta,
+   *  e allora il prezzo si mostra senza simbolo. */
+  currency?: string | null;
 }
 
 export interface VolumeSpike extends Mover {
