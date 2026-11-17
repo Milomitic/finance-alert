@@ -96,7 +96,7 @@ export function SetupDetailDialog({ setup, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl p-0 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl p-0 max-h-[90dvh] overflow-y-auto">
         {setup && (
           <>
             <DialogHeader

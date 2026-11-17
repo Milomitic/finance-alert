@@ -288,26 +288,6 @@
   display: none;                   /* WebKit/Blink */
 }
 
-/* ─── HomePage ambient pulse ──────────────────────────────────────────────
- * Soft slow pulse used on hero cards so the dashboard feels alive
- * even when no values are flashing. Subtle: opacity oscillates
- * between 100% and 92% — visible peripheral motion without competing
- * with content. Used by `LiveAssetsPanel` wrapper and the new
- * SuperinvestorPicksCard.
- */
-@keyframes ambient-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.92; }
-}
-.ambient-pulse {
-  animation: ambient-pulse 4s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ambient-pulse {
-    animation: none;
-  }
-}
-
 /* ─── One scroll context below lg ────────────────────────────────────────
  * The app had 44 nested vertical scrollers inside cards. On a desktop they
  * are correct: the page rows set a definite height (`lg:h-[340px]`,
@@ -369,5 +349,57 @@
     animation: none;
     width: 100%;
     opacity: 0.55;
+  }
+}
+
+/* ─── Regole globali di accessibilita' (piano frontend, fase 0) ──────────
+ *
+ * Quattro regole che valgono per TUTTO cio' che non dichiara altro, invece di
+ * chiederle componente per componente: l'analisi del 2026-11-17 ha contato
+ * 159 <button> scritti a mano, 64 file che animano e ~30 campi nativi, e
+ * nessuna di queste proprieta' era coperta fuori dai primitivi.
+ */
+@layer base {
+  /* I controlli nativi (popup dei <select>, frecce dei campi numerici,
+   * selettore di data) seguono il tema dell'app, non quello del browser. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+
+  /* Un anello di focus per chi non ne dichiara uno. `:where` tiene la
+   * specificita' a zero: ogni `focus-visible:ring-*` dei primitivi vince. */
+  :where(button, a, [role="button"], [role="tab"], summary, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+/* iOS ingrandisce la pagina quando il campo a fuoco ha un corpo sotto i 16px,
+ * e non torna indietro da solo. Solo dove c'e' un dito: su desktop i campi
+ * restano della taglia scelta. `!important` perche' deve battere le classi di
+ * taglia (`text-xs`, `text-sm`) che i campi portano. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
+/* Movimento ridotto per tutto: scheletri, spinner, ping, ingressi e uscite dei
+ * dialoghi. Le animazioni finiscono subito invece di sparire, cosi' lo stato
+ * finale resta quello voluto. Il nastro e la barra di caricamento hanno gia'
+ * le loro regole qui sopra e il JS che le ferma. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -303,7 +303,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen h-dvh overflow-hidden bg-background">
       {/* FIRST focusable element in the document, deliberately. Placed after
           the sidebar it skipped nothing: the rail's collapse toggle and its
           ~12 links came first, which is precisely what a keyboard user needs
