@@ -4,12 +4,12 @@ Lista dei miglioramenti possibili su grafica, tipografia, UI/UX, interazioni,
 struttura delle pagine e organizzazione degli spazi, dal telefono al 4K, e il
 piano con cui affrontarli.
 
-**322 voci** in cinque rapporti di dettaglio, ognuna con Dove · Problema ·
+**328 voci** in cinque rapporti di dettaglio, ognuna con Dove · Problema ·
 Perché conta · Proposta · Impatto · Sforzo:
 
 | Rapporto | Ambito | Metodo | Voci |
 |---|---|---|---|
-| [A — Dal vivo](analisi-frontend-parziali/A-dal-vivo.md) | login, dashboard, poi 14 rotte a sei risoluzioni e tema scuro | browser | 49 |
+| [A — Dal vivo](analisi-frontend-parziali/A-dal-vivo.md) | 14 rotte a sei risoluzioni, in locale e in produzione coi dati veri; tema scuro e grafici a candele | browser | 55 |
 | [B — Sistema di design](analisi-frontend-parziali/B-sistema-di-design.md) | tipografia, colore, spaziatura, superfici, componenti, icone, movimento, grafici, tema scuro, stati | codice | 76 |
 | [C — Pagine](analisi-frontend-parziali/C-pagine-home-titoli-mercati.md) | dashboard, screener, dettaglio titolo, mercati e settori, guscio | codice | 71 |
 | [D — Pagine](analisi-frontend-parziali/D-pagine-segnali-posizioni-resto.md) | segnali, posizioni, diagnostica, calendario e macro, superinvestor, studio, login, 404 | codice | 91 |
@@ -17,23 +17,28 @@ Perché conta · Proposta · Impatto · Sforzo:
 
 ## Come leggerla
 
-- **B, C, D, E vengono dalla lettura del codice**; **A dal browser**, su un backend
-  locale con una copia migrata del database (dati di metà settembre, conto eToro
-  dal vivo). Risoluzioni: 375×812 (preset telefono), 768×1024, 1440×900,
-  1920×1080, 2560×1440, 3840×2160; tema scuro a 1440.
+- **B, C, D, E vengono dalla lettura del codice**; **A dal browser**, due volte:
+  su un backend locale con una copia migrata del database, poi **sulla produzione
+  con i dati veri**. Risoluzioni: 375×812 (preset telefono), 768×1024, 1440×900,
+  1920×1080, 2560×1440, 3840×2160; tema scuro a 1440, compresi i grafici a candele
+  con i colori letti dai pixel. I numeri di questo documento sono quelli di produzione.
 - **La passata dal vivo ha confermato le voci principali dei rapporti dal codice**
   e ne ha corretto due stime: il grafico del titolo a 375px parte a 6.616px, non
   ~3.900 (C-39); i campi che fanno zoomare iOS sono 1-4 per pagina, non ~20 (E-20).
-- **Resta fuori**: un telefono vero (iOS Safari: zoom, aree sicure, PWA), i grafici
-  a candele in tema scuro, le pagine con i dati di produzione.
+- **L'unico limite rimasto è strumentale**: il preset telefono è Chrome che emula
+  un telefono, non Safari su iOS. Zoom dei campi, barra del browser su `100vh`,
+  aree sicure e icona PWA (E-17, E-20, E-26) e il grafico tagliato a 600px (A-40,
+  visto una volta in locale, mai in produzione) si confermano solo da un iPhone.
 - **Due voci del rapporto D sono superate**: D-02 e D-27, rettificate in fondo al file.
 
 ## Il quadro in sette punti
 
-1. **Il contenuto principale sta sotto la piega, misurato.** Il grafico del titolo
-   è nella prima schermata solo a 3840px; a 1440 parte a 2.087px su 900, a 375 a
-   6.616px (A-36). La tabella dei segnali parte a 915px su 900 (A-37). Il dettaglio
-   di un settore è lungo 32.498px su telefono, 40 schermate (A-38).
+1. **Il contenuto principale sta sotto la piega, misurato in produzione.** Il
+   grafico del titolo è nella prima schermata solo a 3840px; a 1440 parte a 2.151px
+   su 900, a 375 a 6.838px (A-36). La tabella dei segnali parte a 1.335px a 1440 e a
+   2.923px su telefono (A-37). Il dettaglio di un settore è lungo 32.958px su
+   telefono, 40 schermate (A-38). Sotto la dashboard ci sono 8.000px di pagina
+   vuota, causati da 185 etichette nascoste che escono da una lista (A-50).
 2. **La dashboard aspetta la chiamata più lenta.** Tutta la pagina resta a scheletro
    finché non risponde il conto eToro (~15s in locale) e, se le API falliscono, lo
    scheletro non finisce mai, senza messaggio (A-05, A-06). Numeri e ticker
@@ -53,7 +58,9 @@ Perché conta · Proposta · Impatto · Sforzo:
    titoli» (D-03), dopo il login si torna sempre alla home (D-89), `confirm()`
    nativo per chiudere una posizione (D-34), differenze e tassi senza campione
    (D-84, D-43).
-7. **Tema scuro e lessico.** In scuro la selezione è il verde del rialzo (B-67, A-47);
+7. **Tema scuro e lessico.** In scuro gli assi dei grafici a candele stanno a 1,7:1
+   sul fondo (A-51), le candele usano il rosso dei guasti (A-52) e la selezione è il
+   verde del rialzo (B-67, A-47);
    lo stesso concetto ha quattro nomi (D-05), italiano e inglese mescolati (A-17),
    otto pagine su quattordici senza titolo (A-43).
 
@@ -74,6 +81,7 @@ nei rapporti prima di cominciare.
 | I due sbordi a 375px: gruppo «Livello/Sul periodo/Sull'anno» di Macro, tabella del dettaglio settore | A-39 |
 | Dettaglio settore: prime 20 aziende e «mostra tutte» | A-38 |
 | Numeri e ticker interi nelle tessere degli indici, nella classifica qualità e nei top picks | A-09, A-10, A-11, A-27 |
+| 8.000px di pagina vuota sotto la dashboard: `relative` sulle liste che scorrono con etichette `sr-only`, e un test di regola | A-50 |
 | `vertTouchDrag: false` in `MarketChart` | E-25 |
 | Linea di base axe da 23 a 10: `<span>` nel `<dl>` di `/sectors`, `aria-label` sui `<select>`, wrapper delle tabelle raggiungibile da tastiera | E-09, E-06, E-04 |
 | Bottoni-icona con nome; «Chiudi» al posto di «Close» | E-07 |
@@ -81,7 +89,8 @@ nei rapporti prima di cominciare.
 | Toast di scansione senza «regole» e con conferma su «Stop»; conferma su «Pulisci» del grafico | C-70, C-44 |
 | Icona PWA vera; tema che segue il sistema alla prima apertura | E-26, E-28 |
 
-**Chiusura:** zero sbordi a 375-3840 su tutte le 14 rotte; dettaglio settore sotto
+**Chiusura:** zero sbordi a 375-3840 su tutte le 14 rotte; dashboard alta quanto
+il suo contenuto (oggi 12.116px per 4.072 di schede a 1440); dettaglio settore sotto
 5.000px a 375; linea di base axe stretta dopo due corse concordi di CI.
 
 ### Fase 1 — Le pagine principali mostrano prima ciò per cui esistono (FA-172) · M
@@ -93,8 +102,9 @@ nei rapporti prima di cominciare.
 | Dashboard: ogni scheda esce dallo scheletro con la propria query, errore visibile con «Riprova»; segnali in alto; un solo «chi si muove», un solo «i miei titoli» | A-05, A-06, A-07, C-01, C-02, C-04, C-09, A-26 |
 | Un titolo per pagina: `h1`, titolo della scheda del browser anche sui dettagli, focus al cambio rotta | C-65, E-01, E-02, A-43 |
 
-**Chiusura:** grafico del titolo entro 900px a 1440 ed entro 1.700px a 375; tabella
-dei segnali entro 900px a 1440; dashboard leggibile in meno di 1s con il conto
+**Chiusura:** grafico del titolo entro 900px a 1440 ed entro 1.700px a 375 (oggi
+2.151 e 6.838); tabella dei segnali entro 900px a 1440 (oggi 1.335); dashboard
+leggibile in meno di 1s con il conto
 eToro ancora in caricamento; `h1` su 14 rotte su 14.
 
 ### Fase 2 — Telefono (FA-173) · M, il calendario L
@@ -104,7 +114,7 @@ eToro ancora in caricamento; `h1` su 14 rotte su 14.
 | Barra di navigazione inferiore (Dashboard · Screener · Segnali · Posizioni · Altro), con aree sicure | C-68, E-16 |
 | Bersagli a 44px dove c'è un dito (`pointer: coarse`), rapporto nel gate accanto ai 24px | E-19, A-44, A-34 |
 | Prima colonna fissa in Segnali e Posizioni; poi schede per riga | E-22, D-35, A-29 |
-| Calendario: agenda della settimana su telefono, giorno aperto in un foglio | D-61, D-62, A-46 |
+| Calendario: agenda della settimana sotto `lg` (a 768 oggi 115 testi troncati), giorno aperto in un foglio | D-61, D-62, A-46, A-55 |
 | Filtri dello screener in un pannello con «Mostra N titoli» | C-31 |
 | Grafici SVG: larghezza iniziale reale, mai 600px | A-40 |
 | axe anche sul progetto telefono, posizioni nel seme | E-15 |
@@ -133,9 +143,11 @@ calendario senza nome; axe verde sul progetto telefono.
 |---|---|
 | `--primary` scuro distinto dal verde «su» | B-67, A-47 |
 | Progetto Playwright in scuro su tre rotte, con linea di base propria | B-66 |
-| Assi, griglie e candele dei grafici dal tema | B-12, B-62…B-65 |
+| Assi, griglie e candele dei grafici dal tema: assi oggi a 1,7:1 in scuro, candele in red-600 | B-12, B-62…B-65, A-51, A-52 |
+| Un solo cartellino di prezzo sulla scala, i valori delle medie in legenda | A-53 |
 
-**Chiusura:** gate scuro verde; contrasto AA dei toni calcolato anche sulle varianti scure.
+**Chiusura:** gate scuro verde; contrasto AA dei toni calcolato anche sulle varianti
+scure; testo degli assi dei grafici sopra 4,5:1 in entrambi i temi, misurato sui pixel.
 
 ### Fase 5 — Pagine e lessico (FA-176) · M per pagina
 
@@ -154,6 +166,12 @@ calendario senza nome; axe verde sul progetto telefono.
 | Tablet a due colonne per dashboard e dettaglio titolo | A-49 |
 
 **Chiusura:** per pagina, i criteri delle voci.
+
+## Da verificare a parte, non di interfaccia
+
+- **Diagnostica mostra errori in produzione** (A-54): «In errore», «Conteggio non
+  disponibile», «Catalogo non disponibile». È un guasto o un ripiego del backend da
+  indagare, non una voce del piano frontend.
 
 ## Fuori dal piano, deliberatamente
 

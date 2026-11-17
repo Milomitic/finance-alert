@@ -108,3 +108,40 @@ parentesi l'altezza della finestra.
 - Nessun bottone senza nome accessibile, salvo 6 sul dettaglio titolo e 6 sul dettaglio mercato a 1440 (bottoni-icona dei controlli del grafico: E-07).
 - 404 corretta a ogni risoluzione, con `h1` e titolo di scheda.
 - A 2560 il riassetto del dettaglio titolo funziona: quattro colonne, nessuno sbordo.
+
+## In produzione, con i dati veri (2026-11-17)
+
+Stessa sonda e stesse 14 rotte, sull'app di produzione (`80-225-80-141.sslip.io`)
+con la sessione dell'utente, alle stesse sei risoluzioni; tema scuro a 1440 sui
+grafici a candele. Solo letture: nessun clic su azioni, scansioni o posizioni; il
+tema è stato riportato al valore che l'utente aveva (chiaro).
+
+### Le stesse misure, coi dati veri
+
+| Rotta | Cosa | 375 (812) | 768 (1024) | 1440 (900) | 1920 (1080) | 2560 (1440) | 3840 (2160) |
+|---|---|---|---|---|---|---|---|
+| `/stocks/AAPL` | grafico dei prezzi | 6.838 | 5.298 | 2.151 | 2.198 | 1.788 | 1.741 ✓ |
+| `/alerts` | tabella dei segnali | 2.923 | 1.614 | 1.335 | 1.458 | 1.439 ✓ | 1.439 ✓ |
+| `/positions` | tabella posizioni | 2.523 | 1.846 | 1.667 | 1.862 | 1.843 | 1.843 ✓ |
+| `/` | scheda Segnali | 3.682 | 2.886 | 387 ✓ | 432 ✓ | 432 ✓ | 432 ✓ |
+| `/` | altezza della pagina | 18.397 | 15.304 | 12.116 | 12.573 | 12.343 | 12.343 |
+
+In produzione la tabella dei segnali scende di altri 400px rispetto al database
+locale (1.335 contro 915 a 1440; 2.923 contro 1.434 a 375), perché le schede
+d'efficacia e delle confluenze sono piene. A-37 è quindi più grave del previsto.
+
+### Voci
+
+- **[A-50] Sotto la dashboard ci sono 8.000px di pagina vuota** — Dove: `/`, ogni risoluzione; `components/dashboard/AnalystActionsCard.tsx:171` (etichetta `sr-only`) dentro le liste `ul.flex-1.min-h-0.overflow-y-auto` alle righe 289 e 323. Problema: a 1440 l'ultima scheda finisce a 4.072px, ma la pagina scorre fino a 12.116px; a 375 fino a 18.397. Misurato togliendo una scheda alla volta: senza «Valutazioni analisti» la pagina torna a 4.072, e nascondendo solo le sue 185 etichette nascoste «, preferito» succede lo stesso. Causa: `.sr-only` è `position: absolute`, e dentro la lista che scorre nessun antenato è posizionato, quindi il loro blocco contenitore sta fuori dal contenitore che scorre: non vengono ritagliate e allungano la pagina. Col database locale non si vedeva, perché i preferiti erano pochi. Perché conta: la barra di scorrimento promette tre volte il contenuto vero, e scorrendo si finisce in una pagina bianca. Proposta: `relative` sulle due `ul` (o sulla `li`); in più un test di regola che pretenda `relative` su ogni contenitore `overflow-y-auto` che contiene un `sr-only`, perché la stessa forma esiste in altri componenti. Impatto: alto. Sforzo: S.
+- **[A-51] Tema scuro: gli assi dei grafici a candele sono quasi invisibili** — Dove: `/stocks/AAPL` (prezzo, RSI, MACD) e `/markets/%5EGSPC`, 1440, scuro. Problema: il colore dominante della scala dei tempi è `rgb(55,65,81)` su un fondo `rgb(26,26,26)`, cioè **1,7:1** (la soglia AA per il testo è 4,5). In chiaro lo stesso asse è grigio 115 a 4,3:1. Conferma B-12 con la misura. Impatto: alto. Sforzo: S.
+- **[A-52] Le candele usano il rosso dei guasti e un verde fuori palette, in entrambi i temi** — Dove: tutti i grafici lightweight-charts. Problema: ribasso `rgb(220,38,38)` (red-600, il colore che il progetto riserva agli errori) e rialzo `rgb(23,181,81)`, che non è l'emerald del resto dell'app. Il pannello RSI usa un viola `rgb(124,58,237)` a 3,05:1 sul fondo scuro. Conferma B-11. Proposta: colori dei grafici da `lib/coloriGrafico.ts` (fase 3), rose/emerald per la direzione. Impatto: medio. Sforzo: S.
+- **[A-53] Etichette di prezzo ammassate sulla scala del grafico** — Dove: `/stocks/AAPL`, 1440, entrambi i temi. Problema: con prezzo, quattro medie e Bollinger accesi, sei-sette cartellini colorati si sovrappongono sul bordo destro nell'arco di 25 dollari; non si legge quale valore è di quale linea. Proposta: un solo cartellino per il prezzo, i valori delle medie nella legenda in alto. Impatto: medio. Sforzo: S.
+- **[A-54] Diagnostica mostra errori in produzione** — Dove: `/diagnostics`, ogni risoluzione. Problema: a schermo «In errore», «Conteggio non disponibile in questo momento.», «Catalogo non disponibile in questo momento.». Non è un difetto di interfaccia: è un guasto o un ripiego del backend in corso, da verificare a parte. Da notare per l'interfaccia: il banner in testa alla pagina non lo riassume (D-48). Impatto: da stabilire. Sforzo: da stabilire.
+- **[A-55] Calendario a 768px: 115 testi troncati** — Dove: `/calendar`, tablet, con gli eventi veri. Problema: alla larghezza tablet la griglia del mese ha sette colonne strette e ogni chip è tagliato (7 a 1440, 0 da 2560 in su). Su telefono non se ne contano solo perché i chip diventano tre pallini senza testo (A-46). Proposta: l'agenda di D-61 anche sotto `lg`, non solo sotto `sm`. Impatto: medio. Sforzo: incluso in D-61.
+
+### Confermato in produzione
+
+- I due sbordi a 375 (A-39): Macro +40px, tabella del settore +23px. Nessun altro, a nessuna risoluzione.
+- Il dettaglio settore a 375: 32.958px.
+- Le pagine senza titolo (A-43), i bersagli sotto 44px (A-44, dashboard 317 su 506), i campi sotto 16px (A-45: 0-4 per pagina).
+- Il grafico SVG tagliato a 600px (A-40) **non si è ripresentato** in produzione: resta da provare su un telefono vero.
