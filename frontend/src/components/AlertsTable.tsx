@@ -52,6 +52,12 @@ const HINT_SEGNALE =
   "Il giorno in cui il segnale è comparso. È la data su cui poggiano il prezzo "
   + "d'ingresso e il piano; se la barra di mercato è precedente, l'orologio lo segnala.";
 
+/** La colonna del titolo resta ferma a sinistra su telefono (E-22): a 375px
+ *  undici colonne scorrono di lato, e appena si scorreva per leggere Forza o
+ *  Direzione non si sapeva piu' di quale titolo fossero. Stessa coppia di
+ *  classi di `FundamentalsCard`; letterale, per il purger di Tailwind. */
+const TITOLO_FISSO = "max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:bg-card";
+
 const ALERTS_COLS = [
   // ⚠️ UNA data sola, e l'id resta `data_segnale` perche' le preferenze
   // salvate dell'utente sono indicizzate su quello. La colonna «Rilevato» —
@@ -383,7 +389,7 @@ export function AlertsTable({
                like the dashboard cards. Holds the inline ticker/name search.
                Always visible — identity column. */
             onSort ? (
-              <th className={cn("px-3 py-1 text-left", INTESTAZIONE)}>
+              <th className={cn("px-3 py-1 text-left", INTESTAZIONE, TITOLO_FISSO)}>
                 <div className="flex items-center gap-2 min-w-0">
                   <button
                     type="button"
@@ -422,7 +428,7 @@ export function AlertsTable({
                 </div>
               </th>
             ) : (
-              <TableHead className={TESTA}>
+              <TableHead className={cn(TESTA, TITOLO_FISSO)}>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="shrink-0">Titolo</span>
                   <TableSearchInput
@@ -592,7 +598,7 @@ export function AlertsTable({
             )}
             {showTitolo && (
               /* Titolo cell: always visible (identity column). */
-              <TableCell>
+              <TableCell className={TITOLO_FISSO}>
                 {/* Ticker e nome sulla STESSA riga (2026-09-22, richiesta
                     dell'utente): su due righe erano la cella piu' alta della
                     tabella. Il nome cede per primo — `truncate`, `min-w-0` — e

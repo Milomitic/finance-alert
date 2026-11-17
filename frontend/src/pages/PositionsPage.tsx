@@ -32,6 +32,11 @@ import { DiarioEtoroCard } from "@/components/positions/DiarioEtoroCard";
 import { useEtoroPortafoglio, useEtoroRischio } from "@/hooks/useEtoro";
 import { RischioPosizioniCard } from "@/components/positions/RischioPosizioniCard";
 
+/** Il titolo resta fermo a sinistra su telefono (E-22, D-35): a 375px le
+ *  colonne scorrono di lato e il P&L, la risposta della pagina, si leggeva
+ *  senza sapere di quale posizione fosse. */
+const TITOLO_FISSO = "max-sm:sticky max-sm:left-0 max-sm:z-[1] max-sm:bg-card";
+
 /* Tone maps as plain string literals — Tailwind's purger only sees literals
    (see CLAUDE.md), don't refactor to template composition. */
 const SIDE_CHIP: Record<Position["side"], string> = {
@@ -272,7 +277,7 @@ export default function PositionsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Titolo</TableHead>
+                        <TableHead className={TITOLO_FISSO}>Titolo</TableHead>
                         <TableHead>Lato</TableHead>
                         {/* Entry, Stop e Target erano tre colonne di numeri:
                             rispondere a «sono piu vicino allo stop o al
@@ -290,7 +295,7 @@ export default function PositionsPage() {
                     <TableBody>
                       {open.map((p) => (
                         <TableRow key={p.id}>
-                          <TableCell>
+                          <TableCell className={TITOLO_FISSO}>
                             <TickerCell
                               p={p}
                               onOpenSignal={setSignalId}
@@ -368,7 +373,7 @@ export default function PositionsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Titolo</TableHead>
+                        <TableHead className={TITOLO_FISSO}>Titolo</TableHead>
                         <TableHead>Lato</TableHead>
                         <TableHead className="text-right">Entry</TableHead>
                         <TableHead className="text-right">Exit</TableHead>
@@ -381,7 +386,7 @@ export default function PositionsPage() {
                     <TableBody>
                       {closed.map((p) => (
                         <TableRow key={p.id}>
-                          <TableCell>
+                          <TableCell className={TITOLO_FISSO}>
                             {/* Il collegamento al segnale c'e anche qui — e
                                 anzi qui che serve di piu, perche rivedere un
                                 trade chiuso vuol dire rileggere la regola che
