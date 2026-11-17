@@ -12,6 +12,7 @@ import type { ScanStatusInfo } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { useFirstPaintActive } from "@/lib/firstPaint";
 import { useIsPhone } from "@/hooks/useMediaQuery";
+import { useConfermaInDuePassi } from "@/hooks/useConfermaInDuePassi";
 import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
 
@@ -194,6 +195,8 @@ interface Props {
   isStopping?: boolean;
 }
 
+const nessunaAzione = () => {};
+
 export function RunProgressToast({ status, labels, onStop, isStopping }: Props) {
   // Visibility-gated tick: this component is mounted globally, and its old
   // unconditional setInterval kept a 1Hz setState alive in hidden tabs all
@@ -201,6 +204,9 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   // the elapsed label and the 30s auto-dismiss window recompute from
   // timestamps, so nothing drifts.
   const now = useNowTick(TICK_MS);
+  // «Stop» interrompe una scansione di dieci minuti e non si annulla: chiede
+  // un secondo tocco (C-70). Sopra i `return null`, con tutti gli altri hook.
+  const stop = useConfermaInDuePassi(onStop ?? nessunaAzione);
 
   // MUST stay above the early returns below, with every other hook.
   //
@@ -550,7 +556,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               variant={isStale ? "default" : "outline"}
               size="sm"
               disabled={isStopping}
-              onClick={onStop}
+              onClick={stop.premi}
               className={cn(
                 "text-sm",
                 isStale &&
@@ -558,7 +564,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
               )}
             >
               <StopCircle className="h-4 w-4 mr-1.5" />
-              {isStale ? "Termina (forzato)" : "Stop"}
+              {stop.armato ? "Conferma: interrompi" : isStale ? "Termina (forzato)" : "Stop"}
             </Button>
           </div>
         )}

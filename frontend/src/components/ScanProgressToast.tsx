@@ -77,9 +77,9 @@ const SCAN_LABELS: RunToastLabels = {
         return "Scaricamento dati di mercato";
       // Evaluation phase
       case "evaluating:loading_rules":
-        return "Caricamento regole attive";
+        return "Preparazione dei detector";
       case "evaluating:scoring":
-        return "Valutazione regole per stock";
+        return "Ricerca dei segnali sui titoli";
       // Post-evaluation persisting sub-phases (split out from
       // `evaluating:persisting` so the user sees WHICH step is running
       // — sector_stats prep is especially worth announcing because it

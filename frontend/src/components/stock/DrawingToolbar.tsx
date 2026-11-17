@@ -1,6 +1,8 @@
 import { Bell, Eraser, Minus, Slash, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useConfermaInDuePassi } from "@/hooks/useConfermaInDuePassi";
+import { cn } from "@/lib/utils";
 
 export type DrawingMode = "none" | "hline" | "trend" | "alert" | "erase";
 
@@ -34,6 +36,9 @@ const TOOLS: {
 ];
 
 export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
+  // «Pulisci» toglie TUTTI i disegni del titolo e non si annulla: chiede un
+  // secondo tocco (C-44), accanto a «Cancella» che ne toglie uno.
+  const pulisci = useConfermaInDuePassi(onClearAll);
   return (
     <div className="inline-flex items-center gap-2">
       {TOOLS.map(({ target, label, icon: Icon, title }) => {
@@ -58,11 +63,11 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
         );
       })}
       <Button
-        type="button" size="sm" variant="ghost" onClick={onClearAll}
-        title="Rimuovi tutti i drawing per questo stock"
-        className="text-sm h-8"
+        type="button" size="sm" variant="ghost" onClick={pulisci.premi}
+        title="Rimuovi tutti i disegni di questo titolo"
+        className={cn("text-sm h-8", pulisci.armato && "text-destructive")}
       >
-        <Trash2 className="h-3.5 w-3.5 mr-1" aria-hidden /> Pulisci
+        <Trash2 className="h-3.5 w-3.5 mr-1" aria-hidden /> {pulisci.armato ? "Conferma: togli tutti" : "Pulisci"}
       </Button>
     </div>
   );
