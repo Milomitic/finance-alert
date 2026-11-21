@@ -300,7 +300,7 @@ export function AnalystActionsCard() {
           /* Un errore diceva "nessun upgrade/downgrade recente": una
              affermazione sul mercato, fatta quando la fetch non e' arrivata. */
           <div className="p-4">
-            <QueryError message="delle azioni analisti" onRetry={q.refetch} isRetrying={q.isFetching} />
+            <QueryError message="delle azioni analisti" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : isEmpty && vista === "miei" ? (
           <div className="flex-1 min-h-0 flex items-center justify-center px-4 text-center">

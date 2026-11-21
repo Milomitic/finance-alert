@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   ArrowLeft,
   Bitcoin,
   CircleDot,
@@ -34,6 +33,7 @@ import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { QueryError } from "@/components/ui/query-error";
 
 /* ─── Per-symbol icon overrides ──────────────────────────────────────────
  *
@@ -110,12 +110,9 @@ export default function MarketDetailPage() {
   if (q.isError || (!q.isLoading && !q.data)) {
     return (
       <Card>
-        <CardContent className="p-6 flex items-center gap-3 text-sm">
-          <AlertCircle className="h-5 w-5 text-destructive" />
-          <span>
-            Errore nel caricamento di <strong>{decoded}</strong>. Verifica
-            che il simbolo sia tra gli asset live tracciati.
-          </span>
+        <CardContent className="p-6">
+          <QueryError message={`di ${decoded}: verifica che sia fra gli strumenti di mercato seguiti`}
+            errore={q.error} onRetry={() => q.refetch()} isRetrying={q.isFetching} />
         </CardContent>
       </Card>
     );

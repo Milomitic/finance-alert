@@ -180,7 +180,7 @@ describe("quello che non si sa non diventa un numero", () => {
       history: null, quote: null,
     } as LiveAsset];
     const { container } = montaA(SEDUTA);
-    expect(screen.getAllByText("n/d").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain("0,00%");
   });
 
@@ -264,8 +264,9 @@ describe("la riga ETF e le icone", () => {
     quotazioni = [{ ticker: "NUGT", price: 88.2, change_pct: -1.4, market_state: "OPEN" }];
     montaA(SEDUTA);
     expect(screen.getByText("YINN")).toBeInTheDocument();
-    const senzaQuota = screen.getByTitle(/YINN: quotazione non disponibile/);
-    expect(senzaQuota.textContent).toBe("n/d");
+    // Il motivo dell'assenza ora e' testo (per i lettori di schermo) e un
+    // aiuto che si apre al tocco, non piu' un `title` (B-75).
+    expect(screen.getByText(/YINN: quotazione non disponibile/)).toHaveClass("sr-only");
   });
 
   it("chi non ha una bandiera ha un'icona: oro, petrolio, bitcoin", () => {
@@ -447,7 +448,7 @@ describe("l'ampiezza non si spaccia per un dato live", () => {
      * quindi Europa e Asia non hanno titoli. */
     montaA(SEDUTA, GLOBAL, SEDUTA.toISOString());
     expect(screen.getAllByText("nessun titolo misurato")).toHaveLength(2);
-    expect(screen.getAllByText("n/d").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
   it("le misure che NON hanno un equivalente regionale restano dichiarate globali", () => {

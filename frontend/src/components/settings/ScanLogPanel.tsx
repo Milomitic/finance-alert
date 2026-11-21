@@ -78,7 +78,7 @@ export function ScanLogPanel() {
           </div>
         ) : q.isError ? (
           <div className="py-6">
-            <QueryError message="del log scan" onRetry={q.refetch} isRetrying={q.isFetching} />
+            <QueryError message="del log scan" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : runs.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">

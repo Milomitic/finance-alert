@@ -117,7 +117,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
         /* Un errore non e' un vuoto: prima cadevano nello stesso ramo, quindi
            un 500 si leggeva come "non c'e' niente da mostrare". */
         <div className="flex-1 p-4">
-          <QueryError message="delle classifiche" onRetry={q.refetch} isRetrying={q.isFetching} />
+          <QueryError message="delle classifiche" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
         </div>
       ) : isEmpty ? (
         <div className="flex-1 flex items-center justify-center p-4 text-xs text-muted-foreground">

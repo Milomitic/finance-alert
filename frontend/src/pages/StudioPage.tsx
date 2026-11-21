@@ -74,7 +74,7 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
     staleTime: 10 * 60_000,
   });
   if (p.simbolo === "") return <p className="text-sm text-muted-foreground">Scegli un simbolo per cominciare.</p>;
-  if (q.isError) return <QueryError message="dello studio" onRetry={q.refetch} isRetrying={q.isFetching} />;
+  if (q.isError) return <QueryError message="dello studio" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
   if (!q.data) return <div className="h-64 animate-pulse rounded-md bg-muted/40" aria-hidden />;
 
   if (p.modello === "dopo_movimento") {

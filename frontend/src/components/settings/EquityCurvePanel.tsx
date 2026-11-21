@@ -128,7 +128,7 @@ export function EquityCurvePanel() {
           </div>
         ) : q.isError ? (
           <div className="mt-6">
-            <QueryError message="della curva equity" onRetry={q.refetch} isRetrying={q.isFetching} />
+            <QueryError message="della curva equity" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : !data || data.n_signals === 0 ? (
           <div className="mt-6 text-sm text-muted-foreground">

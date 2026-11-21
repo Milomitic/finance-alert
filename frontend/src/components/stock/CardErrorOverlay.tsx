@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
 import { ApiError } from "@/api/client";
+import { messaggioErrore } from "@/lib/errori";
 
 /** Centered, formatted error shown inside a detail card when its force-refresh
  *  fails (e.g. the upstream source returned an error). Fills the card body and
@@ -14,7 +15,9 @@ export function CardErrorOverlay({
   onRetry?: () => void;
   retrying?: boolean;
 }) {
-  const message = error instanceof ApiError ? error.detail : error.message;
+  // Il testo del server era in inglese e tecnico («User not found», «Failed
+  // to fetch»): ora si dice quale guasto e' (B-76).
+  const message = messaggioErrore(error) ?? "Aggiornamento non riuscito.";
   return (
     <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 p-4 text-center">
       <AlertTriangle className="h-6 w-6 text-destructive" />

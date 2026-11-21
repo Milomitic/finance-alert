@@ -107,7 +107,7 @@ export default function SectorDetailPage() {
         <div className="mt-4">
           {q.isError ? (
             // A genuine fetch failure is retryable — don't mislabel it "not found".
-            <QueryError message={`del settore ${decoded}`} onRetry={q.refetch} isRetrying={q.isFetching} />
+            <QueryError message={`del settore ${decoded}`} errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           ) : (
             <div className="text-red-600">Settore non trovato: {decoded}</div>
           )}

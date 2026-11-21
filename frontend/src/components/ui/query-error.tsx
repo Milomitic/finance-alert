@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 
+import { messaggioErrore } from "@/lib/errori";
 import { cn } from "@/lib/utils";
 
 interface QueryErrorProps {
@@ -12,6 +13,8 @@ interface QueryErrorProps {
   onRetry?: () => void;
   /** `isFetching` — disables + spins the retry button while a retry runs. */
   isRetrying?: boolean;
+  /** L'errore della query: se si sa quale guasto e', lo dice (B-76). */
+  errore?: unknown;
   className?: string;
 }
 
@@ -29,11 +32,14 @@ export function QueryError({
   message = "dei dati",
   onRetry,
   isRetrying = false,
+  errore,
   className,
 }: QueryErrorProps) {
+  const causa = messaggioErrore(errore);
   return (
     <div role="alert" className={cn("space-y-3", className)}>
       <p className="text-sm text-destructive">Errore nel caricamento {message}.</p>
+      {causa && <p className="text-xs text-muted-foreground">{causa}</p>}
       {onRetry && (
         <button
           type="button"

@@ -32,6 +32,7 @@ import { DiarioEtoroCard } from "@/components/positions/DiarioEtoroCard";
 import { useEtoroPortafoglio, useEtoroRischio } from "@/hooks/useEtoro";
 import { RischioPosizioniCard } from "@/components/positions/RischioPosizioniCard";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { QueryError } from "@/components/ui/query-error";
 
 /** Il titolo resta fermo a sinistra su telefono (E-22, D-35): a 375px le
  *  colonne scorrono di lato e il P&L, la risposta della pagina, si leggeva
@@ -247,8 +248,9 @@ export default function PositionsPage() {
       )}
       {q.isError && (
         <Card>
-          <CardContent className="p-4 text-sm text-rose-600 dark:text-rose-400">
-            Errore nel caricamento delle posizioni.
+          <CardContent className="p-4">
+            {/* Era in rose, il colore della direzione, senza un «Riprova» (B-72). */}
+            <QueryError message="delle posizioni" errore={q.error} onRetry={() => q.refetch()} isRetrying={q.isFetching} />
           </CardContent>
         </Card>
       )}

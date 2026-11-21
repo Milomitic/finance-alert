@@ -48,7 +48,7 @@ export function CatalogRefreshPanel() {
           </div>
         ) : status.isError ? (
           <div className="py-6">
-            <QueryError message="dello stato catalogo" onRetry={status.refetch} isRetrying={status.isFetching} />
+            <QueryError message="dello stato catalogo" errore={status.error} onRetry={status.refetch} isRetrying={status.isFetching} />
           </div>
         ) : (
           <div className="overflow-x-auto">

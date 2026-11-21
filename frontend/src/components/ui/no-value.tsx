@@ -1,3 +1,4 @@
+import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 
 /* How a missing number is shown, so that it stays a missing number.
@@ -15,19 +16,24 @@ import { cn } from "@/lib/utils";
  * screen reader.
  */
 export function NoValue({
-  hint = "Dato non disponibile",
+  hint,
   className,
 }: {
   hint?: string;
   className?: string;
 }) {
+  // ⚠️ Il motivo non sta piu' in `title=` (B-75): su un telefono un `title`
+  // non si apre mai, e `aria-label` su uno span senza ruolo non e' letto in
+  // modo affidabile. Il segno e' «—», come nei 268 punti che lo scrivono a
+  // mano, invece di «n/d»: un segno solo per lo stesso fatto. Il motivo e'
+  // testo per i lettori di schermo e, quando c'e', un aiuto che si apre al
+  // tocco.
+  const motivo = hint ?? "Dato non disponibile";
   return (
-    <span
-      title={hint}
-      aria-label={hint}
-      className={cn("text-muted-foreground tabular-nums", className)}
-    >
-      n/d
+    <span className={cn("inline-flex items-center gap-0.5 text-muted-foreground tabular-nums", className)}>
+      <span aria-hidden>—</span>
+      <span className="sr-only">{motivo}</span>
+      {hint && <InfoHint label="dato assente" text={hint} />}
     </span>
   );
 }

@@ -562,7 +562,7 @@ export function SetupsView({ vista }: SetupsViewProps) {
             ))}
           </div>
         ) : q.isError ? (
-          <QueryError message="dei setup" onRetry={q.refetch} isRetrying={q.isFetching} />
+          <QueryError message="dei setup" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
         ) : view === "active" && (!q.data || q.data.setups.length === 0) ? (
           <Card>
             <CardContent className="p-6 text-sm text-muted-foreground">

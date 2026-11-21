@@ -42,7 +42,7 @@ function RigaPari({ r, mia }: { r: PariRiga; mia: boolean }) {
 
 function Pari({ ticker }: { ticker: string }) {
   const q = usePari(ticker);
-  if (q.isError) return <QueryError message="dei titoli simili" onRetry={q.refetch} isRetrying={q.isFetching} />;
+  if (q.isError) return <QueryError message="dei titoli simili" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
   if (!q.data) return <div className="h-48 animate-pulse rounded-md bg-muted/40" aria-hidden />;
   const { righe, base, gruppo } = q.data;
   if (righe.length <= 1) {
@@ -94,7 +94,7 @@ function RigaReazione({ r }: { r: Reazione }) {
 
 function Reazioni({ ticker }: { ticker: string }) {
   const q = useReazioni(ticker);
-  if (q.isError) return <QueryError message="delle reazioni alle trimestrali" onRetry={q.refetch} isRetrying={q.isFetching} />;
+  if (q.isError) return <QueryError message="delle reazioni alle trimestrali" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
   if (!q.data) return <div className="h-48 animate-pulse rounded-md bg-muted/40" aria-hidden />;
   const { righe, mediana_assoluta_pct } = q.data;
   if (righe.length === 0) {

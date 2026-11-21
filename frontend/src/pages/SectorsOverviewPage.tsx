@@ -1,4 +1,4 @@
-import { BarChart3, Grid3x3, RefreshCw } from "lucide-react";
+import { BarChart3, Grid3x3 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { LeaderboardStrip } from "@/components/sectors/LeaderboardStrip";
@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { useLeaderboards, useSectorsOverview, useSectorsPerformance } from "@/hooks/useSectorDetail";
 import { fmtNum } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { QueryError } from "@/components/ui/query-error";
 
 /* ─── Sectors Overview Hub ──────────────────────────────────────────────────
  *
@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
  * three rankings underneath them purely by being higher up.
  */
 export default function SectorsOverviewPage() {
-  const { data, isLoading, isError, refetch, isFetching } = useSectorsOverview();
+  const { data, isLoading, isError, refetch, isFetching, error } = useSectorsOverview();
   // Separate query from the overview on purpose: the sector lenses render
   // straight from SQL while the analyst board waits on the fundamentals
   // cache, so the page paints without being held to the slower half.
@@ -121,19 +121,10 @@ export default function SectorsOverviewPage() {
       <div className="space-y-6">
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Settori</h1>
         <Card>
-          <CardContent className="p-6 space-y-3">
-            <p className="text-sm text-destructive">
-              Errore nel caricamento dei dati settoriali.
-            </p>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} aria-hidden />
-              Riprova
-            </button>
+          <CardContent className="p-6">
+            {/* Il primitivo, non la sua copia: QueryError era nato da questo
+                blocco e il blocco era rimasto qui (B-72). */}
+            <QueryError message="dei dati settoriali" errore={error} onRetry={() => refetch()} isRetrying={isFetching} />
           </CardContent>
         </Card>
       </div>

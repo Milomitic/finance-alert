@@ -156,7 +156,7 @@ export function SuiTuoiTitoliCard() {
         <SectionTitle icon={Briefcase} label="Sui tuoi titoli" />
         {q.isError ? (
           <div className="flex h-[148px] md:h-[188px] items-center">
-            <QueryError message="dei tuoi titoli" onRetry={q.refetch} isRetrying={q.isFetching} />
+            <QueryError message="dei tuoi titoli" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : !d && !aveaTitoli ? (
           <div className="h-[148px] md:h-[188px] animate-pulse rounded-md bg-muted/40" aria-hidden />

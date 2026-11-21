@@ -1,5 +1,5 @@
 import type { IChartApi } from "lightweight-charts";
-import { AlertCircle, ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -70,6 +70,7 @@ import { StockScoreCard } from "@/components/stock/StockScoreCard";
 import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
+import { QueryError } from "@/components/ui/query-error";
 
 /** Soglia «oltre il Full HD», in pixel.
  *
@@ -347,9 +348,9 @@ export default function StockDetailPage() {
   if (detail.isError || !detail.data) {
     return (
       <Card>
-        <CardContent className="p-6 flex items-center gap-3 text-sm">
-          <AlertCircle className="h-5 w-5 text-destructive" />
-          <span>Errore nel caricamento del ticker <strong>{ticker}</strong>. Verifica che esista in catalogo.</span>
+        <CardContent className="p-6">
+          <QueryError message={`di ${ticker.toUpperCase()}: verifica che sia in catalogo`}
+            errore={detail.error} onRetry={() => detail.refetch()} isRetrying={detail.isFetching} />
         </CardContent>
       </Card>
     );

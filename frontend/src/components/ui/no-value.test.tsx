@@ -27,13 +27,15 @@ describe("hasValue", () => {
 describe("NoValue", () => {
   it("says it has no value instead of showing a number", () => {
     render(<NoValue />);
-    expect(screen.getByText("n/d")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("Dato non disponibile")).toHaveClass("sr-only");
   });
 
-  it("carries the reason to both the tooltip and the screen reader", () => {
-    render(<NoValue hint="Yahoo irraggiungibile" />);
-    const el = screen.getByLabelText("Yahoo irraggiungibile");
-    expect(el).toHaveAttribute("title", "Yahoo irraggiungibile");
+  it("porta il motivo al lettore di schermo e a un aiuto che si apre al tocco, non in title", () => {
+    const { container } = render(<NoValue hint="Yahoo irraggiungibile" />);
+    expect(screen.getByText("Yahoo irraggiungibile")).toHaveClass("sr-only");
+    expect(screen.getByRole("button", { name: /Spiegazione/ })).toBeInTheDocument();
+    expect(container.querySelector("[title]")).toBeNull();
   });
 });
 

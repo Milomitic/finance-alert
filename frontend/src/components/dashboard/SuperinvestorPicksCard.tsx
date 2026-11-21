@@ -41,7 +41,7 @@ export function SuperinvestorPicksCard() {
         ) : q.isError ? (
           /* Il testo vuoto diceva "esegui il seed dei portafogli" — un
              consiglio falso quando il seed c'e' gia' e la fetch e' fallita. */
-          <QueryError message="dei portafogli 13F" onRetry={q.refetch} isRetrying={q.isFetching} />
+          <QueryError message="dei portafogli 13F" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
         ) : q.data && q.data.most_picked.length > 0 ? (
           <div className="flex-1 min-h-0 overflow-y-auto pr-1">
             <ul className="space-y-0">
