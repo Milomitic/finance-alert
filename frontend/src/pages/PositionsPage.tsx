@@ -33,6 +33,7 @@ import { useEtoroPortafoglio, useEtoroRischio } from "@/hooks/useEtoro";
 import { RischioPosizioniCard } from "@/components/positions/RischioPosizioniCard";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { QueryError } from "@/components/ui/query-error";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /** Il titolo resta fermo a sinistra su telefono (E-22, D-35): a 375px le
  *  colonne scorrono di lato e il P&L, la risposta della pagina, si leggeva
@@ -273,7 +274,7 @@ export default function PositionsPage() {
             <CardContent className="p-4">
               <SectionTitle icon={Briefcase} label="Posizioni aperte" className="mb-3" />
               {open.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-6">
+                <div className={STATO_VUOTO}>
                   Nessuna posizione aperta. Apri il dettaglio di un segnale e
                   usa “Traccia trade” nel piano operativo.
                 </div>
@@ -370,7 +371,7 @@ export default function PositionsPage() {
             <CardContent className="p-4">
               <SectionTitle icon={Archive} label="Posizioni chiuse" className="mb-3" />
               {closed.length === 0 ? (
-                <div className="text-sm text-muted-foreground text-center py-6">
+                <div className={STATO_VUOTO}>
                   Nessuna posizione chiusa.
                 </div>
               ) : (

@@ -8,6 +8,7 @@ import { useDetectorPerformance } from "@/hooks/useDetectorPerformance";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { HintLabel } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* Efficacia dei segnali, letta dal magazzino degli esiti.
  *
@@ -72,7 +73,7 @@ function Verdict({ cell }: { cell: DetectorPerfCell }) {
 export function SignalEffectivenessTable({ rows }: { rows: DetectorPerfRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground">
+      <div className={STATO_VUOTO}>
         Nessun segnale maturato. Un esito nasce solo quando la sua finestra
         forward e' interamente trascorsa, quindi i segnali piu' recenti non
         compaiono ancora.

@@ -30,6 +30,7 @@ import { HintAnchor, HintLabel, HintUnderline } from "@/components/ui/info-hint"
 import { cn } from "@/lib/utils";
 import { SCREENER_COLS } from "@/lib/screenerColumns";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /** Toggleable columns for the desktop screener table.
  *  The identity column (Ticker + name) is always-on.
@@ -432,7 +433,7 @@ export function StockBrowserTable({
             </div>
           </div>
           {displayItems.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+            <div className={STATO_VUOTO}>
               Nessuno stock trovato.
               {q.trim()
                 ? ` Nessun risultato per "${q}".`

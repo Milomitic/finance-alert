@@ -30,6 +30,7 @@ import {
 import { CONFIDENZA_BASSA } from "@/lib/confidenza";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO_PICCOLO } from "@/lib/stati";
 
 /* ─── Component label map ───────────────────────────────────────────────── */
 /* Pretty names + 1-line descriptions for the 43 components emitted by the
@@ -726,7 +727,7 @@ export function StockScoreCard({ ticker }: Props) {
   if (isError || !data) {
     return (
       <CardShell onRefresh={onRefresh} isFetching={isRecomputing} updatedAt={data?.computed_at}>
-        <div className="py-6 text-center text-xs text-muted-foreground">
+        <div className={STATO_VUOTO_PICCOLO}>
           Errore nel caricamento dello score.
         </div>
       </CardShell>

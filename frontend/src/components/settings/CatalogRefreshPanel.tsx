@@ -8,6 +8,7 @@ import { useCatalogStatus, useTriggerCatalogRefresh } from "@/hooks/useCatalogSt
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO } from "@/lib/stati";
 
 
 /* ─── Catalog refresh panel ─────────────────────────────────────────────── */
@@ -43,7 +44,7 @@ export function CatalogRefreshPanel() {
         />
 
         {status.isLoading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className={STATO_VUOTO}>
             Caricamento…
           </div>
         ) : status.isError ? (

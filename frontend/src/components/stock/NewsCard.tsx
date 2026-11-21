@@ -11,6 +11,7 @@ import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockNews } from "@/hooks/useStockNews";
 import { cn } from "@/lib/utils";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* ─── Sentiment chip rendering ──────────────────────────────────────────── *
  * The backend classifier (`news_sentiment.py`) tags every headline as
@@ -191,7 +192,7 @@ export function NewsCard({ ticker }: Props) {
               ))}
             </div>
           ) : sorted.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-8 px-2">
+            <div className={STATO_VUOTO}>
               News non disponibili per questo ticker.
               <div className="text-xs mt-1 opacity-75">
                 Yahoo Finance non espone news per questo simbolo, oppure è

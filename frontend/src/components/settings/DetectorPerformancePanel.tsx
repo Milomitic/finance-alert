@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
 import { cellTone } from "@/lib/detectorPerformance";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* ─── DetectorPerformancePanel — esplora esiti per detector ─────────────── *
  *
@@ -72,7 +73,7 @@ export function DetectorPerformancePanel() {
                 Errore nel caricamento degli esiti — riprova più tardi.
               </div>
             ) : !data || data.meta.total_rows === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">
+              <div className={STATO_VUOTO}>
                 Nessun esito maturato nel warehouse: si popola a fine scan man
                 mano che gli orizzonti dei segnali si compiono.
               </div>

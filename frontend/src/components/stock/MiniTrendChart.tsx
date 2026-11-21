@@ -1,5 +1,6 @@
 import { currencySymbol } from "@/lib/money";
 import { GraficoSvg, type SerieGrafico } from "@/components/ui/grafico-svg";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* Il grafico trimestrale/annuale della scheda Fondamentali.
  *
@@ -72,7 +73,7 @@ export default function MiniTrendChart({
   // taiwanesi. La scheda passa quella dei rendiconti; ignota = nessun simbolo.
   const unit = currencySymbol(currency) ?? "";
   if (data.length === 0) {
-    return <div className="text-sm text-muted-foreground text-center py-6">Nessun dato per il grafico</div>;
+    return <div className={STATO_VUOTO}>Nessun dato per il grafico</div>;
   }
   // Revenue is huge ($B) — scale into billions for the bar values; Y-axis label
   // says "$B". EPS stays in dollars on the right axis.

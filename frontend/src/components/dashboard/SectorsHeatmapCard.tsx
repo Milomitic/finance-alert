@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
 import { cn } from "@/lib/utils";
+import { STATO_VUOTO } from "@/lib/stati";
 
 interface Props {
   sectors: SectorBreadth[];
@@ -28,7 +29,7 @@ export function SectorsHeatmapCard({ sectors }: Props) {
           <SectionTitle icon={LayoutGrid} label="Sectors (Avg Δ%)" />
         </div>
         {sectors.length === 0 ? (
-          <div className="text-sm text-muted-foreground text-center py-6">Nessun settore</div>
+          <div className={STATO_VUOTO}>Nessun settore</div>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto p-2">
           {/* Re-balanced: sector name takes the bulk of the row, % stays

@@ -8,6 +8,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useConfluence } from "@/hooks/useAlerts";
 import { TONE_BG } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
+import { STATO_VUOTO_PICCOLO } from "@/lib/stati";
 
 /* Inner list of the strongest active multi-signal clusters (>=2 detectors
  * agreeing on one ticker). Natural height (no internal scroll) so it can be
@@ -63,7 +64,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   const items = (q.data ?? []).slice(0, limit);
   if (q.isLoading) {
     return (
-      <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+      <div className={STATO_VUOTO_PICCOLO}>
         Caricamento…
       </div>
     );
@@ -83,7 +84,7 @@ export function ConfluenceRows({ limit = 8 }: { limit?: number }) {
   }
   if (items.length === 0) {
     return (
-      <div className="px-4 py-6 text-center text-xs text-muted-foreground">
+      <div className={STATO_VUOTO_PICCOLO}>
         Nessuna confluenza attiva.
       </div>
     );

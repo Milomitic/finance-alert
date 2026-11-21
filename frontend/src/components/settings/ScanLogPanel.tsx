@@ -7,6 +7,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useScanLog, type PhaseTiming, type ScanRunSummary } from "@/hooks/useScanLog";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO } from "@/lib/stati";
 
 
 /* ─── Scan log panel ────────────────────────────────────────────────────── *
@@ -73,7 +74,7 @@ export function ScanLogPanel() {
         </div>
 
         {q.isLoading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className={STATO_VUOTO}>
             Caricamento…
           </div>
         ) : q.isError ? (
@@ -81,7 +82,7 @@ export function ScanLogPanel() {
             <QueryError message="del log scan" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
           </div>
         ) : runs.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
+          <div className={STATO_VUOTO}>
             Nessuno scan registrato.
           </div>
         ) : (

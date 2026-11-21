@@ -150,6 +150,28 @@ export function GraficoSvg<T>({
         viewBox={`0 0 ${w} ${H}`}
         role="img"
         aria-label={etichetta}
+        // Da tastiera come col mouse (B-61): il grafico si raggiunge col Tab
+        // e le frecce spostano il punto attivo, con lo stesso riquadro dei
+        // valori. Fuori fuoco il punto torna libero.
+        tabIndex={0}
+        className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onKeyDown={(e) => {
+          if (n === 0) return;
+          if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+            e.preventDefault();
+            const passo = e.key === "ArrowRight" ? 1 : -1;
+            setAttivo((a) => Math.min(n - 1, Math.max(0, (a ?? (passo > 0 ? -1 : n)) + passo)));
+          } else if (e.key === "Home") {
+            e.preventDefault();
+            setAttivo(0);
+          } else if (e.key === "End") {
+            e.preventDefault();
+            setAttivo(n - 1);
+          } else if (e.key === "Escape") {
+            setAttivo(null);
+          }
+        }}
+        onBlur={() => setAttivo(null)}
         onMouseLeave={() => setAttivo(null)}
         onMouseMove={(e) => {
           const box = e.currentTarget.getBoundingClientRect();
@@ -224,6 +246,38 @@ export function GraficoSvg<T>({
             stroke="hsl(var(--muted-foreground))" strokeOpacity={0.4} />
         )}
       </svg>
+      {/* I dati come tabella per i lettori di schermo (B-61): l'etichetta del
+          grafico diceva che cosa misura, non i numeri. */}
+      <table className="sr-only">
+        <caption>{etichetta}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Periodo</th>
+            {serie.map((s) => <th key={s.chiave} scope="col">{s.nome ?? s.chiave}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {dati.map((r, i) => (
+            <tr key={i}>
+              <th scope="row">{formatoX(x(r))}</th>
+              {serie.map((s) => {
+                const v = s.valore(r);
+                return (
+                  <td key={s.chiave}>
+                    {v == null || !Number.isFinite(v) ? "—" : (s.asse === "dx" && formatoYDx ? formatoYDx : formatoY)(v)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {attivo != null && dati[attivo] != null && (
+        // Annunciato quando il punto cambia da tastiera.
+        <div aria-live="polite" className="sr-only">
+          {formatoX(x(dati[attivo]))}
+        </div>
+      )}
       {attivo != null && dati[attivo] != null && (
         <div
           className="pointer-events-none absolute top-1 z-10 rounded-md border border-border bg-background px-2 py-1 text-xs shadow-sm"

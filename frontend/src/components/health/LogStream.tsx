@@ -4,6 +4,7 @@ import type { LogRecord } from "@/api/platformHealth";
 import type { StreamedLog } from "@/hooks/usePlatformHealthStream";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { Button } from "@/components/ui/button";
+import { STATO_VUOTO } from "@/lib/stati";
 
 type Props = {
   records: StreamedLog[];
@@ -413,7 +414,7 @@ export default function LogStream({
         {/* Quando il banner sopra ha gia detto che Loki non risponde, ripeterlo
             qui non aggiunge nulla: lo stato vuoto tace. */}
         {filtered.length === 0 && !(onInfra && origin?.reachable === false) && (
-          <div className="px-5 py-8 text-center text-muted-foreground italic text-sm">
+          <div className={STATO_VUOTO}>
             {onInfra
               ? origin?.loading
                 ? "Interrogazione in corso…"

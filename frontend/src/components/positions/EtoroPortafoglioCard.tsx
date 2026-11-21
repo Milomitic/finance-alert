@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
 import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* ─── Il portafoglio eToro (FA-124) ───────────────────────────────────────
  *
@@ -264,7 +265,7 @@ export function EtoroPortafoglioCard({ d, errore }: { d: EtoroPortafoglio | unde
         )}
         <EtoroDaAbbinare lista={d.da_decidere} />
         {gruppi.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">Nessuna posizione aperta su eToro.</p>
+          <p className={STATO_VUOTO}>Nessuna posizione aperta su eToro.</p>
         ) : (
           <ul className="divide-y divide-border/40">
             {gruppi.map((g) => <RigaStrumento key={g.instrumentId} g={g} />)}

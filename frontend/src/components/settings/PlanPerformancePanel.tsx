@@ -9,6 +9,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { usePlanPerformance } from "@/hooks/usePlanPerformance";
 import { expectancyInterval, expectancyLabel, formatRSegnato, verdictTone } from "@/lib/planPerformance";
 import { cn } from "@/lib/utils";
+import { STATO_VUOTO } from "@/lib/stati";
 
 /* ─── PlanPerformancePanel — il piano avrebbe pagato? ────────────────────── *
  *
@@ -100,7 +101,7 @@ function Contenuto({ dati }: { dati: PlanPerformance }) {
 
   if (meta.rows === 0) {
     return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
+      <p className={STATO_VUOTO}>
         {meta.open_excluded > 0
           ? `${meta.open_excluded} piani ancora in corso e nessuno a finestra chiusa: le misure compaiono quando trascorre il primo orizzonte.`
           : "Nessun esito di piano ancora maturato. Una riga nasce quando il prezzo tocca lo stop o il target, quindi le prime compaiono entro pochi giorni dai segnali con un piano."}
