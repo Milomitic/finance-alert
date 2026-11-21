@@ -113,7 +113,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
         <div className="relative flex items-baseline gap-1.5">
           <span
             className={cn(
-              "tabular-nums font-mono text-[13.5px] tracking-tight leading-none",
+              "tabular-nums font-mono text-[0.7941rem] tracking-tight leading-none",
               isToday
                 ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-sky-700 text-white font-bold shadow-sm"
                 : day.inMonth
@@ -125,7 +125,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
           </span>
           {events.length > CHIP_LIMIT && (
             <span
-              className="text-[12.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+              className="text-[0.7353rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
               aria-hidden
             >
               {events.length} eventi
@@ -196,7 +196,7 @@ export const DayCell = forwardRef<HTMLDivElement, DayCellProps>(
                     {events.slice(CHIP_LIMIT).map((ev, i) => (
                       <li
                         key={i}
-                        className="text-[14.5px] flex items-center gap-1.5"
+                        className="text-[0.8529rem] flex items-center gap-1.5"
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
                         {ev.kind === "earnings"

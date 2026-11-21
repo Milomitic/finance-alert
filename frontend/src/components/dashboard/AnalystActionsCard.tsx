@@ -202,7 +202,7 @@ export function ActionRow({ a }: { a: AnalystAction }) {
         </span>
         {a.from_news && (
           <span
-            className="inline-flex items-center gap-0.5 text-[9.5px] text-muted-foreground shrink-0"
+            className="inline-flex items-center gap-0.5 text-[0.6471rem] text-muted-foreground shrink-0"
             title="Estratto da una notizia (non dal feed strutturato)"
           >
             <Newspaper className="h-2.5 w-2.5" /> news

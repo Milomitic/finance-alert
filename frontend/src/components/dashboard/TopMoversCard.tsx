@@ -231,7 +231,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
             the columns stay aligned). Window-aware per volValue above. */}
         <span
           className={cn(
-            "text-[12.5px] tabular-nums text-right font-semibold text-foreground/80",
+            "text-[0.7353rem] tabular-nums text-right font-semibold text-foreground/80",
             wide ? "block" : "hidden row-full:block",
           )}
           title={volTitle}
@@ -277,7 +277,7 @@ function ColumnHeader({ side }: { side: Side }) {
   return (
     <div
       className={cn(
-        "shrink-0 px-3 py-1 text-[10.5px] uppercase tracking-[0.16em] font-bold border-b",
+        "shrink-0 px-3 py-1 text-[0.6471rem] uppercase tracking-[0.16em] font-bold border-b",
         side === "gainers"
           ? "bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300"
           : "bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300",

@@ -259,7 +259,7 @@ function SourceRow({
         </span>
         <span
           className={cn(
-            "ml-auto shrink-0 px-1.5 py-0.5 text-[9.5px] font-medium rounded border",
+            "ml-auto shrink-0 px-1.5 py-0.5 text-[0.6471rem] font-medium rounded border",
             ROLE_TONE[m.role] ?? ROLE_TONE.primary,
           )}
         >
@@ -294,7 +294,7 @@ function SourceRow({
         </div>
       )}
       {m.last_failure_reason && h !== "healthy" && (
-        <div className="mt-1 pl-4 text-[10.5px] text-rose-700/80 dark:text-rose-400/80 truncate font-mono" title={m.last_failure_reason}>
+        <div className="mt-1 pl-4 text-[0.6471rem] text-rose-700/80 dark:text-rose-400/80 truncate font-mono" title={m.last_failure_reason}>
           ✗ {m.last_failure_reason}
         </div>
       )}
@@ -339,7 +339,7 @@ function ClusterCard({
               </span>
             )}
           </div>
-          <div className="text-[10.5px] text-muted-foreground truncate" title={cat.desc}>
+          <div className="text-[0.6471rem] text-muted-foreground truncate" title={cat.desc}>
             {cat.desc}
           </div>
         </div>
@@ -401,7 +401,7 @@ function SummaryStrip({
               </span>
               <div className="leading-tight">
                 <div className="text-xl font-bold tabular-nums">{counts[t.key]}</div>
-                <div className="text-[10.5px] text-muted-foreground">{t.label}</div>
+                <div className="text-[0.6471rem] text-muted-foreground">{t.label}</div>
               </div>
             </div>
           );
@@ -553,7 +553,7 @@ function SuggestionsStrip({ suggestions }: { suggestions: GapSuggestion[] }) {
       </div>
       <ul className="space-y-1">
         {suggestions.map((s) => (
-          <li key={s.op} className="text-[11.5px] leading-snug text-amber-800/90 dark:text-amber-200/90">
+          <li key={s.op} className="text-[0.6765rem] leading-snug text-amber-800/90 dark:text-amber-200/90">
             <span className="font-semibold font-mono">{s.op}</span>
             {": "}
             <span title={s.why}>{s.suggestion}</span>

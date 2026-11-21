@@ -350,7 +350,7 @@ export function AlertsTable({
           anchor={menuAnchor}
         />
       )}
-      <Table className={embedded ? "text-[13.5px] [&_td]:py-0.5 [&_td]:px-2 [&_th]:h-7 [&_th]:px-2 [&_th]:text-[13.5px]" : "text-sm [&_td]:py-1 [&_th]:h-8"}>
+      <Table className={embedded ? "text-[0.7941rem] [&_td]:py-0.5 [&_td]:px-2 [&_th]:h-7 [&_th]:px-2 [&_th]:text-[0.7941rem]" : "text-sm [&_td]:py-1 [&_th]:h-8"}>
       <TableHeader>
         {/* Right-click anywhere on the header row opens the column-visibility
             menu (non-embedded only). The menu positions itself at the cursor. */}

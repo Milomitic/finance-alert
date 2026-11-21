@@ -329,7 +329,7 @@ export default function CalendarPage() {
       </div>
 
       {/* ── Status strip — running counts + load/error indicators. ──── */}
-      <div className="flex items-center gap-3 px-1 text-[12.5px] font-mono uppercase tracking-[0.16em] text-muted-foreground">
+      <div className="flex items-center gap-3 px-1 text-[0.7353rem] font-mono uppercase tracking-[0.16em] text-muted-foreground">
         {inAttesa ? (
           <span className="inline-flex items-center gap-1.5">
             <Loader2 className="h-3 w-3 animate-spin" />

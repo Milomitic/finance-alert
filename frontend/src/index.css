@@ -135,6 +135,14 @@
       font-size: 19px;
     }
   }
+  /* Terzo gradino (A-41): oltre i 2880px CSS — un 4K a scala 100% — la
+   * pagina restava a 19px mentre si allargava fino a 3.840. A 3.840 ora il
+   * testo vale 21px e il contenuto ha una larghezza massima (Layout). */
+  @media (min-width: 2880px) {
+    html {
+      font-size: 21px;
+    }
+  }
 
   /* Last line of defence against horizontal page overflow.
    *

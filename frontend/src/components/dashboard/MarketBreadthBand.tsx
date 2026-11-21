@@ -155,7 +155,7 @@ function RigaContinente({ region, mood }: { region: RegionDef; mood: RegionMood 
         <span className="text-sm font-bold">{region.label}</span>
         <span
           className={cn(
-            "inline-flex items-center gap-0.5 rounded px-1 text-[0.6176rem] font-bold leading-4",
+            "inline-flex items-center gap-0.5 rounded px-1 text-[0.6471rem] font-bold leading-4",
             umore.classe,
           )}
         >
@@ -192,7 +192,7 @@ function RigaBorsa({ index, inTotal }: { index: IndexBreadth; inTotal: boolean }
         <Bandiera src={meta.countryCode ? `/flags/${meta.countryCode}.svg` : null} />
         <span className="truncate text-sm">{meta.shortName}</span>
         {!inTotal && (
-          <sup className="shrink-0 text-[0.6176rem] text-muted-foreground">
+          <sup className="shrink-0 text-[0.6471rem] text-muted-foreground">
             1<span className="sr-only"> fuori dal totale del continente</span>
           </sup>
         )}

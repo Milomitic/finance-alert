@@ -139,7 +139,7 @@ export default function CacheCard({ cache }: Props) {
               <Database className="h-4 w-4" />
               app.db
             </span>
-            <span className="text-[12.5px] font-mono tabular-nums">
+            <span className="text-[0.7353rem] font-mono tabular-nums">
               {fmtSize(cache.db.size_mb)}
             </span>
           </div>

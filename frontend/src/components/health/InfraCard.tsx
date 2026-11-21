@@ -205,7 +205,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                   <li key={a.name} className="leading-snug">
                     <span className="font-semibold">{a.name}</span>
                     {a.severity && (
-                      <span className="ml-1.5 rounded bg-rose-100 px-1 py-px text-[0.6176rem] font-semibold uppercase text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">
+                      <span className="ml-1.5 rounded bg-rose-100 px-1 py-px text-[0.6471rem] font-semibold uppercase text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">
                         {a.severity}
                       </span>
                     )}
@@ -248,7 +248,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                     <span className="ml-1.5 text-muted-foreground">in {r.pod}</span>
                     <span className="ml-1.5 tabular-nums">×{r.count}</span>
                     {r.reason ? (
-                      <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[0.6176rem] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                      <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[0.6471rem] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
                         {r.reason}
                       </span>
                     ) : (

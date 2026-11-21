@@ -127,7 +127,7 @@ export default function MiniTrendChart({
         {voci.map((v) => (
           <span
             key={v.nome}
-            className="inline-flex items-center gap-1 rounded bg-card/75 px-1 text-[0.625rem] leading-tight text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded bg-card/75 px-1 text-[0.6471rem] leading-tight text-muted-foreground"
           >
             <Segno voce={v} />
             {v.nome}

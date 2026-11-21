@@ -407,7 +407,7 @@ export default function LogStream({
         </div>
       )}
 
-      <div className="max-h-[480px] overflow-auto font-mono text-[12.5px] leading-relaxed">
+      <div className="max-h-[480px] overflow-auto font-mono text-[0.7353rem] leading-relaxed">
         {/* Quando il banner sopra ha gia detto che Loki non risponde, ripeterlo
             qui non aggiunge nulla: lo stato vuoto tace. */}
         {filtered.length === 0 && !(onInfra && origin?.reachable === false) && (

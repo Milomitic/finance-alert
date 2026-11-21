@@ -229,7 +229,7 @@ function Riga({ r }: { r: PlanPerfRow }) {
       </td>
       <td className="py-2 pr-3 text-right text-xs tabular-nums text-muted-foreground">
         {r.esiti.tp1 ?? 0}·{r.esiti.stop ?? 0}·{r.esiti.ambigua ?? 0}·{r.esiti.scaduto ?? 0}
-        <div className="text-[10px]">tp·stop·amb·scad</div>
+        <div className="text-[0.6471rem]">tp·stop·amb·scad</div>
       </td>
       <td className="py-2 text-right tabular-nums text-muted-foreground">
         {r.stop_too_tight}

@@ -602,7 +602,7 @@ function ChipEtf({ ticker, prezzo, cambio, titolo, pre = false }: {
           {ticker}
         </span>
         {pre && (
-          <span className="rounded bg-muted px-1 text-[0.6176rem] font-bold uppercase tracking-wide text-muted-foreground">
+          <span className="rounded bg-muted px-1 text-[0.6471rem] font-bold uppercase tracking-wide text-muted-foreground">
             pre
           </span>
         )}

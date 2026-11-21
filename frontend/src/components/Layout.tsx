@@ -481,7 +481,15 @@ export default function Layout() {
               reload. Navigating away is the recovery. The header and nav sit
               OUTSIDE it and stay usable. */}
           <ErrorBoundary key={location.pathname} label={location.pathname}>
-            <Outlet />
+            {/* Larghezza massima del contenuto (A-41): a 3.840px le schede
+                arrivavano a 3.500px e una riga di tabella stendeva undici
+                colonne su tutto lo schermo, con nome e Forza a due metri di
+                distanza. 2.400px e' dove la dashboard passa a quattro
+                colonne (`dense-4`): oltre, piu' larghezza non aggiunge
+                niente da leggere. */}
+            <div className="mx-auto w-full max-w-[2400px]">
+              <Outlet />
+            </div>
           </ErrorBoundary>
         </main>
         <BarraInferiore

@@ -103,7 +103,7 @@ export function WeekGrid({
                   </span>
                 </span>
                 {evs.length > 0 && (
-                  <span className="shrink-0 text-[10.5px] font-mono uppercase tracking-wider text-muted-foreground tabular-nums">
+                  <span className="shrink-0 text-[0.6471rem] font-mono uppercase tracking-wider text-muted-foreground tabular-nums">
                     {evs.length}
                   </span>
                 )}
@@ -291,7 +291,7 @@ function WeekMacroRow({
             {regionFlag(event.region)}
           </span>
         )}
-        <span className="text-[12.5px] font-medium leading-tight truncate">
+        <span className="text-[0.7353rem] font-medium leading-tight truncate">
           {event.label}
         </span>
         <ImportanceDots

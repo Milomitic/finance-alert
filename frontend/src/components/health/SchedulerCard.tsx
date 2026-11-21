@@ -159,7 +159,7 @@ export default function SchedulerCard({ jobs }: Props) {
                   </span>
                   {late && (
                     <span
-                      className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-medium rounded border bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
+                      className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[0.6471rem] font-medium rounded border bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
                       title={
                         j.next_run_time != null
                           ? `Doveva partire alle ${new Date(j.next_run_time * 1000).toLocaleString("it-IT")} e non risulta eseguito`

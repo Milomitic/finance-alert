@@ -235,7 +235,7 @@ function InsiderRow({ t }: { t: InsiderTransaction }) {
           name in muted/italic so the user identifies the role without
           mistaking it for the transaction text. */}
       <span
-        className="text-[13.5px] font-semibold truncate min-w-0"
+        className="text-[0.7941rem] font-semibold truncate min-w-0"
         title={t.insider || ""}
       >
         {t.insider || "—"}
@@ -340,7 +340,7 @@ export function InsidersAnalystCard({ ticker }: Props) {
         ) : latest.length === 0 ? (
           <div className="text-sm text-muted-foreground text-center py-3">
             Nessuna transazione insider direzionale recente
-            <span className="block text-[10.5px] text-muted-foreground mt-1">
+            <span className="block text-[0.6471rem] text-muted-foreground mt-1">
               (acquisti/vendite open-market — vest, exercise e award sono filtrati)
             </span>
           </div>

@@ -104,7 +104,7 @@ function PicksColumn({ col }: { col: { key: ColumnKey; label: string } }) {
 
   return (
     <div className="flex flex-col min-h-0 min-w-0">
-      <div className="shrink-0 px-3 py-1.5 text-[11.5px] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
+      <div className="shrink-0 px-3 py-1.5 text-[0.6765rem] uppercase tracking-[0.16em] font-bold text-muted-foreground border-b bg-muted/40">
         {col.label}
       </div>
       {q.isLoading ? (

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { SignalChainStep, SignalSnapshot } from "@/api/types";
 
@@ -92,6 +92,22 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
   // Hover crosshair state (hooks run before any early return).
   const svgRef = useRef<SVGSVGElement>(null);
   const [hover, setHover] = useState<{ x: number; y: number } | null>(null);
+  // Corpo dei testi in unita' del viewBox, in proporzione alla larghezza vera
+  // (B-60). Il viewBox e' fisso a 680: a 330px su telefono un corpo 9 si
+  // disegnava a ~4px. Ora cresce fino a un tetto oltre il quale le etichette
+  // si sovrapporrebbero, e a desktop resta circa com'era.
+  const [corpo, setCorpo] = useState(10);
+  const disegnabile = (bars?.length ?? 0) >= 2;
+  useLayoutEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      const larghezza = e.contentRect.width;
+      if (larghezza > 0) setCorpo(Math.min(18, Math.max(10, (11 * W) / larghezza)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [disegnabile]);
 
   if (!bars || bars.length < 2) {
     return (
@@ -233,7 +249,7 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
         return (
           <g key={`y-${i}`}>
             <line x1={PAD_L} y1={yy} x2={W - PAD_R} y2={yy} stroke={GRID} strokeWidth={0.5} opacity={0.25} />
-            <text x={PAD_L - 5} y={yy + 3} textAnchor="end" fontSize={9} fill={GRID}>
+            <text x={PAD_L - 5} y={yy + 3} textAnchor="end" fontSize={corpo} fill={GRID}>
               {priceLabel(p)}
             </text>
           </g>
@@ -249,7 +265,7 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
         return (
           <g key={`x-${i}`}>
             <line x1={x} y1={PAD_T} x2={x} y2={H - PAD_B} stroke={GRID} strokeWidth={0.5} strokeDasharray="2 3" opacity={0.45} />
-            <text x={x} y={H - PAD_B + 13} textAnchor="middle" fontSize={9} fill="#64748b">
+            <text x={x} y={H - PAD_B + 13} textAnchor="middle" fontSize={corpo} fill="#64748b">
               {dm(step.date)}
             </text>
           </g>
@@ -263,7 +279,7 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
         return (
           <g key={`lvl-${i}`}>
             <line x1={PAD_L} y1={yy} x2={W - PAD_R} y2={yy} stroke={st.stroke} strokeWidth={1} strokeDasharray={st.dash} opacity={0.85} />
-            <text x={W - PAD_R} y={yy - 2} textAnchor="end" fontSize={9} fill={st.stroke}>
+            <text x={W - PAD_R} y={yy - 2} textAnchor="end" fontSize={corpo} fill={st.stroke}>
               {l.label}
             </text>
           </g>
@@ -303,7 +319,7 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
         return <polyline key={e.label} points={pl} fill="none" stroke={e.color} strokeWidth={1} opacity={0.75} />;
       })}
       {emaWin.map((e, i) => (
-        <text key={`leg-${e.label}`} x={PAD_L + 2 + i * 52} y={PAD_T + 8} fontSize={9} fill={e.color} fontWeight="bold">
+        <text key={`leg-${e.label}`} x={PAD_L + 2 + i * 52 * (corpo / 9)} y={PAD_T + 8} fontSize={corpo} fill={e.color} fontWeight="bold">
           {e.label}
         </text>
       ))}
@@ -341,7 +357,7 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
             <g key={`mk-${k}`}>
               <line x1={d.x} y1={my} x2={d.x} y2={anchorY} stroke="#0f172a" strokeWidth={0.75} opacity={0.5} />
               <circle cx={d.x} cy={my} r={8} fill="#0f172a" stroke="#fff" strokeWidth={1} />
-              <text x={d.x} y={my + 3} textAnchor="middle" fontSize={9} fill="#fff" fontWeight="bold">
+              <text x={d.x} y={my + 3} textAnchor="middle" fontSize={corpo} fill="#fff" fontWeight="bold">
                 {d.num}
               </text>
             </g>
@@ -361,9 +377,9 @@ export function SignalChartSvg({ bars, annotations, chain }: Props) {
               <line x1={PAD_L} y1={hy} x2={W - PAD_R} y2={hy} stroke="#475569" strokeWidth={0.6} strokeDasharray="3 2" opacity={0.75} />
               <circle cx={bx} cy={y(win[bi].close)} r={2.5} fill="#0f172a" stroke="#fff" strokeWidth={1} />
               <rect x={0} y={hy - 7} width={PAD_L - 3} height={14} rx={2} fill="#0f172a" />
-              <text x={PAD_L - 5} y={hy + 3} textAnchor="end" fontSize={9} fill="#fff">{priceLabel(price)}</text>
+              <text x={PAD_L - 5} y={hy + 3} textAnchor="end" fontSize={corpo} fill="#fff">{priceLabel(price)}</text>
               <rect x={bx - 19} y={H - PAD_B + 2} width={38} height={13} rx={2} fill="#0f172a" />
-              <text x={bx} y={H - PAD_B + 11} textAnchor="middle" fontSize={9} fill="#fff">{dm(win[bi].date)}</text>
+              <text x={bx} y={H - PAD_B + 11} textAnchor="middle" fontSize={corpo} fill="#fff">{dm(win[bi].date)}</text>
             </g>
           );
         })()}

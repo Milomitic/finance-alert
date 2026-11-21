@@ -89,7 +89,7 @@ export function EarningsTable({
       <div
         className={cn(
           "static md:sticky top-0 z-10 grid items-center border-b bg-muted/70 backdrop-blur-sm",
-          "px-2 py-1 text-[12.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
+          "px-2 py-1 text-[0.7353rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground",
           "min-w-[620px] md:min-w-0",
           COL_TEMPLATE,
         )}
@@ -256,7 +256,7 @@ function EarningsTableRow({ event }: { event: EarningsEvent }) {
         <StockLogo ticker={event.ticker} size="xs" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className="text-[14.5px] font-bold tabular-nums truncate">
+            <span className="text-[0.8529rem] font-bold tabular-nums truncate">
               {event.ticker}
             </span>
             {/* Pre/after-market indicator — same glyphs and tooltips as
@@ -348,7 +348,7 @@ function RiskCell({ tier }: { tier: RiskTier | null }) {
     <div className="flex justify-end">
       <span
         className={cn(
-          "inline-block px-1 py-0.5 rounded-sm border text-[12.5px] font-semibold uppercase tracking-wider",
+          "inline-block px-1 py-0.5 rounded-sm border text-[0.7353rem] font-semibold uppercase tracking-wider",
           RISK_TONE[tier],
         )}
         title={`Risk tier: ${tier}`}

@@ -149,7 +149,7 @@ export default function ScansCard({ scans }: Props) {
               className="flex items-center justify-between gap-2 px-4 py-2 border-b last:border-b-0 hover:bg-muted/30 transition-colors"
             >
               <div className="min-w-0 flex-1">
-                <div className="text-[12.5px] font-mono">
+                <div className="text-[0.7353rem] font-mono">
                   #{s.id}{" "}
                   <span className="text-muted-foreground">
                     {fmtDate(s.completed_at)} · {fmtDuration(s.duration_s)}
@@ -163,7 +163,7 @@ export default function ScansCard({ scans }: Props) {
                 )}
               </div>
               <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10.5px] font-medium rounded border shrink-0 ${badge.classes}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 text-[0.6471rem] font-medium rounded border shrink-0 ${badge.classes}`}
               >
                 <badge.Icon className="h-3 w-3" />
                 {badge.label}
