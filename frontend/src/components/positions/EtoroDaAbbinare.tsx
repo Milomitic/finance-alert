@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { EtoroStrumento } from "@/api/etoro";
 import { useAbbinaEtoro } from "@/hooks/useEtoro";
+import { Button } from "@/components/ui/button";
 
 /* ─── Gli strumenti eToro da abbinare al catalogo (FA-124) ────────────────
  *
@@ -54,13 +55,13 @@ function Riga({ s }: { s: EtoroStrumento }) {
             placeholder="altro ticker"
             className="h-7 w-28 rounded-md border bg-background px-2 text-xs"
           />
-          <button
+          <Button
             type="submit"
             disabled={abbina.isPending || !ticker.trim()}
-            className="rounded-md border border-border/60 px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+            variant="outline" size="sm"
           >
             Abbina
-          </button>
+          </Button>
         </form>
         <button
           type="button"

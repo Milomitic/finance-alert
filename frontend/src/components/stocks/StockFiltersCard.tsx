@@ -312,12 +312,12 @@ function MultiSelect({ label, options, selected, onChange }: MultiSelectProps) {
             {label}
           </span>
           {active && (
-            <button
+            <Button
               onClick={clear}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              variant="link" size="testo" className="text-xs text-muted-foreground hover:text-foreground"
             >
               Pulisci
-            </button>
+            </Button>
           )}
         </div>
         <div className="max-h-72 overflow-y-auto p-1">

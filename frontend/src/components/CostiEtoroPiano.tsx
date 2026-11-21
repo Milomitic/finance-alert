@@ -6,6 +6,7 @@ import { fmtPct } from "@/lib/etoroPortafoglio";
 import { formatMoneyGrouped } from "@/lib/money";
 import type { Playbook } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
+import { Segmentato } from "@/components/ui/segmentato";
 
 /* ─── Quanto costa questo piano su eToro (FA-126) ─────────────────────────
  *
@@ -45,22 +46,8 @@ export function CostiEtoroPiano({ ticker, playbook }: { ticker: string; playbook
           Costi su eToro · CFD
         </span>
         <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="Leva" className="flex rounded-md border border-border/60 p-0.5">
-            {LEVE.map((l) => (
-              <button
-                key={l}
-                type="button"
-                aria-pressed={leva === l}
-                onClick={() => setLeva(l)}
-                className={cn(
-                  "min-w-[2.25rem] rounded px-1.5 py-0.5 text-xs font-semibold",
-                  leva === l ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                ×{l}
-              </button>
-            ))}
-          </div>
+          <Segmentato etichetta="Leva" valore={leva} onCambia={setLeva}
+            voci={LEVE.map((l) => ({ id: l, label: `×${l}` }))} />
           <label className="flex items-center gap-1 text-xs text-muted-foreground">
             margine $
             <input

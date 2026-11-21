@@ -71,6 +71,7 @@ import { StockTechnicalCard } from "@/components/stock/StockTechnicalCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
 import { QueryError } from "@/components/ui/query-error";
+import { Button } from "@/components/ui/button";
 
 /** Soglia «oltre il Full HD», in pixel.
  *
@@ -567,8 +568,8 @@ export default function StockDetailPage() {
                 <span>
                   Dati intraday non disponibili dopo il {staleIntradayDate} (fonte dati).
                 </span>
-                <button
-                  className="underline underline-offset-2 hover:opacity-80"
+                <Button
+                  variant="testo" size="testo"
                   onClick={() => {
                     writeRange(DEFAULT_RANGE);
                     // Stessa ragione del selettore qui sopra: cambia la vista,
@@ -577,7 +578,7 @@ export default function StockDetailPage() {
                   }}
                 >
                   Passa a 1G per dati aggiornati
-                </button>
+                </Button>
               </div>
             )}
             {/* Price chart — resizable; defaults to 460px */}

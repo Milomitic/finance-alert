@@ -5,6 +5,7 @@ import type { AlertConflitto } from "@/api/types";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
 import { useAlert } from "@/hooks/useAlerts";
 import { getAlertKindMeta } from "@/lib/alertMeta";
+import { Button } from "@/components/ui/button";
 
 /* ─── Segnali in conflitto (FA-151) ──────────────────────────────────────
  *
@@ -44,13 +45,13 @@ export function RigaConflitto({ c }: { c: AlertConflitto | null | undefined }) {
         <span className="font-semibold">In conflitto:</span> {"sullo stesso titolo c'è un segnale "}
         {verso(c.tone)} ({nome}) nato entro un giorno. Quel giorno il motore non ha detto niente di netto.
       </span>
-      <button
+      <Button
         type="button"
-        className="font-semibold underline-offset-2 hover:underline"
+        variant="testo" size="testo" className="font-semibold"
         onClick={() => setApri(c.alert_id)}
       >
         {"Apri l'altro"}
-      </button>
+      </Button>
       {apri != null && (
         <AlertDetailDialog alert={altro.data ?? null} onClose={() => setApri(null)} />
       )}

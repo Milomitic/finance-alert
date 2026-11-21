@@ -3,6 +3,7 @@ import { Layers } from "lucide-react";
 import type { GiornataMercato } from "@/api/alerts";
 import { Card, CardContent } from "@/components/ui/card";
 import { giornoDelTesto, verso } from "@/lib/giornateDiMercato";
+import { Button } from "@/components/ui/button";
 
 /* ─── Giornate di mercato (FA-152) ───────────────────────────────────────
  *
@@ -26,9 +27,9 @@ export function GiornateDiMercato({
     return (
       <p className="text-xs text-muted-foreground">
         Giornate di mercato in lista per intero.{" "}
-        <button type="button" className="underline underline-offset-2 text-foreground" onClick={onComprimi}>
+        <Button type="button" variant="testo" size="testo" onClick={onComprimi}>
           Comprimile
-        </button>
+        </Button>
       </p>
     );
   }
@@ -50,23 +51,23 @@ export function GiornateDiMercato({
               <span className="font-medium tabular-nums">{giornoDelTesto(g.giorno)}</span>
               {" · "}
               <span className="tabular-nums">{g.segnali}</span> {verso(g.tono, g.segnali)}{" "}
-              <button
+              <Button
                 type="button"
-                className="font-semibold underline-offset-2 hover:underline"
+                variant="testo" size="testo" className="font-semibold"
                 onClick={() => onApri(g)}
                 aria-label={`Mostra i ${g.segnali} segnali ${verso(g.tono, g.segnali)} del ${g.giorno}`}
               >
                 Mostra
-              </button>
+              </Button>
             </li>
           ))}
           {giornate.length > MAX && (
             <li className="text-xs text-muted-foreground">e altre {giornate.length - MAX}</li>
           )}
           <li className="text-xs">
-            <button type="button" className="underline underline-offset-2" onClick={onMostraTutte}>
+            <Button type="button" variant="testo" size="testo" onClick={onMostraTutte}>
               Non comprimere
-            </button>
+            </Button>
           </li>
         </ul>
       </CardContent>

@@ -19,6 +19,7 @@ import {
 } from "@/lib/patrimonio";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU } from "@/lib/toni";
+import { Segmentato } from "@/components/ui/segmentato";
 
 /* ─── Il conto eToro in cima alla home (FA-127) ───────────────────────────
  *
@@ -164,22 +165,8 @@ function Curva({ v, a, inAttesa }: { v: EtoroVivo; a: EtoroAndamento | undefined
           </>
         }
         destra={
-        <div role="group" aria-label="Intervallo della curva" className="flex rounded-md border border-border/60 p-0.5">
-          {INTERVALLI.map((i) => (
-            <button
-              key={i.chiave}
-              type="button"
-              aria-pressed={intervallo === i.chiave}
-              onClick={() => setIntervallo(i.chiave)}
-              className={cn(
-                "min-w-[2.25rem] rounded px-1.5 py-1 text-[0.6765rem] font-semibold transition-colors",
-                intervallo === i.chiave ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {i.etichetta}
-            </button>
-          ))}
-        </div>
+        <Segmentato etichetta="Intervallo della curva" valore={intervallo} onCambia={setIntervallo}
+          voci={INTERVALLI.map((i) => ({ id: i.chiave, label: i.etichetta }))} />
         }
       />
 

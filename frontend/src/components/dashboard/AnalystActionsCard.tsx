@@ -11,6 +11,8 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Segmentato } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 /* Genuine rating CHANGES only — the card used to be dominated by
  * "Maintain"/"Reiterate" rows (a firm reaffirming, no change) which are
@@ -271,22 +273,8 @@ export function AnalystActionsCard() {
             icon={Gavel}
             label="Valutazioni analisti"
             right={
-              <div className="flex rounded-md border border-border text-xs" role="group" aria-label="Quali titoli">
-                {(["miei", "tutti"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={vista === v}
-                    onClick={() => setVista(v)}
-                    className={cn(
-                      "min-h-6 px-2 first:rounded-l-md last:rounded-r-md",
-                      vista === v ? "bg-muted font-semibold text-foreground" : "text-muted-foreground",
-                    )}
-                  >
-                    {v === "miei" ? "I miei" : "Tutti"}
-                  </button>
-                ))}
-              </div>
+              <Segmentato etichetta="Quali titoli" valore={vista} onCambia={setVista}
+                voci={[{ id: "miei", label: "I miei" }, { id: "tutti", label: "Tutti" }]} />
             }
           />
         </div>
@@ -307,9 +295,9 @@ export function AnalystActionsCard() {
             <div className="text-xs text-muted-foreground">
               Nessun cambio di rating sui tuoi titoli negli ultimi 90 giorni.
               <br />
-              <button type="button" className="mt-1 underline underline-offset-2 text-foreground" onClick={() => setVista("tutti")}>
+              <Button type="button" variant="testo" size="testo" className="mt-1" onClick={() => setVista("tutti")}>
                 Mostra tutto il catalogo
-              </button>
+              </Button>
             </div>
           </div>
         ) : isEmpty ? (

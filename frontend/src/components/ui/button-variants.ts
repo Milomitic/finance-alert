@@ -24,6 +24,9 @@ export const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        // Un collegamento dentro una frase che fa un'azione invece di
+        // navigare: sottolineato, del colore del testo intorno (B-40).
+        testo: "text-foreground underline underline-offset-2 hover:opacity-80",
       },
       size: {
         // `coarse:` = dove c'e' un dito (E-19): 44px, il bersaglio che un
@@ -32,6 +35,10 @@ export const buttonVariants = cva(
         sm: "h-8 rounded-md px-3 text-xs coarse:min-h-11",
         lg: "h-10 rounded-md px-8",
         icon: "h-9 w-9 coarse:min-h-11 coarse:min-w-11",
+        // Alto quanto il testo e capace di andare a capo: per i bottoni che
+        // stanno dentro una frase. Sostituisce i <button> sottolineati
+        // scritti a mano (B-39).
+        testo: "h-auto p-0 whitespace-normal",
       },
     },
     defaultVariants: {

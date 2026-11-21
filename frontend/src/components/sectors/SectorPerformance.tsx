@@ -20,6 +20,7 @@ import {
 } from "@/lib/sectorPerformance";
 import { detectorLabel } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
+import { Segmentato } from "@/components/ui/segmentato";
 
 /* ─── L'andamento di un settore (2026-10-11) ───────────────────────────────
  *
@@ -68,22 +69,8 @@ export function AndamentoCard({ a, nTitoli }: { a: AndamentoSettore; nTitoli: nu
           label="Andamento"
           className="mb-2"
           right={
-            <div className="flex rounded-md border p-0.5" role="group" aria-label="Intervallo del grafico">
-              {INTERVALLI.map((i) => (
-                <button
-                  key={i.id}
-                  type="button"
-                  onClick={() => setIntervallo(i.id)}
-                  aria-pressed={intervallo === i.id}
-                  className={cn(
-                    "min-h-[32px] min-w-[40px] rounded px-2 text-xs font-semibold transition-colors",
-                    intervallo === i.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {i.label}
-                </button>
-              ))}
-            </div>
+            <Segmentato etichetta="Intervallo del grafico" taglia="media" valore={intervallo} onCambia={setIntervallo}
+              voci={INTERVALLI.map((i) => ({ id: i.id, label: i.label }))} />
           }
         />
 

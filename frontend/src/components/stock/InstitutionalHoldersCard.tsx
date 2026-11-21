@@ -11,6 +11,8 @@ import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Segmentato } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 /* ─── Superinvestor e fondi: chi detiene il titolo, e cosa ha fatto ────────
  *
@@ -182,37 +184,20 @@ function Segmenti<T extends string>({ voci, valore, onChange, etichetta }: {
   onChange: (v: T) => void;
   etichetta: string;
 }) {
-  return (
-    <div className="flex rounded-md border p-0.5" role="group" aria-label={etichetta}>
-      {voci.map((v) => (
-        <button
-          key={v.id}
-          type="button"
-          onClick={() => onChange(v.id)}
-          aria-pressed={valore === v.id}
-          className={cn(
-            "min-h-[26px] rounded px-2 text-[0.7059rem] font-semibold transition-colors",
-            valore === v.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {v.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <Segmentato etichetta={etichetta} valore={valore} onCambia={onChange} voci={voci} />;
 }
 
 function AltriBottone({ aperto, apri, chiudi, onClick }: { aperto: boolean; apri: string; chiudi: string; onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className="mt-1 inline-flex min-h-[28px] items-center gap-1 text-xs font-medium text-primary hover:underline"
+      variant="link" size="testo" className="mt-1 gap-1 text-xs"
       aria-expanded={aperto}
     >
       {aperto ? <ChevronUp className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
       {aperto ? chiudi : apri}
-    </button>
+    </Button>
   );
 }
 

@@ -9,6 +9,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { getAlertKindMeta } from "@/lib/alertMeta";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /* ─── AlertsInsightCard ──────────────────────────────────────────────────
  * Confluence digest above the alerts table.
@@ -358,14 +359,14 @@ export function AlertsInsightCard({
                   <span className="text-muted-foreground"> · </span>
                   <span className="font-semibold text-rose-600 dark:text-rose-400">{nBear} short</span>
                 </span>
-                <button
+                <Button
                   type="button"
                   onClick={commuta}
                   aria-expanded={aperte}
-                  className="min-h-8 rounded-md border px-2 text-xs font-medium hover:bg-accent"
+                  variant="outline" size="sm"
                 >
                   {aperte ? "Nascondi" : "Mostra"}
-                </button>
+                </Button>
               </div>
             )
           }

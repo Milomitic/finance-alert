@@ -16,6 +16,7 @@ import { SETUP_PER_PAGINA, useSetups, type Setup, type SetupStats } from "@/hook
 import { detectorLabel, groupByCondition, type SetupSortKey } from "@/lib/setupGrouping";
 import { cn } from "@/lib/utils";
 import { MetricStrip, type MetricTileProps } from "@/components/ui/metric-tile";
+import { Button } from "@/components/ui/button";
 
 /* ─── Setups — cosa si sta formando, PRIMA del segnale ─────────────────────
  *
@@ -599,22 +600,22 @@ export function SetupsView({ vista }: SetupsViewProps) {
               {offset + 1}–{offset + all.length} di {totale}
             </span>
             <div className="flex items-center gap-1">
-              <button
+              <Button
                 type="button"
-                className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                variant="outline" size="sm"
                 onClick={() => vaiA(offset - SETUP_PER_PAGINA)}
                 disabled={offset === 0 || q.isFetching}
               >
                 Precedenti
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                variant="outline" size="sm"
                 onClick={() => vaiA(offset + SETUP_PER_PAGINA)}
                 disabled={!q.data?.has_more || q.isFetching}
               >
                 Successivi
-              </button>
+              </Button>
             </div>
           </div>
         )}

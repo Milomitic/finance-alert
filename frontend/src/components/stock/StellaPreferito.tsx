@@ -2,6 +2,7 @@ import { Star } from "lucide-react";
 
 import { useStellaPreferito } from "@/hooks/usePreferiti";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /** La stella dei preferiti (FA-112), accanto al ticker nella pagina titolo.
  *
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 export function StellaPreferito({ ticker }: { ticker: string }) {
   const { preferito, pronto, commuta, inCorso } = useStellaPreferito(ticker);
   return (
-    <button
+    <Button
       type="button"
       onClick={commuta}
       disabled={!pronto || inCorso}
@@ -22,7 +23,7 @@ export function StellaPreferito({ ticker }: { ticker: string }) {
       // Nome FISSO: lo stato lo dice `aria-pressed`. Un nome che cambia con lo
       // stato verrebbe annunciato due volte («Togli dai preferiti, premuto»).
       aria-label={`Preferito ${ticker}`}
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-muted disabled:opacity-50"
+      variant="ghost" size="icon" className="shrink-0"
     >
       <Star
         className={cn(
@@ -33,6 +34,6 @@ export function StellaPreferito({ ticker }: { ticker: string }) {
         )}
         aria-hidden
       />
-    </button>
+    </Button>
   );
 }

@@ -11,6 +11,8 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { intervallo, MODELLI, type Modello, parametriDaUrl, pct } from "@/lib/studio";
 import { cn } from "@/lib/utils";
 import { GIU, SU } from "@/lib/coloriGrafico";
+import { Segmentato } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 /* ─── Studio: statistica storica di un simbolo (FA-157) ───────────────────
  *
@@ -167,16 +169,9 @@ export default function StudioPage() {
               <input className={cn(CAMPO, "w-28 uppercase")} value={bozza.simbolo}
                 onChange={(e) => setBozza({ ...bozza, simbolo: e.target.value })} placeholder="AAPL, ^GSPC" />
             </label>
-            <div className="flex rounded-md border p-0.5" role="group" aria-label="Modello">
-              {MODELLI.map((m) => (
-                <button key={m.id} type="button" aria-pressed={bozza.modello === m.id}
-                  onClick={() => setBozza({ ...bozza, modello: m.id as Modello })}
-                  className={cn("min-h-8 rounded px-2 text-xs font-semibold",
-                    bozza.modello === m.id ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
+            <Segmentato etichetta="Modello" taglia="media" valore={bozza.modello}
+              onCambia={(id) => setBozza({ ...bozza, modello: id as Modello })}
+              voci={MODELLI.map((m) => ({ id: m.id as Modello, label: m.label }))} />
             {bozza.modello === "dopo_movimento" && (
               <>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -218,9 +213,9 @@ export default function StudioPage() {
                   onChange={(e) => setBozza({ ...bozza, orizzonte: Number(e.target.value) })} />
               </label>
             )}
-            <button type="submit" className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
+            <Button type="submit" variant="default">
               Calcola
-            </button>
+            </Button>
           </form>
         </CardContent>
       </Card>

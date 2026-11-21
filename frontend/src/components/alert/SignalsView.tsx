@@ -300,16 +300,16 @@ export function SignalsView() {
               vuoto={filters.solo_rilevanti ? (
                 <>
                   Nessun segnale sui tuoi titoli con questi filtri.{" "}
-                  <button
+                  <Button
                     type="button"
-                    className="underline underline-offset-2 text-foreground"
+                    variant="testo" size="testo"
                     onClick={() => {
                       setPage(0);
                       setFilters({ ...filters, solo_rilevanti: undefined });
                     }}
                   >
                     Mostra tutti i titoli
-                  </button>
+                  </Button>
                 </>
               ) : undefined}
               onQueryChange={(v) => {

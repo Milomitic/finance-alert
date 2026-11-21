@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useNota } from "@/hooks/useTitoloConfronti";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /** La nota personale sul titolo (FA-156), accanto alla stella.
  *
@@ -26,11 +27,11 @@ export function NotaTitolo({ ticker }: { ticker: string }) {
       }}
     >
       <PopoverTrigger asChild>
-        <button
+        <Button
           type="button"
           disabled={q.isLoading}
           aria-label={`Nota su ${ticker}`}
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-muted disabled:opacity-50"
+          variant="ghost" size="icon" className="shrink-0"
         >
           <NotebookPen
             className={cn("h-5 w-5", presente ? "text-foreground" : "text-muted-foreground")}
@@ -38,7 +39,7 @@ export function NotaTitolo({ ticker }: { ticker: string }) {
             aria-hidden
           />
           {presente && <span className="sr-only"> (c'è una nota)</span>}
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-80 max-w-[calc(100vw-2rem)] space-y-2 p-3" collisionPadding={16}>
         <label htmlFor={`nota-${ticker}`} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

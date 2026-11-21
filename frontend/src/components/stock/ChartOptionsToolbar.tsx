@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { ChartType } from "@/components/stock/PriceChart";
 import { cn } from "@/lib/utils";
 import { BENCHMARKS } from "@/lib/benchmarks";
+import { Segmentato } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   chartType: ChartType;
@@ -52,26 +54,8 @@ export function ChartOptionsToolbar({
 
   return (
     <div className="inline-flex items-center gap-1.5">
-      <div className="inline-flex h-8 items-center rounded-md border bg-muted/30 p-0.5">
-        {TYPES.map(({ key, label, Icon }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => onChartType(key)}
-            title={label}
-            aria-label={label}
-            aria-pressed={chartType === key}
-            className={cn(
-              "h-7 px-2 rounded transition-colors flex items-center",
-              chartType === key
-                ? "bg-background shadow-sm text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </button>
-        ))}
-      </div>
+      <Segmentato etichetta="Tipo di grafico" taglia="media" valore={chartType} onCambia={onChartType}
+        voci={TYPES.map(({ key, label, Icon }) => ({ id: key, nome: label, titolo: label, label: <Icon className="h-4 w-4" aria-hidden /> }))} />
       <select
         value={benchmark}
         onChange={(e) => onBenchmark(e.target.value)}
@@ -121,24 +105,24 @@ export function ChartOptionsToolbar({
           </button>
         )}
       </div>
-      <button
+      <Button
         type="button"
         onClick={onResetZoom}
         title="Reimposta zoom e posizione"
         aria-label="Reimposta zoom e posizione"
-        className="h-8 w-8 rounded-md border bg-muted/30 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center"
+        variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
       >
         <Maximize2 className="h-4 w-4" />
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         onClick={onExport}
         title="Esporta PNG"
         aria-label="Esporta PNG"
-        className="h-8 w-8 rounded-md border bg-muted/30 text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center"
+        variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
       >
         <Download className="h-4 w-4" />
-      </button>
+      </Button>
     </div>
   );
 }

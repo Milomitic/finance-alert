@@ -22,6 +22,7 @@ import {
   type SortKey,
   type SortState,
 } from "./day-detail/sort";
+import { Button } from "@/components/ui/button";
 
 /* ─── DayDetailPanel — split-view right column ──────────────────────────── */
 /* Earnings are presented as a SORTABLE TABLE (V3 — was a card list).
@@ -180,14 +181,14 @@ function DayDetailContent({
     >
       {/* Header — long date + counts + close button */}
       <header className="relative shrink-0 rounded-t-xl border-b bg-gradient-to-b from-muted/40 to-card px-5 pt-4 pb-3.5">
-        {chiudiProprio && <button
+        {chiudiProprio && <Button
           type="button"
           onClick={onClose}
           aria-label="Chiudi pannello"
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          variant="ghost" size="icon" className="absolute right-3 top-3 h-8 w-8 text-muted-foreground"
         >
           <X className="h-4 w-4" />
-        </button>}
+        </Button>}
         <div className="text-[0.7647rem] font-mono font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           {isToday ? "Oggi" : "Giornata"}
         </div>

@@ -3,6 +3,7 @@ import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Check, Copy
 import type { LogRecord } from "@/api/platformHealth";
 import type { StreamedLog } from "@/hooks/usePlatformHealthStream";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Button } from "@/components/ui/button";
 
 type Props = {
   records: StreamedLog[];
@@ -358,11 +359,11 @@ export default function LogStream({
             onChange={(e) => setSearchFilter(e.target.value)}
             className="rounded-md border bg-background px-2.5 py-1.5 w-52"
           />
-          <button
+          <Button
             type="button"
             onClick={copyVisible}
             disabled={filtered.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="outline" size="sm" className="gap-1.5"
             title={`Copia negli appunti le ${filtered.length} righe visibili`}
           >
             {copiedAll ? (
@@ -376,25 +377,25 @@ export default function LogStream({
                 <span className="text-xs">Copia visibili</span>
               </>
             )}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onTogglePause}
-            className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
+            variant="outline" size="icon"
             title={paused ? "Riprendi" : "Pausa"}
             aria-label={paused ? "Riprendi il flusso dei log" : "Metti in pausa il flusso dei log"}
           >
             {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             onClick={onClear}
-            className="rounded-md border px-2.5 py-1.5 hover:bg-muted transition-colors"
+            variant="outline" size="icon"
             title="Pulisci buffer locale"
             aria-label="Pulisci il buffer locale dei log"
           >
             <Trash2 className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </header>
 

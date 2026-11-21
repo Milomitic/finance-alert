@@ -20,7 +20,8 @@ import {
 } from "@/lib/colonneEsiti";
 import { ESITO_META, formatR } from "@/lib/planOutcome";
 import { detectorLabel } from "@/lib/setupGrouping";
-import { cn } from "@/lib/utils";
+import { Segmentato as SceltaSegmentata } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 /* ─── Esiti: che cosa si e' chiuso ────────────────────────────────────────
  *
@@ -97,28 +98,7 @@ function Segmentato<T extends string | null>({
       {/* Bottoni con `aria-pressed`, non `role="tab"`: non c'e' un tabpanel da
           promettere, e un `aria-controls` verso un id che non esiste fa
           annunciare agli assistivi una relazione inventata. */}
-      <div
-        role="group"
-        aria-label={etichetta}
-        className="inline-flex overflow-hidden rounded-md border text-xs font-semibold"
-      >
-        {voci.map((v) => (
-          <button
-            key={v.id ?? "tutti"}
-            type="button"
-            aria-pressed={valore === v.id}
-            onClick={() => onCambia(v.id)}
-            className={cn(
-              "min-h-[36px] whitespace-nowrap px-2.5 transition-colors",
-              valore === v.id
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/40",
-            )}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      <SceltaSegmentata etichetta={etichetta} taglia="media" valore={valore} onCambia={onCambia} voci={voci} />
     </div>
   );
 }
@@ -457,9 +437,9 @@ export function OutcomesView() {
                   {offset + 1}–{offset + righe.length} di {totale}
                 </span>
                 <div className="flex items-center gap-1">
-                  <button
+                  <Button
                     type="button"
-                    className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                    variant="outline" size="sm"
                     onClick={() =>
                       scrivi({
                         pagina:
@@ -471,10 +451,10 @@ export function OutcomesView() {
                     disabled={offset === 0 || q.isFetching}
                   >
                     Precedenti
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="min-h-[36px] rounded-md border px-3 font-semibold hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent"
+                    variant="outline" size="sm"
                     onClick={() =>
                       scrivi({
                         pagina: String(Math.floor((offset + ESITI_PER_PAGINA) / ESITI_PER_PAGINA) + 1),
@@ -483,7 +463,7 @@ export function OutcomesView() {
                     disabled={!q.data?.has_more || q.isFetching}
                   >
                     Successivi
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

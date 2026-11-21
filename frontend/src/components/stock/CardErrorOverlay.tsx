@@ -2,6 +2,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { ApiError } from "@/api/client";
 import { messaggioErrore } from "@/lib/errori";
+import { Button } from "@/components/ui/button";
 
 /** Centered, formatted error shown inside a detail card when its force-refresh
  *  fails (e.g. the upstream source returned an error). Fills the card body and
@@ -23,14 +24,14 @@ export function CardErrorOverlay({
       <AlertTriangle className="h-6 w-6 text-destructive" />
       <p className="text-sm text-destructive break-words max-w-full">{message}</p>
       {onRetry ? (
-        <button
+        <Button
           type="button"
           onClick={onRetry}
           disabled={retrying}
-          className="mt-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 disabled:opacity-50"
+          variant="testo" size="testo" className="mt-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {retrying ? "Aggiornamento…" : "Riprova"}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

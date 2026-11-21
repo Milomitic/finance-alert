@@ -15,6 +15,7 @@ import { useIsPhone } from "@/hooks/useMediaQuery";
 import { aggiungiRecente, leggiRecenti } from "@/lib/titoliRecenti";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Button } from "@/components/ui/button";
 
 // I recenti hanno un proprietario unico, `lib/titoliRecenti.ts` (FA-112): li
 // registra la pagina titolo da qualunque parte si arrivi, non solo da qui.
@@ -406,13 +407,13 @@ export function NavbarSearch() {
               {search.isError ? (
                 <div className="px-4 py-6 text-sm text-center" role="alert">
                   <p className={TESTO_GIU}>Ricerca non disponibile.</p>
-                  <button
+                  <Button
                     type="button"
-                    className="mt-2 text-sm font-medium underline underline-offset-2"
+                    variant="testo" size="testo" className="mt-2"
                     onClick={() => void search.refetch()}
                   >
                     Riprova
-                  </button>
+                  </Button>
                 </div>
               ) : totalResults === 0 ? (
                 <div className="px-4 py-6 text-sm text-muted-foreground text-center">

@@ -35,6 +35,7 @@ import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { useEtoroVivo } from "@/hooks/useEtoro";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { contoAtteso, ricordaConto } from "@/lib/contoAtteso";
+import { Button } from "@/components/ui/button";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
 /* Each market-driven row has its own skeleton that mirrors the loaded
@@ -141,9 +142,9 @@ function MarketError({
       <CardContent className="p-4 flex items-center gap-3 text-sm">
         <AlertCircle className="h-5 w-5 text-destructive" />
         <span>Errore nel caricamento {label}.</span>
-        <button onClick={onRetry} className="ml-auto text-blue-600 hover:underline flex items-center gap-1">
+        <Button onClick={onRetry} variant="link" size="testo" className="ml-auto gap-1">
           <RefreshCw className="h-3 w-3" /> Riprova
-        </button>
+        </Button>
       </CardContent>
     </Card>
   );

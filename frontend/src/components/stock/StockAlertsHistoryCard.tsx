@@ -14,7 +14,8 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useScanStock } from "@/hooks/useAlertMutations";
 import { useLiveQuote } from "@/hooks/useLiveQuote";
 import { getAlertMeta } from "@/lib/alertMeta";
-import { cn } from "@/lib/utils";
+import { Segmentato } from "@/components/ui/segmentato";
+import { Button } from "@/components/ui/button";
 
 /** Righe per pagina, in tutte e due le viste: cinque a vista, le altre fino
  *  a dieci si scorrono, oltre si cambia pagina (su richiesta, 2026-10-06 —
@@ -212,37 +213,20 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
 
                     Due bottoni con `aria-pressed` sono la forma corretta di un
                     controllo segmentato, e non promettono un pannello. */}
-                <div
-                  role="group"
-                  aria-label="Vista dei segnali"
-                  className="inline-flex h-6 items-center rounded-lg bg-muted p-0.5"
-                >
-                  {([
-                    ["recenti", "Recenti", "I segnali non archiviati di questo titolo"],
-                    ["completo", "Storico", "Tutti i segnali, archiviati compresi — e' dove stanno gli esiti maturati"],
-                  ] as const).map(([valore, etichetta, spiegazione]) => (
-                    <button
-                      key={valore}
-                      type="button"
-                      aria-pressed={scheda === valore}
-                      title={spiegazione}
-                      onClick={() => {
-                        setScheda(valore);
-                        // L'offset si azzera cambiando vista. In render, non in
-                        // un effect: `react-hooks/set-state-in-effect` e' gated.
-                        setOffset(0);
-                      }}
-                      className={cn(
-                        "h-5 rounded px-1.5 text-[0.6765rem] transition-colors",
-                        scheda === valore
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {etichetta}
-                    </button>
-                  ))}
-                </div>
+                <Segmentato
+                  etichetta="Vista dei segnali"
+                  valore={scheda}
+                  onCambia={(valore) => {
+                    setScheda(valore);
+                    // L'offset si azzera cambiando vista. Nel gestore, non in
+                    // un effect: `react-hooks/set-state-in-effect` e' gated.
+                    setOffset(0);
+                  }}
+                  voci={[
+                    { id: "recenti", label: "Recenti", titolo: "I segnali non archiviati di questo titolo" },
+                    { id: "completo", label: "Storico", titolo: "Tutti i segnali, archiviati compresi — e' dove stanno gli esiti maturati" },
+                  ]}
+                />
                 {/* ⚠️ La striscia NON compare sullo storico. E' calcolata sulle
                     righe CARICATE: su una pagina da 25 accanto a un totale di
                     400 direbbe "rialzisti 12" intendendo un'altra cosa. Stessa
@@ -343,24 +327,24 @@ export function StockAlertsHistoryCard({ alerts, ticker, chart }: Props) {
                 {primaDellaPagina}–{ultimaDellaPagina} di {totale}
               </span>
               <div className="flex items-center gap-1">
-                <button
+                <Button
                   type="button"
-                  className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  variant="ghost" size="sm" className="gap-0.5"
                   onClick={() => vaiA(Math.max(0, offset - PER_PAGINA))}
                   disabled={offset === 0 || (completo && storico.isFetching)}
                 >
                   <ChevronLeft className="h-3 w-3" aria-hidden />
                   Precedenti
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="inline-flex items-center gap-0.5 rounded px-2 py-1 hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                  variant="ghost" size="sm" className="gap-0.5"
                   onClick={() => vaiA(offset + PER_PAGINA)}
                   disabled={!ceNeSonoAltri || (completo && storico.isFetching)}
                 >
                   Successivi
                   <ChevronRight className="h-3 w-3" aria-hidden />
-                </button>
+                </Button>
               </div>
             </div>
           )}
