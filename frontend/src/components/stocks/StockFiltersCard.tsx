@@ -569,6 +569,23 @@ function CollapsibleArea({
   );
 }
 
+
+
+/** Il bottone che toglie un filtro dal suo chip. Era scritto a mano 33
+ *  volte in questo file, identico (B-39): un componente solo, con l'anello
+ *  di focus dei primitivi. */
+function RimuoviChip({ onClick, etichetta }: { onClick: () => void; etichetta: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="ml-0.5 rounded p-0.5 hover:bg-background/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      aria-label={etichetta}
+    >
+      <X className="h-3 w-3" aria-hidden />
+    </button>
+  );
+}
 export function StockFiltersCard({ state, onChange, filters, view }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
@@ -978,259 +995,199 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
             {state.indexCodes.map((v) => (
               <Badge key={`i-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Indice:</span> {v}
-                <button
-                  onClick={() => removeChip("indexCodes", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi indice ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("indexCodes", v)} etichetta={`Rimuovi indice ${v}`} />
               </Badge>
             ))}
             {state.sectors.map((v) => (
               <Badge key={`s-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Settore:</span> {v}
-                <button
-                  onClick={() => removeChip("sectors", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi settore ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("sectors", v)} etichetta={`Rimuovi settore ${v}`} />
               </Badge>
             ))}
             {state.industries.map((v) => (
               <Badge key={`ind-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Industry:</span> {v}
-                <button
-                  onClick={() => removeChip("industries", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi industry ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("industries", v)} etichetta={`Rimuovi industry ${v}`} />
               </Badge>
             ))}
             {state.exchanges.map((v) => (
               <Badge key={`e-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Exchange:</span> {v}
-                <button
-                  onClick={() => removeChip("exchanges", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi exchange ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("exchanges", v)} etichetta={`Rimuovi exchange ${v}`} />
               </Badge>
             ))}
             {state.countries.map((v) => (
               <Badge key={`c-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Paese:</span> {v}
-                <button
-                  onClick={() => removeChip("countries", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi paese ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("countries", v)} etichetta={`Rimuovi paese ${v}`} />
               </Badge>
             ))}
             {state.datiCompleti && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 Dati completi
-                <button
-                  onClick={() => removeChip("datiCompleti", "")}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label="Rimuovi filtro dati completi"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("datiCompleti", "")} etichetta="Rimuovi filtro dati completi" />
               </Badge>
             )}
             {state.excludeEtf && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 Escludi ETF
-                <button
-                  onClick={() => removeChip("excludeEtf", "")}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label="Rimuovi filtro escludi ETF"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("excludeEtf", "")} etichetta="Rimuovi filtro escludi ETF" />
               </Badge>
             )}
             {state.riskTiers.map((v) => (
               <Badge key={`r-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Rischio:</span> {v}
-                <button
-                  onClick={() => removeChip("riskTiers", v)}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label={`Rimuovi rischio ${v}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => removeChip("riskTiers", v)} etichetta={`Rimuovi rischio ${v}`} />
               </Badge>
             ))}
             {state.minScore != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Score ≥</span> {state.minScore}
-                <button
-                  onClick={() => onChange({ ...state, minScore: null })}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label="Rimuovi soglia score minima"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => onChange({ ...state, minScore: null })} etichetta="Rimuovi soglia score minima" />
               </Badge>
             )}
             {state.scoreMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Score ≤</span> {state.scoreMax}
-                <button
-                  onClick={() => onChange({ ...state, scoreMax: null })}
-                  className="ml-0.5 rounded hover:bg-background/60 p-0.5"
-                  aria-label="Rimuovi soglia score massima"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <RimuoviChip onClick={() => onChange({ ...state, scoreMax: null })} etichetta="Rimuovi soglia score massima" />
               </Badge>
             )}
             {state.profitabilityMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Profitt. ≥</span> {state.profitabilityMin}
-                <button onClick={() => onChange({ ...state, profitabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia profittabilità"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => onChange({ ...state, profitabilityMin: null })} etichetta="Rimuovi soglia profittabilità" />
               </Badge>
             )}
             {state.sustainabilityMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Sosten. ≥</span> {state.sustainabilityMin}
-                <button onClick={() => onChange({ ...state, sustainabilityMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sostenibilità"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => onChange({ ...state, sustainabilityMin: null })} etichetta="Rimuovi soglia sostenibilità" />
               </Badge>
             )}
             {state.growthMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Crescita ≥</span> {state.growthMin}
-                <button onClick={() => onChange({ ...state, growthMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia crescita"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => onChange({ ...state, growthMin: null })} etichetta="Rimuovi soglia crescita" />
               </Badge>
             )}
             {state.valueMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Valore ≥</span> {state.valueMin}
-                <button onClick={() => onChange({ ...state, valueMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia valore"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => onChange({ ...state, valueMin: null })} etichetta="Rimuovi soglia valore" />
               </Badge>
             )}
             {state.sentimentMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Sentiment ≥</span> {state.sentimentMin}
-                <button onClick={() => onChange({ ...state, sentimentMin: null })} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia sentiment"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => onChange({ ...state, sentimentMin: null })} etichetta="Rimuovi soglia sentiment" />
               </Badge>
             )}
             {state.marketCapMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Mkt cap ≥</span> {(state.marketCapMin / 1e9).toFixed(0)}B$
-                <button onClick={() => removeChip("marketCapMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("marketCapMin", "")} etichetta="Rimuovi soglia market cap minima" />
               </Badge>
             )}
             {state.marketCapMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Mkt cap ≤</span> {(state.marketCapMax / 1e9).toFixed(0)}B$
-                <button onClick={() => removeChip("marketCapMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia market cap massima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("marketCapMax", "")} etichetta="Rimuovi soglia market cap massima" />
               </Badge>
             )}
             {state.techMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Tecnico ≥</span> {state.techMin}
-                <button onClick={() => removeChip("techMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia tecnico"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("techMin", "")} etichetta="Rimuovi soglia tecnico" />
               </Badge>
             )}
             {state.postures.map((v) => (
               <Badge key={`p-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Postura:</span> {v}
-                <button onClick={() => removeChip("postures", v)} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label={`Rimuovi postura ${v}`}><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("postures", v)} etichetta={`Rimuovi postura ${v}`} />
               </Badge>
             ))}
             {state.rsiMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">RSI ≥</span> {state.rsiMin}
-                <button onClick={() => removeChip("rsiMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("rsiMin", "")} etichetta="Rimuovi soglia RSI minima" />
               </Badge>
             )}
             {state.rsiMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">RSI ≤</span> {state.rsiMax}
-                <button onClick={() => removeChip("rsiMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia RSI massima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("rsiMax", "")} etichetta="Rimuovi soglia RSI massima" />
               </Badge>
             )}
             {state.aboveEma200 && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 sopra EMA200
-                <button onClick={() => removeChip("aboveEma200", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro sopra EMA200"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("aboveEma200", "")} etichetta="Rimuovi filtro sopra EMA200" />
               </Badge>
             )}
             {state.aboveEma50 && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 sopra EMA50
-                <button onClick={() => removeChip("aboveEma50", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro sopra EMA50"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("aboveEma50", "")} etichetta="Rimuovi filtro sopra EMA50" />
               </Badge>
             )}
             {state.near52wHigh && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 vicino max 52s
-                <button onClick={() => removeChip("near52wHigh", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro vicino massimo 52 settimane"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("near52wHigh", "")} etichetta="Rimuovi filtro vicino massimo 52 settimane" />
               </Badge>
             )}
             {state.near52wLow && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 vicino min 52s
-                <button onClick={() => removeChip("near52wLow", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro vicino minimo 52 settimane"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("near52wLow", "")} etichetta="Rimuovi filtro vicino minimo 52 settimane" />
               </Badge>
             )}
             {state.signalsWithinDays != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Segnali:</span> {signalsWindowLabel(state.signalsWithinDays)}
-                <button onClick={() => removeChip("signalsWithinDays", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro con segnali"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("signalsWithinDays", "")} etichetta="Rimuovi filtro con segnali" />
               </Badge>
             )}
             {state.priceMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Prezzo ≥</span> {state.priceMin}
-                <button onClick={() => removeChip("priceMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("priceMin", "")} etichetta="Rimuovi soglia prezzo minima" />
               </Badge>
             )}
             {state.priceMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Prezzo ≤</span> {state.priceMax}
-                <button onClick={() => removeChip("priceMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia prezzo massima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("priceMax", "")} etichetta="Rimuovi soglia prezzo massima" />
               </Badge>
             )}
             {state.changeMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Δ% ≥</span> {state.changeMin}
-                <button onClick={() => removeChip("changeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("changeMin", "")} etichetta="Rimuovi soglia variazione minima" />
               </Badge>
             )}
             {state.changeMax != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Δ% ≤</span> {state.changeMax}
-                <button onClick={() => removeChip("changeMax", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia variazione massima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("changeMax", "")} etichetta="Rimuovi soglia variazione massima" />
               </Badge>
             )}
             {state.volSpike && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 vol spike &gt;2×
-                <button onClick={() => removeChip("volSpike", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi filtro volume spike"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("volSpike", "")} etichetta="Rimuovi filtro volume spike" />
               </Badge>
             )}
             {state.volRatioMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Vol× ≥</span> {state.volRatioMin}
-                <button onClick={() => removeChip("volRatioMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia vol ratio minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("volRatioMin", "")} etichetta="Rimuovi soglia vol ratio minima" />
               </Badge>
             )}
             {state.volumeMin != null && (
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Vol ≥</span> {state.volumeMin.toLocaleString()}
-                <button onClick={() => removeChip("volumeMin", "")} className="ml-0.5 rounded hover:bg-background/60 p-0.5" aria-label="Rimuovi soglia volume minima"><X className="h-3 w-3" /></button>
+                <RimuoviChip onClick={() => removeChip("volumeMin", "")} etichetta="Rimuovi soglia volume minima" />
               </Badge>
             )}
           </div>
