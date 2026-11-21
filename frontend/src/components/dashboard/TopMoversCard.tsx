@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtVolume } from "@/lib/volumeFormat";
 import { formatMoney } from "@/lib/money";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   movers: MoversBlock;
@@ -122,8 +123,8 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
   const v = m[field] ?? null;
   const positive = v != null ? v >= 0 : true;
   const color = positive
-    ? "text-emerald-800 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+    ? TESTO_SU
+    : TESTO_GIU;
   const composite = m.composite ?? null;
   const displayPrice = livePrice ?? m.last_close ?? null;
 

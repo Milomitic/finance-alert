@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { SetupDetectorStat } from "@/hooks/useSetups";
 import { cn } from "@/lib/utils";
 import { InfoHint } from "@/components/ui/info-hint";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Which setup families actually work.
  *
@@ -78,8 +79,8 @@ function Num({ value, suffix = "" }: { value: number | null; suffix?: string }) 
   const tone =
     suffix === "%" && value !== 0
       ? value > 0
-        ? "text-emerald-800 dark:text-emerald-400"
-        : "text-rose-700 dark:text-rose-400"
+        ? TESTO_SU
+        : TESTO_GIU
       : "";
   return (
     <span className={cn("tabular-nums", tone)}>

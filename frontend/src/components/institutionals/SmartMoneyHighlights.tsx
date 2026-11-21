@@ -11,6 +11,7 @@ import {
   AZIONE_LABEL, azioneDecisiva, mossePiuPesanti, settoreDominante, statisticheFondi,
 } from "@/lib/smartMoney";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── La fascia in cima a /institutionals ─────────────────────────────────── *
  *
@@ -120,8 +121,8 @@ function ColonnaMosse({
 }) {
   const Icona = kind === "buy" ? TrendingUp : TrendingDown;
   const tono = kind === "buy"
-    ? "text-emerald-800 dark:text-emerald-300"
-    : "text-rose-700 dark:text-rose-300";
+    ? TESTO_SU
+    : TESTO_GIU;
   return (
     <div className="min-w-0">
       <div className={cn("mb-1 flex items-center gap-1.5 text-[0.7059rem] font-bold uppercase tracking-[0.14em]", tono)}>

@@ -2,6 +2,7 @@ import type { Position } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { winRateLabel } from "@/lib/winRate";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /**
  * Portfolio-level rollup over tracked positions (F1). Everything is derived
@@ -26,8 +27,8 @@ const nfPct = new Intl.NumberFormat("it-IT", {
 function pnlClass(v: number | null): string {
   if (v == null || v === 0) return "text-muted-foreground";
   return v > 0
-    ? "text-emerald-800 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+    ? TESTO_SU
+    : TESTO_GIU;
 }
 
 function sum(xs: (number | null | undefined)[]): number {

@@ -7,6 +7,7 @@ import { type GiornoAgenda, ripartisciRighe, taglia, vociDelGiorno } from "@/lib
 import { earningsBeatTone, formatEps } from "@/lib/calendarMeta";
 import { etichettaGiorno } from "@/lib/settimana";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── L'agenda nel jumbotron: quattro giorni lavorativi in due righe ───────
  *
@@ -47,8 +48,8 @@ function VoceTrimestrale({ e, segno }: { e: EarningsEvent; segno?: ReactNode }) 
   const colore = !uscita
     ? "text-foreground"
     : battuta
-      ? "text-emerald-800 dark:text-emerald-300"
-      : "text-rose-700 dark:text-rose-300";
+      ? TESTO_SU
+      : TESTO_GIU;
   return (
     <li className="flex h-4 min-w-0 items-center gap-1 leading-4 tabular-nums">
       {segno}

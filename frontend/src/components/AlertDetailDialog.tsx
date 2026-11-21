@@ -65,6 +65,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ingressiDelPiano, pianoDelSegnale } from "@/lib/tradePlaybook";
 import { RigaConflitto } from "@/components/alert/SegnaleInConflitto";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 export type { AlertChartLink };
 
@@ -542,8 +543,8 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
                         className={cn(
                           "font-bold tabular-nums",
                           fwd != null && fwd >= 0
-                            ? "text-emerald-800 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400",
+                            ? TESTO_SU
+                            : TESTO_GIU,
                         )}
                       >
                         {fwd != null ? fmtPct(fwd) : "n/d"}
@@ -589,8 +590,8 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
                           className={cn(
                             "font-bold tabular-nums",
                             mkt >= 0
-                              ? "text-emerald-800 dark:text-emerald-400"
-                              : "text-rose-600 dark:text-rose-400",
+                              ? TESTO_SU
+                              : TESTO_GIU,
                           )}
                         >
                           {fmtPct(mkt)}

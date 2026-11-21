@@ -11,6 +11,7 @@ import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   ticker: string;
@@ -56,8 +57,8 @@ function TargetInTesta({ pt, currency }: { pt: AnalystPriceTarget; currency: str
           className={cn(
             "whitespace-nowrap text-sm font-bold",
             upside > 0
-              ? "text-emerald-800 dark:text-emerald-300"
-              : "text-rose-700 dark:text-rose-300",
+              ? TESTO_SU
+              : TESTO_GIU,
           )}
           title={
             baseDay
@@ -326,9 +327,9 @@ function priceTargetTone(action: string | null | undefined): {
 } {
   switch (action) {
     case "Raises":
-      return { cls: "text-emerald-800 dark:text-emerald-300", arrow: "↑" };
+      return { cls: TESTO_SU, arrow: "↑" };
     case "Lowers":
-      return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
+      return { cls: TESTO_GIU, arrow: "↓" };
     case "Initiates":
       return { cls: "text-blue-700 dark:text-blue-300", arrow: "✦" };
     case "Maintains":

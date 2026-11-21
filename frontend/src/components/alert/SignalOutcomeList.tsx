@@ -17,6 +17,7 @@ import {
   stopTroppoStretto, tracciaGara, type Gamba,
 } from "@/lib/planOutcome";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Che cosa e' successo al piano di ogni segnale ───────────────────────
  *
@@ -192,8 +193,8 @@ function PL({ riga }: { riga: PlanOutcomeRow }) {
         pl == null || pl === 0
           ? "text-muted-foreground"
           : pl > 0
-            ? "text-emerald-800 dark:text-emerald-300"
-            : "text-rose-700 dark:text-rose-300",
+            ? TESTO_SU
+            : TESTO_GIU,
       )}
     >
       {formatPL(pl)}
@@ -359,9 +360,9 @@ function Riga({ riga, onApri, vis }: {
             className={cn(
               "justify-self-end text-sm font-bold tabular-nums",
               riga.r_multiple > 0
-                ? "text-emerald-800 dark:text-emerald-300"
+                ? TESTO_SU
                 : riga.r_multiple < 0
-                  ? "text-rose-700 dark:text-rose-300"
+                  ? TESTO_GIU
                   : "text-muted-foreground",
             )}
           >

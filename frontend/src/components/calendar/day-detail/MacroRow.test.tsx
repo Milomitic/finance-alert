@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { MacroEvent } from "@/api/types";
 
 import { MacroRow } from "./MacroRow";
+import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
 
 /** Il CPI del 14 ottobre come lo serve il backend il 2026-10-06: livelli FRED
  *  di agosto e luglio, consenso Forexfactory sulla variazione m/m. */
@@ -101,6 +102,6 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
       { periodo: "2026-08-01", previsto: 0.5, attuale: 0.4 },
     ] });
     const barre = Array.from(container.querySelectorAll("svg rect")).map((r) => r.getAttribute("fill"));
-    expect(barre).toEqual(["#94a3b8", "#10b981", "#f43f5e"]);
+    expect(barre).toEqual([NEUTRO, SU, GIU]);
   });
 });

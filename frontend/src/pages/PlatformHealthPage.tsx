@@ -21,6 +21,7 @@ import { useInfraHealth } from "@/hooks/useInfraHealth";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
 import { APP_ORIGIN, useInfraLogs, useInfraLogSources } from "@/hooks/useInfraLogs";
+import { TESTO_SU } from "@/lib/toni";
 
 type OverallStatus = "operational" | "degraded" | "outage";
 
@@ -40,7 +41,7 @@ const STATUS_INFO: Record<
     desc: "Nessuna anomalia rilevata negli ultimi minuti.",
     Icon: CheckCircle2,
     bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    fg: "text-emerald-800 dark:text-emerald-300",
+    fg: TESTO_SU,
     border: "border-emerald-200 dark:border-emerald-800/60",
   },
   degraded: {

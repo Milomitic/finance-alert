@@ -28,6 +28,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 const ICONS: Record<string, LucideIcon> = {
   "Information Technology": Cpu,
@@ -67,8 +68,8 @@ const ICON_COLOR: Record<string, string> = {
   "Energy": "text-amber-700 dark:text-amber-400",
   "Financial Services": "text-violet-600 dark:text-violet-400",
   "Financials": "text-violet-600 dark:text-violet-400",
-  "Healthcare": "text-emerald-800 dark:text-emerald-400",
-  "Health Care": "text-emerald-800 dark:text-emerald-400",
+  "Healthcare": TESTO_SU,
+  "Health Care": TESTO_SU,
   "Industrials": "text-stone-600 dark:text-stone-400",
   "Industrial": "text-stone-600 dark:text-stone-400",
   "Consumer Cyclical": "text-fuchsia-600 dark:text-fuchsia-400",
@@ -80,7 +81,7 @@ const ICON_COLOR: Record<string, string> = {
   "Utilities": "text-yellow-600 dark:text-yellow-500",
   "Communication Services": "text-indigo-600 dark:text-indigo-400",
   "Communications": "text-indigo-600 dark:text-indigo-400",
-  "Real Estate": "text-rose-600 dark:text-rose-400",
+  "Real Estate": TESTO_GIU,
   "Pharmaceuticals": "text-lime-600 dark:text-lime-400",
 };
 

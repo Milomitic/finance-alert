@@ -13,6 +13,7 @@ import type { InfraHealth } from "@/api/platformHealth";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Infrastruttura — quello che finora sapeva solo Grafana.
  *
@@ -31,9 +32,9 @@ import { cn } from "@/lib/utils";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 const TONE: Record<Tone, string> = {
-  ok: "text-emerald-800 dark:text-emerald-300",
+  ok: TESTO_SU,
   warn: "text-amber-700 dark:text-amber-300",
-  bad: "text-rose-700 dark:text-rose-300",
+  bad: TESTO_GIU,
   muted: "text-muted-foreground",
 };
 
@@ -205,7 +206,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                   <li key={a.name} className="leading-snug">
                     <span className="font-semibold">{a.name}</span>
                     {a.severity && (
-                      <span className="ml-1.5 rounded bg-rose-100 px-1 py-px text-[0.6471rem] font-semibold uppercase text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">
+                      <span className="ml-1.5 rounded bg-red-100 px-1 py-px text-[0.6471rem] font-semibold uppercase text-red-800 dark:bg-red-900/40 dark:text-red-200">
                         {a.severity}
                       </span>
                     )}

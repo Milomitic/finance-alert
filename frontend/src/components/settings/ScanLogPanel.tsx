@@ -6,6 +6,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useScanLog, type PhaseTiming, type ScanRunSummary } from "@/hooks/useScanLog";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 
 /* ─── Scan log panel ────────────────────────────────────────────────────── *
@@ -128,9 +129,9 @@ function KpiCell({
 }) {
   const toneCls =
     tone === "pos"
-      ? "text-emerald-800 dark:text-emerald-400"
+      ? TESTO_SU
       : tone === "neg"
-        ? "text-rose-700 dark:text-rose-400"
+        ? TESTO_GIU
         : "text-foreground";
   return (
     <div className="rounded border bg-muted/30 px-3 py-2">

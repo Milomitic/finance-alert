@@ -7,6 +7,7 @@ import {
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import { deveAprireLaFinestra } from "@/lib/chartInitialView";
+import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
 
 interface Props {
   line: IndicatorPoint[];
@@ -147,7 +148,7 @@ export function MacdPanel({
           return {
             time: dateToTime(p.date),
             value: v,
-            color: v >= 0 ? "rgba(22,163,74,0.55)" : "rgba(220,38,38,0.55)",
+            color: conAlfa(v >= 0 ? SU : GIU, 0.55),
           };
         }),
     );

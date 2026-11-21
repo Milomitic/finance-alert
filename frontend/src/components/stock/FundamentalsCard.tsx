@@ -23,6 +23,7 @@ import { CONFIDENZA_BASSA_FONDAMENTALI, completezzaFondamentali } from "@/lib/co
 import { formatBigMoney, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 const EPS_GAAP_TRIMESTRALE =
   "EPS GAAP del trimestre (conto economico) — include poste straordinarie (es. costi di fusione, impairment).";
@@ -106,7 +107,7 @@ function fmtPctSurp(v: number | null | undefined): { text: string; color: string
   const sign = v >= 0 ? "+" : "";
   return {
     text: `${sign}${v.toFixed(2)}%`,
-    color: v > 0 ? "text-emerald-800 dark:text-emerald-400" : v < 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground",
+    color: v > 0 ? TESTO_SU : v < 0 ? TESTO_GIU : "text-muted-foreground",
   };
 }
 
@@ -117,8 +118,8 @@ function fmtPctSurp(v: number | null | undefined): { text: string; color: string
  *  without having to read across to the rightmost column. */
 function beatTone(reported: number | null | undefined, estimate: number | null | undefined): string {
   if (reported == null || estimate == null) return "";
-  if (reported > estimate) return "text-emerald-800 dark:text-emerald-400";
-  if (reported < estimate) return "text-rose-600 dark:text-rose-400";
+  if (reported > estimate) return TESTO_SU;
+  if (reported < estimate) return TESTO_GIU;
   return "";
 }
 

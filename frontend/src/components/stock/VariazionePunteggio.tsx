@@ -1,6 +1,7 @@
 import { useVariazionePunteggio } from "@/hooks/useTitoloConfronti";
 import { CATEGORY_LABEL } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Che cosa ha mosso il punteggio Qualità a 30 e 90 giorni (FA-156).
  *
@@ -21,7 +22,7 @@ export function VariazionePunteggio({ ticker }: { ticker: string }) {
           <p key={f.giorni} className="flex flex-wrap gap-x-1">
             <span className="text-muted-foreground">{f.giorni} g:</span>
             <span className={cn("font-semibold tabular-nums",
-              !fermo && (f.delta > 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"))}>
+              !fermo && (f.delta > 0 ? TESTO_SU : TESTO_GIU))}>
               {f.delta > 0 ? "+" : f.delta < 0 ? "−" : ""}{Math.abs(f.delta).toFixed(1).replace(".", ",")}
             </span>
             {!fermo && primo && Math.abs(primo.contributo) >= 0.3 && (

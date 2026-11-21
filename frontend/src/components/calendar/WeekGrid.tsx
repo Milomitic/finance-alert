@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { ImportanceDots } from "./ImportanceDots";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── WeekGrid — Mon→Fri columnar view ──────────────────────────────────────
  *
@@ -156,8 +157,8 @@ function WeekEarningsRow({ event }: { event: EarningsEvent }) {
   const resultColor = !reported
     ? "text-foreground"
     : beat
-      ? "text-emerald-800 dark:text-emerald-300"
-      : "text-rose-700 dark:text-rose-300";
+      ? TESTO_SU
+      : TESTO_GIU;
   return (
     <Link
       to={`/stocks/${encodeURIComponent(event.ticker)}`}

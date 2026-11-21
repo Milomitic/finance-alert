@@ -18,6 +18,7 @@ import {
   verso,
 } from "@/lib/patrimonio";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU } from "@/lib/toni";
 
 /* ─── Il conto eToro in cima alla home (FA-127) ───────────────────────────
  *
@@ -48,7 +49,7 @@ const ALTEZZA = "h-[700px] lg:h-[300px]";
 
 function tono(v: number | null | undefined): string {
   if (v == null || v === 0) return "text-muted-foreground";
-  return v > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  return v > 0 ? "text-emerald-700 dark:text-emerald-400" : TESTO_GIU;
 }
 
 function ora(iso: string | null): string {

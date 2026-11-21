@@ -9,6 +9,8 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useEtfHoldings } from "@/hooks/useEtfHoldings";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { GIU, SU } from "@/lib/coloriGrafico";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   ticker: string;
@@ -42,7 +44,7 @@ function fmtPct(pct: number): string {
 
 function tonoPct(pct: number | null | undefined): string {
   if (pct == null) return "text-muted-foreground";
-  return pct >= 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  return pct >= 0 ? TESTO_SU : TESTO_GIU;
 }
 
 export function EtfHoldingsCard({ ticker }: Props) {
@@ -225,7 +227,7 @@ function MiniSpark({ closes, up }: { closes: number[]; up: boolean }) {
       <polyline
         points={points}
         fill="none"
-        stroke={up ? "#17b551" : "#dc2626"}
+        stroke={up ? SU : GIU}
         strokeWidth={1.3}
         strokeLinejoin="round"
         strokeLinecap="round"

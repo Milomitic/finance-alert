@@ -8,6 +8,7 @@ import { HintAnchor, HintUnderline } from "@/components/ui/info-hint";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   data: IndexBreadth[];
@@ -70,8 +71,8 @@ function cellTone(value: number | null, kind: "pct" | "change"): string {
     if (value <= 40) return "text-rose-600 dark:text-rose-400 font-semibold";
   }
   if (kind === "change") {
-    if (value > 0) return "text-emerald-800 dark:text-emerald-400";
-    if (value < 0) return "text-rose-600 dark:text-rose-400";
+    if (value > 0) return TESTO_SU;
+    if (value < 0) return TESTO_GIU;
   }
   return "";
 }

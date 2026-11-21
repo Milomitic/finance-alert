@@ -15,6 +15,7 @@ import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS, defaultVisibleRange } from "@/lib/chartClamp";
 import { deveAprireLaFinestra } from "@/lib/chartInitialView";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
+import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
 
 interface Props {
   ohlcv: OhlcvBar[];
@@ -278,9 +279,9 @@ export function PriceChart({
     chartRef.current = chart;
 
     candleRef.current = chart.addCandlestickSeries({
-      upColor: "#17b551", downColor: "#dc2626",
-      borderUpColor: "#17b551", borderDownColor: "#dc2626",
-      wickUpColor: "#17b551", wickDownColor: "#dc2626",
+      upColor: SU, downColor: GIU,
+      borderUpColor: SU, borderDownColor: GIU,
+      wickUpColor: SU, wickDownColor: GIU,
       // Native lastValue badge: the price is now ONE of the price-scale
       // badges, integrated with and anti-overlap-stacked against the
       // EMA/BB badges (no more separate floating DOM overlay that could
@@ -503,7 +504,7 @@ export function PriceChart({
       ohlcv.map((b) => ({
         time: dateToTime(b.date),
         value: b.volume,
-        color: b.close >= b.open ? "rgba(22,163,74,0.4)" : "rgba(220,38,38,0.4)",
+        color: conAlfa(b.close >= b.open ? SU : GIU, 0.4),
       })),
     );
     // Initial visible window: clamp to the most recent N bars based on
@@ -606,7 +607,7 @@ export function PriceChart({
       .map((pa) =>
         series.createPriceLine({
           price: pa.target_price,
-          color: pa.direction === "above" ? "#17b551" : "#dc2626",
+          color: pa.direction === "above" ? SU : GIU,
           lineWidth: 1,
           lineStyle: 2,
           axisLabelVisible: true,

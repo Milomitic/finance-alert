@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtDollar, fmtVolume } from "@/lib/volumeFormat";
 import { formatMoney } from "@/lib/money";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 type VolMode = "dollar" | "shares";
 
@@ -246,9 +247,9 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                       className={cn(
                         "shrink-0 text-[0.7647rem] font-semibold tabular-nums w-[62px] text-right",
                         displayChange != null && displayChange >= 0
-                          ? "text-emerald-800 dark:text-emerald-400"
+                          ? TESTO_SU
                           : displayChange != null
-                            ? "text-rose-600 dark:text-rose-400"
+                            ? TESTO_GIU
                             : "text-muted-foreground",
                       )}
                       title="Variazione % giornaliera (live)"

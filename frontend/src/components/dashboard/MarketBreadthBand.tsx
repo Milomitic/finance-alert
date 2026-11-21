@@ -8,6 +8,7 @@ import { getIndexMeta } from "@/lib/indexMeta";
 import { formatVariazione } from "@/lib/marketNumber";
 import { type MoodKey, type RegionDef, type RegionMood, regionMoods } from "@/lib/marketRegions";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Umore e ampiezza: tre continenti, e sotto ognuno le sue borse ───────── *
  *
@@ -61,8 +62,8 @@ const UMORE: Record<MoodKey, { label: string; icona: ReactNode; classe: string }
 
 function tono(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "text-muted-foreground";
 }
 

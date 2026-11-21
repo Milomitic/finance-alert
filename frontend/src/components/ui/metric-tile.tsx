@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoHint } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Una metrica a schermo, in evidenza o compatta ─────────────────────────
  *
@@ -45,8 +46,8 @@ export function MetricTile({ label, value, hint, note, tone, primary = false }: 
           className={cn(
             "tabular-nums leading-tight",
             primary ? "text-3xl font-bold mt-1" : "text-lg font-semibold",
-            tone === "ok" && "text-emerald-800 dark:text-emerald-400",
-            tone === "bad" && "text-rose-700 dark:text-rose-400",
+            tone === "ok" && TESTO_SU,
+            tone === "bad" && TESTO_GIU,
           )}
         >
           {value}

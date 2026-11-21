@@ -9,6 +9,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { quandoTrimestrale, tempoFa } from "@/lib/suiTuoiTitoli";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Sui tuoi titoli (FA-149) ────────────────────────────────────────────
  *
@@ -99,7 +100,7 @@ function RigaAnalista({ a }: { a: AnalistaMio }) {
       <Segno r={a.rilevanza} />
       <Ticker t={a.ticker} />
       <span className={cn("shrink-0 text-xs font-medium",
-        su && "text-emerald-800 dark:text-emerald-400", giu && "text-rose-700 dark:text-rose-400")}>
+        su && TESTO_SU, giu && TESTO_GIU)}>
         {su ? "↑" : giu ? "↓" : "•"} {a.a}
       </span>
       <span className="min-w-0 truncate text-xs text-muted-foreground">

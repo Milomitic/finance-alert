@@ -1,3 +1,5 @@
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /* ─── Il VIX letto come movimento atteso ──────────────────────────────────── *
  *
  * Il VIX e' la volatilita' implicita ANNUALIZZATA dell'S&P 500 sui prossimi 30
@@ -91,7 +93,7 @@ export const CLASSE_BANDA: Record<BandaVix, string> = {
  *  rialzo della paura. */
 export function tonoVariazioneVix(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v) || Number(v.toFixed(2)) === 0) return "text-muted-foreground";
-  return v > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400";
+  return v > 0 ? TESTO_GIU : TESTO_SU;
 }
 
 /** Un percento senza segno, con la virgola: «0,99». */

@@ -7,6 +7,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useCatalogStatus, useTriggerCatalogRefresh } from "@/hooks/useCatalogStatus";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 
 /* ─── Catalog refresh panel ─────────────────────────────────────────────── */
@@ -131,7 +132,7 @@ export function CatalogRefreshPanel() {
                       <td className="text-right px-3 py-2">
                         {idx.stocks_added != null ? (
                           <span>
-                            <span className="text-emerald-800 dark:text-emerald-400">
+                            <span className={TESTO_SU}>
                               +{idx.stocks_added}
                             </span>
                             {" / "}
@@ -139,7 +140,7 @@ export function CatalogRefreshPanel() {
                               ~{idx.stocks_updated ?? 0}
                             </span>
                             {" / "}
-                            <span className="text-rose-700 dark:text-rose-400">
+                            <span className={TESTO_GIU}>
                               -{idx.stocks_removed ?? 0}
                             </span>
                           </span>

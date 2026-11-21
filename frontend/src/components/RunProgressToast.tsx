@@ -15,6 +15,7 @@ import { useIsPhone } from "@/hooks/useMediaQuery";
 import { useConfermaInDuePassi } from "@/hooks/useConfermaInDuePassi";
 import { useNowTick } from "@/hooks/useNowTick";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── RunProgressToast — generic persistent progress notification ────────── */
 /* Used by BOTH the alert-scan and the score-recompute flows. The backend
@@ -298,8 +299,8 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
   const iconClass: Record<typeof variant, string> = {
     running: "text-primary",
     stale: "text-amber-700 dark:text-amber-400",
-    success: "text-emerald-800 dark:text-emerald-400",
-    failed: "text-rose-600 dark:text-rose-400",
+    success: TESTO_SU,
+    failed: TESTO_GIU,
   };
 
   const dismissCountdown =
@@ -526,7 +527,7 @@ export function RunProgressToast({ status, labels, onStop, isStopping }: Props) 
                     <strong
                       className={
                         c.highlightWhenPositive && (c.value ?? 0) > 0
-                          ? "text-emerald-800 dark:text-emerald-400"
+                          ? TESTO_SU
                           : undefined
                       }
                     >

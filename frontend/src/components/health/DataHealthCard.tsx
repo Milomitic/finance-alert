@@ -4,6 +4,7 @@ import type { DataHealth, DeployHealth } from "@/api/platformHealth";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Freschezza dei dati + stato del deploy, dentro l'app.
  *
@@ -21,9 +22,9 @@ import { cn } from "@/lib/utils";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 const TONE: Record<Tone, string> = {
-  ok: "text-emerald-800 dark:text-emerald-300",
+  ok: TESTO_SU,
   warn: "text-amber-700 dark:text-amber-300",
-  bad: "text-rose-700 dark:text-rose-300",
+  bad: TESTO_GIU,
   muted: "text-muted-foreground",
 };
 

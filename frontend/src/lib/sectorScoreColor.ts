@@ -1,3 +1,5 @@
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /* Colore del punteggio medio di settore, estratto dalle piastrelle */
 
 /* Industry row components for the sectors overview hub.
@@ -30,8 +32,8 @@
  */
 export function avgScoreColor(score: number | null | undefined): string {
   if (score === null || score === undefined) return "text-muted-foreground";
-  if (score >= 70) return "text-emerald-800 dark:text-emerald-400";
+  if (score >= 70) return TESTO_SU;
   if (score >= 50) return "text-foreground";
   if (score >= 30) return "text-amber-700 dark:text-amber-400";
-  return "text-rose-600 dark:text-rose-400";
+  return TESTO_GIU;
 }

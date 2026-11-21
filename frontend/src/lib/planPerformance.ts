@@ -1,4 +1,5 @@
 import type { PlanPerfRow } from "@/api/platformHealth";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Il colore di un'attesa in R.
  *
@@ -13,8 +14,8 @@ import type { PlanPerfRow } from "@/api/platformHealth";
  * perde), non un guasto.
  */
 export function verdictTone(verdict: PlanPerfRow["verdict"]): string {
-  if (verdict === "positive") return "text-emerald-800 dark:text-emerald-400";
-  if (verdict === "negative") return "text-rose-700 dark:text-rose-400";
+  if (verdict === "positive") return TESTO_SU;
+  if (verdict === "negative") return TESTO_GIU;
   return "text-muted-foreground";
 }
 

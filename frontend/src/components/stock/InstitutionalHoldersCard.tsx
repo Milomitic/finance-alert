@@ -10,6 +10,7 @@ import { ordina, ordinaPerData, riepilogo, separaPerValore, variazione } from "@
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Superinvestor e fondi: chi detiene il titolo, e cosa ha fatto ────────
  *
@@ -101,13 +102,13 @@ function RigaFondo({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
 function verbo(action: string | null): { label: string; tone: string } {
   switch (action) {
     case "new":
-      return { label: "Nuovo", tone: "text-emerald-800 dark:text-emerald-300" };
+      return { label: "Nuovo", tone: TESTO_SU };
     case "add":
-      return { label: "Add", tone: "text-emerald-800 dark:text-emerald-300" };
+      return { label: "Add", tone: TESTO_SU };
     case "reduce":
       return { label: "Reduce", tone: "text-amber-700 dark:text-amber-300" };
     case "sold_out":
-      return { label: "Sold out", tone: "text-rose-700 dark:text-rose-300" };
+      return { label: "Sold out", tone: TESTO_GIU };
     case "hold":
       return { label: "Hold", tone: "text-muted-foreground" };
     default:

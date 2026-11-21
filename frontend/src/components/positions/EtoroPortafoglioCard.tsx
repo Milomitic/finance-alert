@@ -13,6 +13,7 @@ import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
 import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Il portafoglio eToro (FA-124) ───────────────────────────────────────
  *
@@ -28,7 +29,7 @@ import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
 
 function tono(v: number | null | undefined): string {
   if (v == null || v === 0) return "text-muted-foreground";
-  return v > 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  return v > 0 ? TESTO_SU : TESTO_GIU;
 }
 
 function ora(iso: string): string {
@@ -113,7 +114,7 @@ function Dettaglio({ p, valuta }: { p: EtoroPosizione; valuta: string | null }) 
         {p.stop != null ? (
           <>
             {formatMoney(p.stop, valuta)}{" "}
-            <span className="text-rose-600 dark:text-rose-400">({fmtPct(p.stop_pct_margine)} del margine)</span>
+            <span className={TESTO_GIU}>({fmtPct(p.stop_pct_margine)} del margine)</span>
           </>
         ) : (
           <span className="font-semibold text-rose-600 dark:text-rose-400">nessuno</span>
@@ -145,7 +146,7 @@ function RigaStrumento({ g }: { g: GruppoStrumento }) {
           <Cifra etichetta="P/L" className={tono(g.pnlUsd)}>
             {formatMoneySigned(g.pnlUsd, "USD")} <span className="text-xs">({fmtPct(g.pnlPctMargine)})</span>
           </Cifra>
-          <Cifra etichetta="Stop peggiore" className="text-rose-600 dark:text-rose-400">
+          <Cifra etichetta="Stop peggiore" className={TESTO_GIU}>
             {g.senzaStop > 0 ? `${g.senzaStop} senza stop` : fmtPct(g.stopPeggiorePct)}
           </Cifra>
           <button

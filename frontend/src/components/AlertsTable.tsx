@@ -36,6 +36,7 @@ import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
 import { PastigliaConflitto } from "@/components/alert/SegnaleInConflitto";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Toggleable columns for the non-embedded alerts table.
  *  Checkbox + Titolo are always-on (identity + selection).
@@ -690,10 +691,10 @@ export function AlertsTable({
                     pct >= 70 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500";
                   const txt =
                     pct >= 70
-                      ? "text-emerald-800 dark:text-emerald-400"
+                      ? TESTO_SU
                       : pct >= 50
                         ? "text-amber-700 dark:text-amber-400"
-                        : "text-rose-600 dark:text-rose-400";
+                        : TESTO_GIU;
                   return (
                     <div className="flex items-center justify-end gap-2" title={`Forza ${pct}% — ${FORZA_TOOLTIP}`}>
                       <span className={cn(embedded ? "text-[0.7647rem]" : "text-sm", "font-semibold tabular-nums w-10 text-right", txt)}>

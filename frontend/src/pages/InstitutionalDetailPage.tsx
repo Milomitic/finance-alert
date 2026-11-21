@@ -13,6 +13,7 @@ import { nextOffset, PAGE_SIZE } from "@/hooks/useInstitutionalHoldings";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* InstitutionalDetailPage — single portfolio drilldown.
  *
@@ -66,13 +67,13 @@ function actionMeta(action: string | null): {
     case "new":
       return {
         label: "Nuovo",
-        tone: "text-emerald-800 dark:text-emerald-300",
+        tone: TESTO_SU,
         bg: "bg-emerald-50 dark:bg-emerald-950/40",
       };
     case "add":
       return {
         label: "Add",
-        tone: "text-emerald-800 dark:text-emerald-300",
+        tone: TESTO_SU,
         bg: "bg-emerald-50 dark:bg-emerald-950/40",
       };
     case "reduce":
@@ -84,7 +85,7 @@ function actionMeta(action: string | null): {
     case "sold_out":
       return {
         label: "Sold out",
-        tone: "text-rose-700 dark:text-rose-300",
+        tone: TESTO_GIU,
         bg: "bg-rose-50 dark:bg-rose-950/40",
       };
     case "hold":
@@ -100,8 +101,8 @@ function actionMeta(action: string | null): {
 
 function qoqColor(v: number | null | undefined): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-300";
-  if (v < 0) return "text-rose-700 dark:text-rose-300";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "text-muted-foreground";
 }
 

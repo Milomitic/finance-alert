@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Check, Copy, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
 import type { StreamedLog } from "@/hooks/usePlatformHealthStream";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 type Props = {
   records: StreamedLog[];
@@ -37,9 +38,9 @@ type Props = {
 const LEVEL_TONE: Record<string, string> = {
   DEBUG: "text-slate-500 dark:text-slate-400",
   INFO: "text-sky-700 dark:text-sky-300",
-  SUCCESS: "text-emerald-800 dark:text-emerald-300",
+  SUCCESS: TESTO_SU,
   WARNING: "text-amber-700 dark:text-amber-300",
-  ERROR: "text-rose-700 dark:text-rose-300",
+  ERROR: TESTO_GIU,
   CRITICAL: "text-rose-800 dark:text-rose-300 font-bold",
 };
 

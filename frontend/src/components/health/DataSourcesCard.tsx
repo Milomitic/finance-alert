@@ -294,7 +294,7 @@ function SourceRow({
         </div>
       )}
       {m.last_failure_reason && h !== "healthy" && (
-        <div className="mt-1 pl-4 text-[0.6471rem] text-rose-700/80 dark:text-rose-400/80 truncate font-mono" title={m.last_failure_reason}>
+        <div className="mt-1 pl-4 text-[0.6471rem] text-red-700 dark:text-red-400 truncate font-mono" title={m.last_failure_reason}>
           ✗ {m.last_failure_reason}
         </div>
       )}

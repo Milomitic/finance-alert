@@ -10,6 +10,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { intervallo, MODELLI, type Modello, parametriDaUrl, pct } from "@/lib/studio";
 import { cn } from "@/lib/utils";
+import { GIU, SU } from "@/lib/coloriGrafico";
 
 /* ─── Studio: statistica storica di un simbolo (FA-157) ───────────────────
  *
@@ -97,7 +98,7 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
           <GraficoSvg dati={r.mesi} x={(m) => m.mese} formatoY={(v) => pct(v, 1)}
             etichetta={`Rendimento medio per mese di ${p.simbolo}`}
             serie={[{ chiave: "media", nome: "Media", valore: (m) => m.media, colore: "hsl(var(--primary))", tipo: "barre",
-              coloreBarra: (m) => ((m.media ?? 0) >= 0 ? "rgb(16 185 129)" : "rgb(244 63 94)") }]} />
+              coloreBarra: (m) => ((m.media ?? 0) >= 0 ? SU : GIU) }]} />
         </div>
         <TabellaMisure righe={[...r.mesi.map((m) => [m.mese, m] as [string, Misura]), ["Tutti i mesi", r.base_mesi]]} />
         <TabellaMisure righe={[...r.giorni.map((g) => [g.giorno, g] as [string, Misura]), ["Tutte le sedute", r.base_giorni]]} />

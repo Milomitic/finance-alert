@@ -1,3 +1,5 @@
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /* Formati della scheda «Titoli simili / Reazioni» (FA-156). */
 
 /** 2,4 T · 310 B · 950 M; «—» se manca. In dollari: la colonna dice «Cap. $». */
@@ -22,5 +24,5 @@ export function percentuale(v: number | null | undefined): string {
 /** rose/emerald = direzione (CLAUDE.md). */
 export function toneDiRendimento(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v) || v === 0) return "";
-  return v > 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400";
+  return v > 0 ? TESTO_SU : TESTO_GIU;
 }

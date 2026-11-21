@@ -16,6 +16,8 @@ import { useNowTick } from "@/hooks/useNowTick";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { getStockFlagCode } from "@/lib/stockMeta";
 import { cn } from "@/lib/utils";
+import { GIU, SU } from "@/lib/coloriGrafico";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Una sola forma per le etichette sotto il nome: borsa, indici, settore,
  *  sotto-settore e fondi si leggono come la stessa famiglia. */
@@ -64,7 +66,7 @@ export function HeaderSparkline({ closes, up }: { closes: number[]; up: boolean 
   const areaPath = `M0,${H} L${points} L${W},${H} Z`;
   // Emerald/rose come il resto dell'app per la direzione: il rosso
   // `#dc2626` e' quello dei guasti (CLAUDE.md, una palette per significato).
-  const stroke = up ? "#10b981" : "#f43f5e";
+  const stroke = up ? SU : GIU;
   return (
     <svg
       // Solo il terzo inferiore della scheda (A-48): a tutta altezza l'area
@@ -142,9 +144,9 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
     change == null
       ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
       : change > 0
-        ? { bg: "bg-card", stripe: "bg-emerald-500", text: "text-emerald-800 dark:text-emerald-300", arrow: "▲" }
+        ? { bg: "bg-card", stripe: "bg-emerald-500", text: TESTO_SU, arrow: "▲" }
         : change < 0
-          ? { bg: "bg-card", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
+          ? { bg: "bg-card", stripe: "bg-rose-500", text: TESTO_GIU, arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
 
   const closes = (ohlcv ?? []).map((b) => b.close).filter((c) => Number.isFinite(c));

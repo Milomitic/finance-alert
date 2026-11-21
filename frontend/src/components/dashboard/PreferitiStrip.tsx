@@ -10,6 +10,7 @@ import { leggiRecenti } from "@/lib/titoliRecenti";
 import { cn } from "@/lib/utils";
 import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
 import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Preferiti e recenti, in cima alla home (FA-112) ─────────────────────
  *
@@ -34,8 +35,8 @@ function Variazione({ pct }: { pct: number | null | undefined }) {
     <span
       className={cn(
         "tabular-nums",
-        pct > 0 ? "text-emerald-800 dark:text-emerald-400"
-          : pct < 0 ? "text-rose-600 dark:text-rose-400"
+        pct > 0 ? TESTO_SU
+          : pct < 0 ? TESTO_GIU
             : "text-muted-foreground",
       )}
     >

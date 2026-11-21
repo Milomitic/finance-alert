@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { SignalHoverItem } from "@/lib/signalMarkers";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Floating detail panel for the signal(s) fired on the hovered candle.
  *  Renders under the OHLC legend (top-left), only while the crosshair is on a
@@ -13,8 +14,8 @@ const toneDot: Record<SignalHoverItem["tone"], string> = {
 };
 
 function outcomeGlyph(outcome: boolean | null | undefined): { text: string; cls: string } {
-  if (outcome === true) return { text: "✓", cls: "text-emerald-800 dark:text-emerald-400" };
-  if (outcome === false) return { text: "✗", cls: "text-rose-600 dark:text-rose-400" };
+  if (outcome === true) return { text: "✓", cls: TESTO_SU };
+  if (outcome === false) return { text: "✗", cls: TESTO_GIU };
   return { text: "· in maturazione", cls: "text-muted-foreground" };
 }
 

@@ -14,6 +14,7 @@ import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { aggiungiRecente, leggiRecenti } from "@/lib/titoliRecenti";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 // I recenti hanno un proprietario unico, `lib/titoliRecenti.ts` (FA-112): li
 // registra la pagina titolo da qualunque parte si arrivi, non solo da qui.
@@ -194,8 +195,8 @@ export function NavbarSearch() {
     const change = i.avg_change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
-      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
+      change > 0 ? TESTO_SU :
+      change < 0 ? TESTO_GIU : "";
     return (
       <button
         type="button"
@@ -244,8 +245,8 @@ export function NavbarSearch() {
     const mc = s.market_cap ?? enriched?.market_cap ?? null;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
-      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
+      change > 0 ? TESTO_SU :
+      change < 0 ? TESTO_GIU : "";
     return (
       <button
         type="button"
@@ -305,8 +306,8 @@ export function NavbarSearch() {
     const change = enriched?.change_pct;
     const changeColor =
       change == null ? "text-muted-foreground" :
-      change > 0 ? "text-emerald-800 dark:text-emerald-400" :
-      change < 0 ? "text-rose-600 dark:text-rose-400" : "";
+      change > 0 ? TESTO_SU :
+      change < 0 ? TESTO_GIU : "";
     const Icon = kind === "preferito" ? Star : kind === "recent" ? History : TrendingUp;
     // Recent + top-movers don't carry a Stock object (only the ticker
     // string), so country comes from the ticker suffix. Bare tickers
@@ -404,7 +405,7 @@ export function NavbarSearch() {
             <div className="max-h-[600px] overflow-y-auto">
               {search.isError ? (
                 <div className="px-4 py-6 text-sm text-center" role="alert">
-                  <p className="text-rose-600 dark:text-rose-400">Ricerca non disponibile.</p>
+                  <p className={TESTO_GIU}>Ricerca non disponibile.</p>
                   <button
                     type="button"
                     className="mt-2 text-sm font-medium underline underline-offset-2"

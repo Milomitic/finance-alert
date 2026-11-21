@@ -35,6 +35,7 @@ import {
   tonoVariazioneVix,
 } from "@/lib/vix";
 import { fmtVolume } from "@/lib/volumeFormat";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── MarketPulseJumbotron — PROTOTIPO ────────────────────────────────────── *
  *
@@ -172,8 +173,8 @@ function nomeBreve(a: LiveAsset): string {
 
 function tono(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "text-muted-foreground";
 }
 

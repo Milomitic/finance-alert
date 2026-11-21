@@ -7,6 +7,7 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { type EquityFilters, useEquityCurve } from "@/hooks/useEquityCurve";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── EquityCurvePanel ────────────────────────────────────────────────────── *
  *
@@ -37,8 +38,8 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "up
       <div
         className={cn(
           "text-lg font-semibold tabular-nums",
-          tone === "up" && "text-emerald-800 dark:text-emerald-400",
-          tone === "down" && "text-rose-600 dark:text-rose-400",
+          tone === "up" && TESTO_SU,
+          tone === "down" && TESTO_GIU,
           tone === "muted" && "text-muted-foreground",
         )}
       >

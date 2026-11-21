@@ -9,6 +9,7 @@ import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { formatLivello, formatVariazione } from "@/lib/marketNumber";
 import { cn } from "@/lib/utils";
 import { advanceScroll } from "@/lib/tickerScroll";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── MarketTickerTape ──────────────────────────────────────────────────── *
  *
@@ -126,9 +127,9 @@ function TickerItem({ asset }: { asset: LiveAsset }) {
     changePct == null
       ? "text-muted-foreground"
       : changePct > 0
-      ? "text-emerald-800 dark:text-emerald-400"
+      ? TESTO_SU
       : changePct < 0
-      ? "text-rose-600 dark:text-rose-400"
+      ? TESTO_GIU
       : "text-muted-foreground";
   const ArrowIcon = changePct == null
     ? null

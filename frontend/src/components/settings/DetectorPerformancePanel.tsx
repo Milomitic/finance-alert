@@ -15,6 +15,7 @@ import { getAlertKindMeta } from "@/lib/alertMeta";
 import { cn } from "@/lib/utils";
 import { HintLabel } from "@/components/ui/info-hint";
 import { cellTone } from "@/lib/detectorPerformance";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── DetectorPerformancePanel — esplora esiti per detector ─────────────── *
  *
@@ -466,7 +467,7 @@ function ret(v: number | null): string {
 
 function retTone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-rose-700 dark:text-rose-400";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "";
 }

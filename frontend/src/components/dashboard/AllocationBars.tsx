@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /**
  * Shared institutional-allocation infographic — compact horizontal
@@ -255,9 +256,9 @@ export function AllocationBars({
                   className={cn(
                     "truncate text-[0.6765rem] uppercase tracking-wider tabular-nums",
                     it.exited
-                      ? "text-rose-700 dark:text-rose-300"
+                      ? TESTO_GIU
                       : (movement.value ?? 0) > 0
-                        ? "text-emerald-800 dark:text-emerald-300"
+                        ? TESTO_SU
                         : (movement.value ?? 0) < 0
                           ? "text-amber-700 dark:text-amber-300"
                           : "text-muted-foreground",

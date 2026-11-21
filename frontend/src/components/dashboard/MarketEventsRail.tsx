@@ -7,6 +7,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── MarketEventsRail — the deliberately thin one ──────────────────────── *
  *
@@ -80,8 +81,8 @@ function RailRow({
         <span
           className={cn(
             "ml-auto shrink-0 text-[0.7647rem] font-semibold tabular-nums",
-            tone === "pos" && "text-emerald-800 dark:text-emerald-400",
-            tone === "neg" && "text-rose-600 dark:text-rose-400",
+            tone === "pos" && TESTO_SU,
+            tone === "neg" && TESTO_GIU,
             tone === "warn" && "text-amber-700 dark:text-amber-400",
             tone === "mute" && "text-muted-foreground",
           )}

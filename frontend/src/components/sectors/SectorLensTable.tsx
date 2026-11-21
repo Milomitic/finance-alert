@@ -8,6 +8,7 @@ import type { SectorSummary } from "@/hooks/useSectorDetail";
 import { GAP_TEXT } from "@/lib/lensGap";
 import { GAP_NOTABLE, type SortKey, lensGap, sortSectors } from "@/lib/sectorLens";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── SectorLensTable — every sector on one screen, comparable ───────────── *
  *
@@ -90,7 +91,7 @@ function Sparkline({ points }: { points: { date: string; avg: number }[] }) {
         points={d}
         fill="none"
         strokeWidth={1.5}
-        className={up ? "stroke-emerald-500" : "stroke-red-500"}
+        className={up ? "stroke-emerald-500" : "stroke-rose-500"}
       />
     </svg>
   );
@@ -98,8 +99,8 @@ function Sparkline({ points }: { points: { date: string; avg: number }[] }) {
 
 function toneClass(v: number | null): string {
   if (v === null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "text-muted-foreground";
 }
 

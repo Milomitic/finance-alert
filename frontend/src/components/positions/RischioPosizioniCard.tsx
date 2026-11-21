@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Il rischio delle posizioni aperte (FA-143, FA-144, FA-145) ──────────
  *
@@ -57,9 +58,9 @@ function PrimoPassaggio({ g }: { g: EtoroPrimoPassaggio | null }) {
       </div>
       <p className="text-xs text-muted-foreground">
         Su {g.finestre} finestre da {g.orizzonte} sedute dal {anno(g.dal)}:{" "}
-        <span className="text-rose-700 dark:text-rose-400">stop prima {g.stop}</span>
+        <span className={TESTO_GIU}>stop prima {g.stop}</span>
         {" · "}
-        <span className="text-emerald-800 dark:text-emerald-400">target prima {g.target}</span>
+        <span className={TESTO_SU}>target prima {g.target}</span>
         {" · "}nessuno {g.nessuno}. Quota stop {pct(q(g.stop), 0)} (intervallo {g.stop_pct_ci[0].toFixed(0)}–
         {g.stop_pct_ci[1].toFixed(0)}%).
       </p>
@@ -81,7 +82,7 @@ function Posizione({ p }: { p: EtoroRischioPosizione }) {
         <span>
           <span className="text-muted-foreground">Allo stop </span>
           <span className={cn("font-semibold tabular-nums",
-            p.distanza_stop_pct != null && p.distanza_stop_pct <= 0 && "text-rose-700 dark:text-rose-400")}>
+            p.distanza_stop_pct != null && p.distanza_stop_pct <= 0 && TESTO_GIU)}>
             {pct(p.distanza_stop_pct)}
           </span>
           {p.distanza_stop_atr != null && (
@@ -193,7 +194,7 @@ export function RischioPosizioniCard({
                     <li key={`${s.indice}${s.shock_pct}`} className="flex justify-between gap-3">
                       <span className="min-w-0 truncate">{s.indice} {s.shock_pct.toFixed(0)}%</span>
                       <span className={cn("tabular-nums",
-                        s.pnl_usd < 0 ? "text-rose-700 dark:text-rose-400" : "text-emerald-800 dark:text-emerald-400")}>
+                        s.pnl_usd < 0 ? TESTO_GIU : TESTO_SU)}>
                         {formatMoneySigned(s.pnl_usd, "USD")}
                       </span>
                     </li>

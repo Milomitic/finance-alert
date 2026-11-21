@@ -6,6 +6,7 @@ import {
   ESITO_META, formatR, giornoBreve, sequenzaGambe, stopTroppoStretto,
 } from "@/lib/planOutcome";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Com'e' andato il piano, dentro la scheda di un segnale ──────────────
  *
@@ -89,9 +90,9 @@ export function PlanOutcomeBlock({ plan }: { plan: PlanBrief | null | undefined 
           className={cn(
             "text-lg font-bold tabular-nums",
             plan.r_multiple > 0
-              ? "text-emerald-800 dark:text-emerald-300"
+              ? TESTO_SU
               : plan.r_multiple < 0
-                ? "text-rose-700 dark:text-rose-300"
+                ? TESTO_GIU
                 : "text-muted-foreground",
           )}
         >

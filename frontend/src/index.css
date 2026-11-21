@@ -29,7 +29,9 @@
     --muted-foreground: 215.4 16.3% 44%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    /* Era 0 84.2% 60.2% (~#ef4444): 3,8:1 su bianco, sotto la soglia AA, ed
+     * e' il colore di ogni messaggio d'errore (B-16). Ora ~5,8:1. */
+    --destructive: 0 72% 45%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;

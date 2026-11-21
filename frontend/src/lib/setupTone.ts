@@ -1,3 +1,5 @@
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /* ─── La direzione di un setup, quando ce n'è una ──────────────────────────
  *
  * FA-061. Un setup che aspetta un evento SENZA verso — una compressione di
@@ -29,8 +31,8 @@ export function setupTone(raw: string | null | undefined): SetupTone {
  *  scritte per intero e una classe costruita a runtime sparisce dal bundle di
  *  produzione senza che si veda in sviluppo (CLAUDE.md). */
 export const SETUP_TONE_TEXT: Record<SetupTone, string> = {
-  bull: "text-emerald-800 dark:text-emerald-400",
-  bear: "text-rose-600 dark:text-rose-400",
+  bull: TESTO_SU,
+  bear: TESTO_GIU,
   // ⚠️ Né rosa né smeraldo: in questa app quei due significano «verso», e
   // un'attesa senza verso non può indossarli. Ardesia è leggibile e non
   // dice niente sulla direzione — 8,9:1 su bianco, ben sopra la soglia AA.

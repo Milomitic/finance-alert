@@ -1,3 +1,6 @@
+import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /** Come si scrive e si colora la variazione di un indicatore macro.
  *
  *  ⚠️ L'unita' la decide il backend (`unita_variazione`): "%" su un indice o un
@@ -23,8 +26,8 @@ export function formatVariazioneMacro(v: number | null | undefined, unita: strin
 }
 
 export const TONO_VARIAZIONE = {
-  su: "text-emerald-800 dark:text-emerald-400",
-  giu: "text-rose-600 dark:text-rose-400",
+  su: TESTO_SU,
+  giu: TESTO_GIU,
   fermo: "text-muted-foreground",
 } as const;
 
@@ -42,7 +45,7 @@ export function tonoEsito(esito: string | null | undefined): string {
 
 /** Il riempimento di una barra del grafico per esito; grigio senza stima. */
 export function coloreEsito(esito: string | null | undefined): string {
-  return esito === "sopra" ? "rgb(16 185 129)" : esito === "sotto" ? "rgb(244 63 94)" : "rgb(148 163 184)";
+  return esito === "sopra" ? SU : esito === "sotto" ? GIU : NEUTRO;
 }
 
 /** Il dato contro la stima del SUO rilascio: verde sopra, rosso sotto. */

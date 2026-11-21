@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Genuine rating CHANGES only — the card used to be dominated by
  * "Maintain"/"Reiterate" rows (a firm reaffirming, no change) which are
@@ -76,9 +77,9 @@ function GradeChip({
 function priceTargetTone(action: string | null | undefined): { cls: string; arrow: string } {
   switch (action) {
     case "Raises":
-      return { cls: "text-emerald-800 dark:text-emerald-300", arrow: "↑" };
+      return { cls: TESTO_SU, arrow: "↑" };
     case "Lowers":
-      return { cls: "text-rose-700 dark:text-rose-300", arrow: "↓" };
+      return { cls: TESTO_GIU, arrow: "↓" };
     case "Initiates":
       return { cls: "text-blue-700 dark:text-blue-300", arrow: "✦" };
     case "Maintains":
@@ -128,7 +129,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
     <span
       className={cn(
         "shrink-0 w-[52px] text-right tabular-nums text-[0.7059rem] font-semibold",
-        up ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+        up ? TESTO_SU : TESTO_GIU,
       )}
       title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale (${formatMoney(cur, a.currency, { decimals: 2 })}) del ${Math.abs(pct).toFixed(1)}%`}
     >

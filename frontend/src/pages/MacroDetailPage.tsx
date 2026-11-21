@@ -16,6 +16,7 @@ import { MacroAnalisiCard } from "@/components/macro/MacroAnalisiCard";
 import { formatConsenso } from "@/lib/consensoMacro";
 import { coloreEsito, formatVariazioneMacro, tonoControStima, tonoEsito } from "@/lib/variazioneMacro";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── /macro/:seriesId — Investing-style indicator detail page ─────────── *
  *
@@ -545,9 +546,9 @@ function KpiCell({
   const sizeCls = size === "xl" ? "text-3xl" : "text-2xl";
   const toneCls =
     tone === "pos"
-      ? "text-emerald-800 dark:text-emerald-400"
+      ? TESTO_SU
       : tone === "neg"
-        ? "text-rose-600 dark:text-rose-400"
+        ? TESTO_GIU
         : "text-foreground";
   return (
     <div className="flex flex-col gap-1 min-w-0">

@@ -7,6 +7,7 @@ import {
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import { deveAprireLaFinestra } from "@/lib/chartInitialView";
+import { AVVISO } from "@/lib/coloriGrafico";
 
 interface Props {
   rsi14: IndicatorPoint[];
@@ -172,7 +173,7 @@ export function RsiPanel({
       price: 30, color: "#fb923c", lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
     });
     lineRef.current.createPriceLine({
-      price: 70, color: "#dc2626", lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
+      price: 70, color: AVVISO, lineWidth: 1, lineStyle: 2, axisLabelVisible: true,
     });
     lineRef.current.createPriceLine({
       price: 50, color: "rgba(100,116,139,0.4)", lineWidth: 1, lineStyle: 1, axisLabelVisible: false,

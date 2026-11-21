@@ -1,6 +1,7 @@
 import { formatMoney } from "@/lib/money";
 import type { Playbook } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 function Cell({
   label, value, hint, tone,
@@ -12,9 +13,9 @@ function Cell({
 }) {
   const vcls =
     tone === "rose"
-      ? "text-rose-600 dark:text-rose-400"
+      ? TESTO_GIU
       : tone === "emerald"
-        ? "text-emerald-800 dark:text-emerald-400"
+        ? TESTO_SU
         : "text-foreground";
   return (
     <div className="rounded-md border border-border/60 px-2.5 py-1.5">
@@ -42,7 +43,7 @@ export function PlaybookView({
 }) {
   const p = playbook;
   const isLong = p.side === "long";
-  const accent = isLong ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  const accent = isLong ? TESTO_SU : TESTO_GIU;
   const chipCls = isLong
     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
     : "bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300";

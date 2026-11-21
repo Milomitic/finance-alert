@@ -2,6 +2,7 @@ import type { Position } from "@/api/types";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { ariaLabel, geometry } from "@/lib/positionGeometry";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* La geometria di una posizione aperta, come barra.
  *
@@ -140,7 +141,7 @@ function PriceRow({ p }: { p: Position }) {
   return (
     <div className="mt-1 flex items-baseline justify-between gap-2 text-[0.6765rem] tabular-nums leading-none">
       <span
-        className="text-rose-600 dark:text-rose-400"
+        className={TESTO_GIU}
         title={`Stop ${formatMoney(p.stop_price, p.currency)}`}
       >
         <span className="opacity-60">S</span> {formatMoney(p.stop_price, p.currency)}
@@ -152,7 +153,7 @@ function PriceRow({ p }: { p: Position }) {
         <span className="opacity-60">E</span> {formatMoney(p.entry_price, p.currency)}
       </span>
       <span
-        className="text-emerald-800 dark:text-emerald-400"
+        className={TESTO_SU}
         title={`Target ${formatMoney(p.target_price, p.currency)}`}
       >
         <span className="opacity-60">T</span> {formatMoney(p.target_price, p.currency)}

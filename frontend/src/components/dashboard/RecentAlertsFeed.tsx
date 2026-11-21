@@ -17,6 +17,7 @@ import { barraDiversaDalSegnale, giornoDelSegnale, isAlertDelayed } from "@/lib/
 import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita } from "@/lib/alertMeta";
 import { pianoDelSegnale, primoTarget } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   alerts: Alert[];
@@ -78,10 +79,10 @@ export function RecentAlertsFeed({ alerts }: Props) {
               forza == null
                 ? ""
                 : forza >= 70
-                  ? "text-emerald-800 dark:text-emerald-400"
+                  ? TESTO_SU
                   : forza >= 50
                     ? "text-amber-700 dark:text-amber-400"
-                    : "text-rose-600 dark:text-rose-400";
+                    : TESTO_GIU;
             const prob = snapshotProbabilita(snap);
             const piano = pianoDelSegnale(a);
             const target = piano ? primoTarget(piano) : null;
@@ -162,8 +163,8 @@ export function RecentAlertsFeed({ alerts }: Props) {
                         className={cn(
                           "whitespace-nowrap text-[0.7647rem] font-semibold tabular-nums",
                           target.variazionePct >= 0
-                            ? "text-emerald-800 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400",
+                            ? TESTO_SU
+                            : TESTO_GIU,
                         )}
                         title={`Il 1° target dista ${variazione(target.variazionePct)} dal prezzo d'ingresso`}
                       >

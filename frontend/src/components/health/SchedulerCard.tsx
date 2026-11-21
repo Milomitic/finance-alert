@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Clock, CheckCircle2, XCircle, AlertTriangle, Circle, CalendarClock } from "lucide-react";
 import type { SchedulerJobStat } from "@/api/platformHealth";
+import { TESTO_GIU } from "@/lib/toni";
 
 type Props = { jobs: SchedulerJobStat[] };
 
@@ -199,7 +200,7 @@ export default function SchedulerCard({ jobs }: Props) {
               </div>
               <div className="text-right text-[0.7059rem] text-muted-foreground tabular-nums shrink-0">
                 <div className="text-emerald-800 dark:text-emerald-400 font-medium">{j.runs}</div>
-                {j.errors > 0 && <div className="text-rose-700 dark:text-rose-400">{j.errors} err</div>}
+                {j.errors > 0 && <div className={TESTO_GIU}>{j.errors} err</div>}
               </div>
             </div>
           );

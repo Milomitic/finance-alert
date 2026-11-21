@@ -14,6 +14,8 @@ import { eUnaVariazione, formatConsenso } from "@/lib/consensoMacro";
 import { cn } from "@/lib/utils";
 
 import { ImportanceDots } from "../ImportanceDots";
+import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Macro row (kept as card — different shape than tabular earnings) ──── */
 
@@ -310,8 +312,8 @@ function SlotConsenso({ label, hint, testo, tone = "neutral", big, sotto }: {
         className={cn(
           "font-bold tabular-nums leading-tight",
           big ? "text-lg" : "text-sm",
-          tone === "pos" && "text-emerald-800 dark:text-emerald-400",
-          tone === "neg" && "text-rose-600 dark:text-rose-400",
+          tone === "pos" && TESTO_SU,
+          tone === "neg" && TESTO_GIU,
           tone === "neutral" && (testo === "—" ? "text-muted-foreground font-normal italic" : "text-foreground"),
         )}
       >
@@ -348,9 +350,9 @@ function KpiSlot({
 }) {
   const valueTone =
     tone === "pos"
-      ? "text-emerald-800 dark:text-emerald-400"
+      ? TESTO_SU
       : tone === "neg"
-        ? "text-rose-600 dark:text-rose-400"
+        ? TESTO_GIU
         : "text-foreground";
 
   // Variation vs the comparison reading. Computed as relative change
@@ -398,8 +400,8 @@ function KpiSlot({
         <span
           className={cn(
             "text-sm font-bold tabular-nums",
-            deltaTone === "pos" && "text-emerald-800 dark:text-emerald-400",
-            deltaTone === "neg" && "text-rose-600 dark:text-rose-400",
+            deltaTone === "pos" && TESTO_SU,
+            deltaTone === "neg" && TESTO_GIU,
             deltaTone === "neutral" && "text-muted-foreground",
           )}
         >
@@ -460,7 +462,7 @@ function MacroMiniBars({
             y={y}
             width={w}
             height={Math.max(h, 0.5)}
-            fill={{ pos: "#10b981", neg: "#f43f5e", neutral: "#94a3b8" }[
+            fill={{ pos: SU, neg: GIU, neutral: NEUTRO }[
               toneContro(perPeriodo.get(p.date)?.attuale, perPeriodo.get(p.date)?.previsto)
             ]}
             opacity={i === pts.length - 1 ? 1 : 0.7}
@@ -482,8 +484,8 @@ function toneContro(v: number | null | undefined, stima: number | null | undefin
 }
 
 const TONO_TESTO = {
-  pos: "text-emerald-800 dark:text-emerald-400",
-  neg: "text-rose-600 dark:text-rose-400",
+  pos: TESTO_SU,
+  neg: TESTO_GIU,
   neutral: "",
 } as const;
 

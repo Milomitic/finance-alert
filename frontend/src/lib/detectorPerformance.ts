@@ -1,3 +1,5 @@
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+
 /* Tono della cella del cubo prestazioni, estratto dal pannello */
 
 /* Stessa scala della tabella "Efficacia segnali": ≥55% verde, <45% rosso. */
@@ -18,7 +20,7 @@
 export function cellTone(c: {
   skill_verdict?: string | null;
 }): string {
-  if (c.skill_verdict === "above") return "text-emerald-800 dark:text-emerald-400";
-  if (c.skill_verdict === "below") return "text-rose-700 dark:text-rose-400";
+  if (c.skill_verdict === "above") return TESTO_SU;
+  if (c.skill_verdict === "below") return TESTO_GIU;
   return "";
 }

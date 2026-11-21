@@ -29,6 +29,7 @@ import {
 } from "@/lib/rigaPunteggio";
 import { CONFIDENZA_BASSA } from "@/lib/confidenza";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Component label map ───────────────────────────────────────────────── */
 /* Pretty names + 1-line descriptions for the 43 components emitted by the
@@ -331,8 +332,8 @@ function ScoreSparkline({ ticker }: { ticker: string }) {
         <span
           className={
             delta >= 0
-              ? "text-emerald-800 dark:text-emerald-400"
-              : "text-rose-600 dark:text-rose-400"
+              ? TESTO_SU
+              : TESTO_GIU
           }
         >
           {delta >= 0 ? "+" : ""}

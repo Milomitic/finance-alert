@@ -15,6 +15,7 @@ import {
 import { detectorLabel } from "@/lib/setupGrouping";
 import { conversionStep } from "@/lib/setupTimeline";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── What happened to the setups that closed ───────────────────────────── *
  *
@@ -127,8 +128,8 @@ function OutcomeRow({
               {passo.evento} ·{" "}
               <span
                 className={cn(
-                  passo.tono === "ok" && "text-emerald-800 dark:text-emerald-400",
-                  passo.tono === "bad" && "text-rose-700 dark:text-rose-400",
+                  passo.tono === "ok" && TESTO_SU,
+                  passo.tono === "bad" && TESTO_GIU,
                 )}
               >
                 {passo.esito}

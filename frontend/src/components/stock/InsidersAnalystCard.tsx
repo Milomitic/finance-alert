@@ -11,6 +11,7 @@ import { useCardRefresh } from "@/hooks/useCardRefresh";
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   ticker: string;
@@ -67,7 +68,7 @@ function txnTone(text: string): string {
     !isNonOpenMarket &&
     (lc.includes("purchase") || lc.includes("buy") || lc.includes("acquisition (open market)"))
   ) {
-    return "text-emerald-800 dark:text-emerald-300";
+    return TESTO_SU;
   }
   // Bearish: open-market divestiture. Same row can be labelled
   // "Sale", "Sale (Multiple)", or "Disposition (Open Market)" /
@@ -78,7 +79,7 @@ function txnTone(text: string): string {
     !isNonOpenMarket &&
     (lc.includes("sale") || lc.includes("sell") || lc.includes("disposition"))
   ) {
-    return "text-rose-700 dark:text-rose-300";
+    return TESTO_GIU;
   }
   // Fallback for anything that somehow survives the filter — should
   // be rare. Stay muted so it never looks directional by accident.

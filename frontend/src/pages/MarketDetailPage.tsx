@@ -33,6 +33,7 @@ import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Per-symbol icon overrides ──────────────────────────────────────────
  *
@@ -152,9 +153,9 @@ export default function MarketDetailPage() {
     changePct == null
       ? { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" }
       : changePct > 0
-        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: "text-emerald-800 dark:text-emerald-300", arrow: "▲" }
+        ? { bg: "bg-emerald-50/50 dark:bg-emerald-950/15", stripe: "bg-emerald-500", text: TESTO_SU, arrow: "▲" }
         : changePct < 0
-          ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: "text-rose-700 dark:text-rose-300", arrow: "▼" }
+          ? { bg: "bg-rose-50/50 dark:bg-rose-950/15", stripe: "bg-rose-500", text: TESTO_GIU, arrow: "▼" }
           : { bg: "bg-card", stripe: "bg-slate-300 dark:bg-slate-600", text: "text-muted-foreground", arrow: "" };
   const headerCloses = d.bars
     .map((b) => b.close)
@@ -422,7 +423,7 @@ export default function MarketDetailPage() {
                   <dd className={cn(
                     "font-semibold",
                     d.quote.market_state === "OPEN"
-                      ? "text-emerald-800 dark:text-emerald-400"
+                      ? TESTO_SU
                       : "text-muted-foreground",
                   )}>
                     {d.quote.market_state}

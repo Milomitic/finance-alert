@@ -14,6 +14,7 @@ import { formatEps, formatMarketCap } from "@/lib/calendarMeta";
 import { cn } from "@/lib/utils";
 
 import type { SortKey, SortState } from "./sort";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Earnings table ────────────────────────────────────────────────────── */
 /* CSS-grid implementation rather than <table> so we get sticky header,
@@ -330,8 +331,8 @@ function NumCell({
     <div
       className={cn(
         "text-right text-[0.8235rem] font-semibold tabular-nums",
-        tone === "pos" && "text-emerald-800 dark:text-emerald-400",
-        tone === "neg" && "text-rose-700 dark:text-rose-400",
+        tone === "pos" && TESTO_SU,
+        tone === "neg" && TESTO_GIU,
       )}
     >
       {value}

@@ -21,6 +21,7 @@ import { getSectorRing, getSectorTone } from "@/lib/sectorMeta";
 import { cn } from "@/lib/utils";
 
 import { ImportanceDots } from "./ImportanceDots";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── EventChip — discriminated dispatcher ──────────────────────────────── */
 /* The chip is the page's most-rendered element (potentially 100+ on a
@@ -167,8 +168,8 @@ function EarningsChip({
                 className={cn(
                   "text-right font-semibold",
                   beat
-                    ? "text-emerald-800 dark:text-emerald-300"
-                    : "text-rose-700 dark:text-rose-300",
+                    ? TESTO_SU
+                    : TESTO_GIU,
                 )}
               >
                 {formatEps(event.eps_reported)}
@@ -178,8 +179,8 @@ function EarningsChip({
                 className={cn(
                   "text-right font-semibold",
                   beat
-                    ? "text-emerald-800 dark:text-emerald-300"
-                    : "text-rose-700 dark:text-rose-300",
+                    ? TESTO_SU
+                    : TESTO_GIU,
                 )}
               >
                 {(event.surprise_pct ?? 0) >= 0 ? "+" : ""}

@@ -12,6 +12,7 @@ import { getStockFlagCode } from "@/lib/stockMeta";
 import { scoreColor } from "@/lib/scoreMeta";
 import { formatRendimento, tonoRendimento } from "@/lib/sectorPerformance";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Score→text-color for the DETAIL page's tables — a bolder palette
  * (green/red, semibold on the top tier) kept LOCAL on purpose: the
@@ -103,8 +104,8 @@ export function PicksCard({
 }) {
   const accentTone =
     accent === "green"
-      ? "text-emerald-800 dark:text-emerald-300"
-      : "text-rose-700 dark:text-rose-300";
+      ? TESTO_SU
+      : TESTO_GIU;
   const Icon = accent === "green" ? TrendingUp : TrendingDown;
   return (
     <Card>

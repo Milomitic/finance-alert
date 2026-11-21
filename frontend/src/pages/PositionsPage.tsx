@@ -31,6 +31,7 @@ import { EtoroPortafoglioCard } from "@/components/positions/EtoroPortafoglioCar
 import { DiarioEtoroCard } from "@/components/positions/DiarioEtoroCard";
 import { useEtoroPortafoglio, useEtoroRischio } from "@/hooks/useEtoro";
 import { RischioPosizioniCard } from "@/components/positions/RischioPosizioniCard";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Il titolo resta fermo a sinistra su telefono (E-22, D-35): a 375px le
  *  colonne scorrono di lato e il P&L, la risposta della pagina, si leggeva
@@ -88,8 +89,8 @@ function PnlCell({ pct, abs, currency }: { pct: number | null; abs: number | nul
       className={cn(
         "font-bold tabular-nums",
         positive
-          ? "text-emerald-800 dark:text-emerald-400"
-          : "text-rose-600 dark:text-rose-400",
+          ? TESTO_SU
+          : TESTO_GIU,
       )}
     >
       {fmtPct(pct)}

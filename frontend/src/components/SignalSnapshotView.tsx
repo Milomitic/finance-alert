@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { glossForStep } from "@/lib/signalInterpretation";
 import { useSignalCalibration } from "@/hooks/useSignalCalibration";
 import { useSignalDrift } from "@/hooks/useSignalDrift";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* Source badge configuration for non-technical hybrid chain steps. */
 const SOURCE_BADGE: Record<
@@ -202,8 +203,8 @@ export function SignalSnapshotView({
               className={cn(
                 "flex items-center gap-1.5 pl-[5.5rem] -mt-1 text-[0.7059rem] tabular-nums",
                 driftFlagged.delta < 0
-                  ? "text-rose-600 dark:text-rose-400"
-                  : "text-emerald-800 dark:text-emerald-400",
+                  ? TESTO_GIU
+                  : TESTO_SU,
               )}
               title={
                 `Hit-rate recente sui segnali maturati vs base storico calibrato. ` +

@@ -15,6 +15,7 @@ import type { RegisterChart } from "@/hooks/useChartSync";
 import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 import { barToLegend } from "@/lib/ohlcLegend";
+import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
 
 interface Props {
   bars: MarketDetailBar[];
@@ -121,12 +122,12 @@ export function MarketChart({
     });
     chartRef.current = chart;
     candleRef.current = chart.addCandlestickSeries({
-      upColor: "#17b551",
-      downColor: "#dc2626",
-      borderUpColor: "#17b551",
-      borderDownColor: "#dc2626",
-      wickUpColor: "#17b551",
-      wickDownColor: "#dc2626",
+      upColor: SU,
+      downColor: GIU,
+      borderUpColor: SU,
+      borderDownColor: GIU,
+      wickUpColor: SU,
+      wickDownColor: GIU,
     });
     ema20Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
     ema50Ref.current = chart.addLineSeries({ priceLineVisible: false, lastValueVisible: true });
@@ -238,7 +239,7 @@ export function MarketChart({
           .map((b) => ({
             time: dateToTime(b.date),
             value: b.volume as number,
-            color: b.close >= b.open ? "rgba(22, 163, 74, 0.35)" : "rgba(220, 38, 38, 0.35)",
+            color: conAlfa(b.close >= b.open ? SU : GIU, 0.35),
           })),
       );
     }

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useScoreIcReport } from "@/hooks/useScoreIcReport";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── ScoreIcPanel — the Qualità pillar-IC transparency study ───────────── *
  *
@@ -41,8 +42,8 @@ function icClass(cell: ScoreIcPillar | undefined): string {
   if (!cell) return "text-muted-foreground";
   if (Math.abs(cell.t_stat) < 2) return "text-muted-foreground";
   return cell.ic_mean > 0
-    ? "text-emerald-800 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+    ? TESTO_SU
+    : TESTO_GIU;
 }
 
 export function ScoreIcPanel() {

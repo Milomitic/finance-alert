@@ -11,6 +11,7 @@ import { getAlertKindMeta } from "@/lib/alertMeta";
 import { fmtPct } from "@/lib/etoroPortafoglio";
 import { formatMoneyGrouped, formatMoneyGroupedSigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Il diario delle operazioni eToro (FA-128) ───────────────────────────
  *
@@ -28,7 +29,7 @@ const RIGHE = 15;
 
 function tono(v: number | null | undefined): string {
   if (v == null || v === 0) return "text-muted-foreground";
-  return v > 0 ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
+  return v > 0 ? TESTO_SU : TESTO_GIU;
 }
 
 function giorno(iso: string): string {

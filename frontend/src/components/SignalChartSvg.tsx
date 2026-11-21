@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { SignalChainStep, SignalSnapshot } from "@/api/types";
+import { GIU, SERIE, SU } from "@/lib/coloriGrafico";
 
 interface Bar {
   date: string;
@@ -26,13 +27,13 @@ const PAD_B = 28;
 const LEVEL_STYLE: Record<string, { stroke: string; dash?: string }> = {
   neckline: { stroke: "#6366f1" },
   breakout: { stroke: "#0ea5e9" },
-  support: { stroke: "#17b551" },
-  resistance: { stroke: "#dc2626" },
+  support: { stroke: SU },
+  resistance: { stroke: GIU },
   stop: { stroke: "#d97706", dash: "4 3" },
 };
 
-const UP = "#17b551";
-const DOWN = "#dc2626";
+const UP = SU;
+const DOWN = GIU;
 const GRID = "#94a3b8";
 
 function dm(iso: string): string {
@@ -59,9 +60,9 @@ function emaArr(vals: number[], period: number): number[] {
 }
 
 const EMA_DEFS = [
-  { p: 20, color: "#c084fc" },
-  { p: 50, color: "#3b82f6" },
-  { p: 200, color: "#f59e0b" },
+  { p: 20, color: SERIE.ema20 },
+  { p: 50, color: SERIE.ema50 },
+  { p: 200, color: SERIE.ema200 },
 ];
 
 function bbands(vals: number[], period = 20, k = 2): { up: number[]; lo: number[] } {

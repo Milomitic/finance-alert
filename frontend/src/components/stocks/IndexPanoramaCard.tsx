@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   data: IndexBreadth;
@@ -75,9 +76,9 @@ export function IndexPanoramaCard({ data, filters, onTileFilter }: Props) {
 
   const TONE_FG: Record<string, string> = {
     default: "",
-    good: "text-emerald-800 dark:text-emerald-400",
+    good: TESTO_SU,
     warn: "text-amber-700 dark:text-amber-400",
-    bad: "text-rose-600 dark:text-rose-400",
+    bad: TESTO_GIU,
   };
 
   const tiles: KpiTile[] = [

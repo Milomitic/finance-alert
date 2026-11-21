@@ -7,6 +7,7 @@ import { currencySymbol } from "@/lib/money";
 
 import { cn } from "@/lib/utils";
 import { fmtPrice, fmtVolume } from "@/lib/ohlcLegend";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Minimal bar shape the legend needs. `volume` is null for assets whose
  *  source has no volume (FX, some indices) — the Vol cell is hidden then. */
@@ -35,8 +36,8 @@ export interface LegendDatum {
   isUp: boolean;
 }
 
-const upTone = "text-emerald-800 dark:text-emerald-300";
-const downTone = "text-rose-700 dark:text-rose-300";
+const upTone = TESTO_SU;
+const downTone = TESTO_GIU;
 
 /** Fixed top-left OHLCV legend. Render inside a `relative` chart container.
  *  Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's on the time

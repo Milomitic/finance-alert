@@ -29,6 +29,7 @@ import { GAP_TEXT, formatGap, lensGapOf } from "@/lib/lensGap";
 import { HintAnchor, HintLabel, HintUnderline } from "@/components/ui/info-hint";
 import { cn } from "@/lib/utils";
 import { SCREENER_COLS } from "@/lib/screenerColumns";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /** Toggleable columns for the desktop screener table.
  *  The identity column (Ticker + name) is always-on.
@@ -116,16 +117,16 @@ function vsEma200(m: StockSearchItem["metrics"]): number | null {
  *  drawdown = rosso. Plain string literals (Tailwind purger contract). */
 function pctFromHighTone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v >= -5) return "text-emerald-800 dark:text-emerald-400";
-  if (v <= -20) return "text-rose-600 dark:text-rose-400";
+  if (v >= -5) return TESTO_SU;
+  if (v <= -20) return TESTO_GIU;
   return "";
 }
 
 /** Tone per "vs EMA200": sopra = verde, sotto = rosso. Plain literals. */
 function vsEma200Tone(v: number | null): string {
   if (v == null) return "text-muted-foreground";
-  if (v > 0) return "text-emerald-800 dark:text-emerald-400";
-  if (v < 0) return "text-rose-600 dark:text-rose-400";
+  if (v > 0) return TESTO_SU;
+  if (v < 0) return TESTO_GIU;
   return "";
 }
 
@@ -193,7 +194,7 @@ function ScoreTrendArrow({ delta }: { delta: number | null | undefined }) {
     <span
       className={cn(
         "text-[0.6765rem] font-semibold align-middle ml-0.5",
-        up ? "text-emerald-800 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+        up ? TESTO_SU : TESTO_GIU,
       )}
       title={`Δ score vs ~7 giorni fa: ${up ? "+" : ""}${delta.toFixed(1)}`}
     >
@@ -445,8 +446,8 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-emerald-800 dark:text-emerald-400"
-                  : change < 0 ? "text-rose-600 dark:text-rose-400"
+                  : change > 0 ? TESTO_SU
+                  : change < 0 ? TESTO_GIU
                   : "";
                 const compositeCls = item.score.composite != null
                   ? scoreColor(item.score.composite)
@@ -699,8 +700,8 @@ export function StockBrowserTable({
                 const flag = getStockFlagCode(s.country, s.ticker);
                 const changeColor = change == null
                   ? "text-muted-foreground"
-                  : change > 0 ? "text-emerald-800 dark:text-emerald-400"
-                  : change < 0 ? "text-rose-600 dark:text-rose-400"
+                  : change > 0 ? TESTO_SU
+                  : change < 0 ? TESTO_GIU
                   : "";
                 const compositeCls = item.score.composite != null
                   ? scoreColor(item.score.composite)
@@ -816,7 +817,7 @@ export function StockBrowserTable({
                       <td className={cn(
                         "px-3 py-1.5 text-right tabular-nums",
                         rsi == null ? "text-muted-foreground"
-                          : rsi >= 70 ? "text-rose-600 dark:text-rose-400"
+                          : rsi >= 70 ? TESTO_GIU
                           : rsi <= 30 ? "text-amber-700 dark:text-amber-400"
                           : "",
                       )}>

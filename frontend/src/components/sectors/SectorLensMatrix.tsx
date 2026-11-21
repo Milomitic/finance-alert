@@ -209,7 +209,7 @@ export function SectorLensMatrix({ sectors, activeSector, onHover }: Props) {
                     className={cn(
                       "transition-[stroke-width,fill-opacity]",
                       tone === "pos" && "fill-emerald-500 stroke-emerald-500",
-                      tone === "neg" && "fill-red-500 stroke-red-500",
+                      tone === "neg" && "fill-rose-500 stroke-rose-500",
                       tone === "mid" && "fill-amber-500 stroke-amber-500",
                       tone === "muted" && "fill-muted-foreground stroke-muted-foreground",
                     )}

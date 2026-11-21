@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useStockFundamentals } from "@/hooks/useStockFundamentals";
 import { formatCompactMoney, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 interface Props {
   ticker: string;
@@ -81,8 +82,8 @@ interface Row {
  *
  * Restano stringhe letterali: il purger di Tailwind vede solo quelle, e una
  * classe composta sparirebbe in silenzio dal build di produzione. */
-const GOOD = "text-emerald-800 dark:text-emerald-400";
-const BAD = "text-rose-600 dark:text-rose-400";
+const GOOD = TESTO_SU;
+const BAD = TESTO_GIU;
 const WARN = "text-amber-700 dark:text-amber-400";
 
 function pctTone(opts: {

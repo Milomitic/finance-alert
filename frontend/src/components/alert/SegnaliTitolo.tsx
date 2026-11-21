@@ -2,11 +2,12 @@ import { Link } from "react-router-dom";
 
 import { direzione, type SegnaliTitolo as Conteggio } from "@/lib/segnaliPerTitolo";
 import { cn } from "@/lib/utils";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 const FRECCIA = { bull: "▲", bear: "▼", misti: "◆" } as const;
 const COLORE = {
-  bull: "text-emerald-800 dark:text-emerald-400",
-  bear: "text-rose-700 dark:text-rose-400",
+  bull: TESTO_SU,
+  bear: TESTO_GIU,
   misti: "text-muted-foreground",
 } as const;
 

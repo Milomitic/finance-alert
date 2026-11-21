@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import type { Alert } from "@/api/types";
+import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 
 /* ─── Shared alert-kind metadata ────────────────────────────────────────── */
 /* One source of truth for the per-kind label / icon / semantic tone used by
@@ -148,8 +149,8 @@ export const TONE_BORDER_LEFT: Record<AlertTone, string> = {
 };
 
 export const TONE_TEXT: Record<AlertTone, string> = {
-  bullish: "text-emerald-800 dark:text-emerald-400",
-  bearish: "text-rose-600 dark:text-rose-400",
+  bullish: TESTO_SU,
+  bearish: TESTO_GIU,
   warning: "text-amber-700 dark:text-amber-400",
   neutral: "text-slate-600 dark:text-slate-400",
 };
