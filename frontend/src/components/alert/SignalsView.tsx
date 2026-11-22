@@ -9,6 +9,8 @@ import { SignalStatsSection } from "@/components/alert/SignalStatsSection";
 import { AlertFilters } from "@/components/AlertFilters";
 import { AlertsInsightCard } from "@/components/AlertsInsightCard";
 import { AlertsTable } from "@/components/AlertsTable";
+import { ElencoSegnaliCompatto } from "@/components/alert/ElencoSegnaliCompatto";
+import { useIsPhone } from "@/hooks/useMediaQuery";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
@@ -126,6 +128,29 @@ export function SignalsView() {
   const arrivate = [list, conf, prestazioni].every((q) => q.data !== undefined || q.isError);
   if (!haCaricato && arrivate) setHaCaricato(true);
   const primoCaricamento = !haCaricato;
+  const isPhone = useIsPhone();
+  // ⚠️ La lista parte dai titoli in posizione e fra i preferiti
+  // (FA-136): vuota, deve dire che e' ristretta e come allargarla,
+  // altrimenti si legge come «oggi non e' scattato niente».
+  const vuotoSegnali = filters.solo_rilevanti ? (
+      <>
+        Nessun segnale sui tuoi titoli con questi filtri.{" "}
+        <Button
+          type="button"
+          variant="testo" size="testo"
+          onClick={() => {
+            setPage(0);
+            setFilters({ ...filters, solo_rilevanti: undefined });
+          }}
+        >
+          Mostra tutti i titoli
+        </Button>
+      </>
+  ) : undefined;
+  const cambiaRicerca = (v: string) => {
+    setPage(0);
+    setFilters({ ...filters, q: v || undefined });
+  };
   const bulk = useBulkAlerts();
   const patchAlert = usePatchAlert();
 
@@ -189,19 +214,20 @@ export function SignalsView() {
           dopo un filtro restano per sezione: partono da un clic. */}
       {primoCaricamento ? (
         <div key="scheletro" className="space-y-4" aria-busy="true">
-          {/* Stesso ordine e stesse altezze della pagina vera (D-01): le
-              confluenze chiuse sono una riga, l'efficacia sta in fondo. */}
+          {/* Stesso ordine e stesse altezze della pagina vera: l'efficacia in
+              cima come negli Esiti, poi le confluenze chiuse (una riga). */}
+          <CardSkeleton label="EFFICACIA DEI SEGNALI" rows={3} strongHeader className="h-[240px]" />
           <CardSkeleton label="CONFLUENZE ATTIVE" rows={0} strongHeader className="h-[58px]" />
           <CardSkeleton label="SEGNALI" rows={12} strongHeader className="h-[640px]" />
-          <CardSkeleton label="EFFICACIA DEI SEGNALI" rows={3} strongHeader className="h-[240px]" />
         </div>
       ) : (
       <div key="contenuto" className="space-y-4">
-      {/* ⚠️ L'efficacia sta IN FONDO, sotto la tabella (D-01, A-37). Stava in
-          cima e la tabella partiva a 1.335px su una finestra di 900 (misurato
-          in produzione il 2026-11-17): la domanda di chi apre la pagina e'
-          «cosa e' scattato», e l'efficacia — tutti gli esiti maturati, che
-          cambiano in settimane — risponde a un'altra. */}
+      {/* L'efficacia sta in CIMA, come le statistiche degli Esiti (richiesta
+          dell'utente del 2026-11-22). Era stata spostata in fondo (D-01, A-37)
+          perche' spingeva la tabella a 1.335px: la decisione e' dell'utente,
+          che vuole lo stesso ordine nelle due viste. */}
+      <SignalStatsSection />
+
       {/* Confluence digest — always visible above the table (replaced the old
           list/confluence view toggle). Cluster rows drill down into the table. */}
       <AlertsInsightCard
@@ -286,6 +312,14 @@ export function SignalsView() {
               isRetrying={list.isFetching}
               className="p-6"
             />
+          ) : isPhone ? (
+            <ElencoSegnaliCompatto
+              alerts={items}
+              onRowClick={setOpenDetail}
+              q={filters.q ?? ""}
+              onQueryChange={cambiaRicerca}
+              vuoto={vuotoSegnali}
+            />
           ) : (
             <AlertsTable
               alerts={items}
@@ -294,28 +328,8 @@ export function SignalsView() {
               onSelectAll={onSelectAll}
               onRowClick={setOpenDetail}
               q={filters.q ?? ""}
-              // ⚠️ La lista parte dai titoli in posizione e fra i preferiti
-              // (FA-136): vuota, deve dire che e' ristretta e come allargarla,
-              // altrimenti si legge come «oggi non e' scattato niente».
-              vuoto={filters.solo_rilevanti ? (
-                <>
-                  Nessun segnale sui tuoi titoli con questi filtri.{" "}
-                  <Button
-                    type="button"
-                    variant="testo" size="testo"
-                    onClick={() => {
-                      setPage(0);
-                      setFilters({ ...filters, solo_rilevanti: undefined });
-                    }}
-                  >
-                    Mostra tutti i titoli
-                  </Button>
-                </>
-              ) : undefined}
-              onQueryChange={(v) => {
-                setPage(0);
-                setFilters({ ...filters, q: v || undefined });
-              }}
+              vuoto={vuotoSegnali}
+              onQueryChange={cambiaRicerca}
               sortBy={sortBy}
               sortDir={sortDir}
               onSort={handleSort}
@@ -350,10 +364,6 @@ export function SignalsView() {
           </div>
         </div>
       )}
-
-      {/* Le statistiche di efficacia, spostate qui da Diagnostica (2026-09-16):
-          tutti gli esiti maturati, non la pagina ne' i filtri della tabella. */}
-      <SignalStatsSection />
 
       </div>
       )}
