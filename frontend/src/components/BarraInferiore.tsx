@@ -10,16 +10,24 @@ import { cn } from "@/lib/utils";
  *  e «Altro» che apre il menu completo. Prima ogni cambio di pagina costava
  *  due tocchi nell'angolo opposto al pollice.
  *
- *  Sta NEL flusso della colonna, non sovrapposta: `<main>` si accorcia della
- *  sua altezza invece di finirle sotto, e la pagina non salta quando compare.
- *  L'area sicura in fondo vale zero finche' il viewport non chiede
- *  `viewport-fit=cover`, e la barra e' gia' pronta se un giorno lo chiedera'. */
+ *  ⚠️ E' `fixed`, con uno spaziatore della stessa altezza NEL flusso
+ *  (2026-11-22). Stava solo nel flusso di una colonna alta 100dvh: appena
+ *  qualcosa allungava il documento, il documento scorreva e la barra usciva
+ *  dallo schermo senza tornare (segnalato su un Galaxy S26+). Fissa, nessuno
+ *  scorrimento la porta via; lo spaziatore accorcia `<main>` come prima, quindi
+ *  niente finisce sotto la barra e la pagina non salta.
+ *
+ *  Il viewport chiede `viewport-fit=cover`: su Android a tutto schermo la
+ *  pagina arriva sotto i tre bottoni di sistema, e `safe-area-inset-bottom` ne
+ *  porta l'altezza. Barra e spaziatore la aggiungono sotto le voci. */
 export function BarraInferiore({ onAltro, altroAperto }: { onAltro: () => void; altroAperto: boolean }) {
   const voce = "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[0.7059rem] font-medium";
   return (
+    <>
+    <div aria-hidden className="box-content h-14 shrink-0 pb-[env(safe-area-inset-bottom)] lg:hidden" />
     <nav
       aria-label="Navigazione principale"
-      className="shrink-0 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <div className="flex">
         {NAV_PRIMARIE.map(({ to, label, icon: Icon }) => (
@@ -51,5 +59,6 @@ export function BarraInferiore({ onAltro, altroAperto }: { onAltro: () => void; 
         </button>
       </div>
     </nav>
+    </>
   );
 }
