@@ -76,11 +76,13 @@ export function OperazioniFondiCard({ limit = 12, className }: { limit?: number;
           <SectionTitle
             icon={ArrowLeftRight}
             label="Operazioni dei fondi"
-            right={d?.trimestre ? (
+            /* Sempre presente, anche vuoto: arrivando coi dati alzava
+               l'intestazione di 5px e la pagina saltava (CLS nel gate). */
+            right={
               <span className="text-xs text-muted-foreground">
-                {trimestreBreve(d.trimestre)} · {d.fondi} fondi
+                {d?.trimestre ? `${trimestreBreve(d.trimestre)} · ${d.fondi} fondi` : " "}
               </span>
-            ) : undefined}
+            }
           />
         </div>
         <div className="flex min-h-0 flex-1 flex-col p-3">
