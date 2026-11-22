@@ -22,7 +22,7 @@ import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 /** Una sola forma per le etichette sotto il nome: borsa, indici, settore,
  *  sotto-settore e fondi si leggono come la stessa famiglia. */
 const ETICHETTA =
-  "inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2.5 py-1 text-sm font-medium transition-colors";
+  "inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 hover:bg-muted px-2 py-0.5 text-xs sm:px-2.5 sm:py-1 sm:text-sm font-medium transition-colors";
 
 interface Props {
   stock: Stock;
@@ -166,7 +166,10 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
           Allineati in alto lasciavano tutto il vuoto in fondo, sopra lo
           sparkline. */}
       <CardContent className="relative z-10 flex h-full flex-col justify-center gap-4 p-4 pl-7">
-        <div className="flex items-center gap-6 flex-wrap">
+        {/* Su telefono: identita', prezzo, poi i tag (richiesta del 2026-11-22:
+            il prezzo stava sotto tre righe di etichette). Da sm: identita' e tag
+            a sinistra, prezzo a destra centrato sulle due righe, come prima. */}
+        <div className="grid grid-cols-1 items-center gap-x-12 gap-y-3 sm:grid-cols-[minmax(0,auto)_auto] sm:justify-start">
           {/* Identity column: logo aligned + vertically centered with the
               ticker/name on one row; the exchange/sector tags sit BELOW. */}
           <div className="min-w-0">
@@ -190,12 +193,116 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Price block — moved next to the identity (left-aligned), both
+              vertically centered via the row's items-center. Extra left margin
+              gives a bit more breathing room between the name and the price. */}
+          <div className="text-left tabular-nums flex flex-col gap-1 items-start sm:col-start-2 sm:row-span-2 sm:row-start-1">
+            {displayPrice != null && (
+              <>
+                <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
+                  {isMarketOpen ? (
+                    <MarketStateBadge
+                      phase="open"
+                      size="md"
+                      title={
+                        liveAge != null
+                          ? `Mercato aperto · prezzo ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
+                          : "Prezzo live"
+                      }
+                    />
+                  ) : isPremarket ? (
+                    <MarketStateBadge
+                      phase="pre"
+                      size="md"
+                      title={
+                        liveAge != null
+                          ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · ${Math.round(liveAge)}s fa`
+                          : "Pre-market USA — la variazione mostrata è il movimento pre-apertura rispetto alla chiusura di ieri"
+                      }
+                    />
+                  ) : isStale ? (
+                    <MarketStateBadge
+                      phase="stale"
+                      size="md"
+                      title={
+                        liveAge != null && liveAge > 90
+                          ? `Quotazione non aggiornabile ora — ultimo prezzo salvato ${Math.round(liveAge / 60)} min fa`
+                          : "Quotazione non aggiornabile ora — mostro l'ultimo prezzo salvato, non è un valore live"
+                      }
+                    />
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 text-muted-foreground font-semibold"
+                      title={
+                        liveOk
+                          ? "Mercato chiuso — il prezzo mostrato è l'ultima chiusura"
+                          : "Live quote non disponibile — mostra l'ultima chiusura giornaliera"
+                      }
+                    >
+                      Ultima chiusura
+                    </span>
+                  )}
+                </div>
+                {/* La valuta e quella di QUOTAZIONE, non il dollaro: 312 titoli su
+                    1010 non sono in dollari e questo era il numero piu grande
+                    della pagina con il simbolo sbagliato sopra. */}
+                <FlashValue
+                  value={displayPrice}
+                  format={(v) => formatMoney(v, stock.currency)}
+                  className="text-3xl sm:text-5xl font-bold leading-none"
+                />
+              </>
+            )}
+            {change != null && (
+              <div className={cn("inline-flex items-baseline gap-1.5 text-lg sm:text-2xl font-bold mt-1", tone.text)}>
+                <span className="text-lg">{tone.arrow}</span>
+                {changeAbs != null && (
+                  <span className="text-base font-semibold opacity-80">
+                    {formatMoneySigned(changeAbs, stock.currency)}
+                  </span>
+                )}
+                <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
+              </div>
+            )}
+            {/* V3.3: quando il mercato è aperto (o in pre-market) e il
+                prezzo "live" differisce dalla chiusura precedente, mostra
+                la previous close come contesto. La variazione % è già
+                coperta sopra; questa caption fornisce il prezzo di
+                riferimento da cui si calcola il movimento. In pre-market
+                è la base del movimento pre-apertura; intraday è il prezzo
+                di partenza della giornata. Nascosto a mercato chiuso (in
+                quel caso il prezzo mostrato È già la chiusura). */}
+            {/* FA-158: col breaker di Yahoo aperto il prezzo viene da Finnhub,
+                e si dice. */}
+            {liveOk && live.data!.source === "finnhub" && (
+              <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
+                Prezzo da Finnhub (Yahoo non risponde)
+              </div>
+            )}
+            {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
+              <div
+                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
+                title={
+                  isPremarket
+                    ? "Chiusura di ieri — riferimento da cui si calcola il movimento pre-apertura"
+                    : "Chiusura della sessione di trading precedente — riferimento da cui calcolare la variazione intraday"
+                }
+              >
+                Prev close:{" "}
+                <span className="text-foreground/80 font-semibold tabular-nums">
+                  {formatMoney(live.data.prev_close, stock.currency)}
+                </span>
+              </div>
+            )}
+          </div>
             {/* Le etichette in tre righe, ciascuna una domanda (2026-10-12):
                 dove si quota e in quali indici sta; in che settore e
                 sotto-settore; quanti fondi lo detengono. Prima erano una riga
                 sola che andava a capo dove capitava, e un indice finiva
                 accanto al settore come se fossero la stessa cosa. */}
-            <div className="mt-3 flex flex-col items-start gap-1.5">
+            <div className="flex min-w-0 flex-col items-start gap-1.5 sm:col-start-1 sm:row-start-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 {/* Exchange: cliccabile, porta allo screener filtrato per questa
                     borsa. La bandiera vive dentro il tag (il listing e'
@@ -255,110 +362,6 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
                 </a>
               ) : null}
             </div>
-          </div>
-
-          {/* Price block — moved next to the identity (left-aligned), both
-              vertically centered via the row's items-center. Extra left margin
-              gives a bit more breathing room between the name and the price. */}
-          <div className="text-left tabular-nums shrink-0 flex flex-col gap-1 items-start sm:ml-12">
-            {displayPrice != null && (
-              <>
-                <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
-                  {isMarketOpen ? (
-                    <MarketStateBadge
-                      phase="open"
-                      size="md"
-                      title={
-                        liveAge != null
-                          ? `Mercato aperto · prezzo ${Math.round(liveAge)}s fa (cache 10s + polling 15s)`
-                          : "Prezzo live"
-                      }
-                    />
-                  ) : isPremarket ? (
-                    <MarketStateBadge
-                      phase="pre"
-                      size="md"
-                      title={
-                        liveAge != null
-                          ? `Pre-market USA · la variazione è il movimento pre-apertura vs chiusura di ieri · ${Math.round(liveAge)}s fa`
-                          : "Pre-market USA — la variazione mostrata è il movimento pre-apertura rispetto alla chiusura di ieri"
-                      }
-                    />
-                  ) : isStale ? (
-                    <MarketStateBadge
-                      phase="stale"
-                      size="md"
-                      title={
-                        liveAge != null && liveAge > 90
-                          ? `Quotazione non aggiornabile ora — ultimo prezzo salvato ${Math.round(liveAge / 60)} min fa`
-                          : "Quotazione non aggiornabile ora — mostro l'ultimo prezzo salvato, non è un valore live"
-                      }
-                    />
-                  ) : (
-                    <span
-                      className="inline-flex items-center gap-1 text-muted-foreground font-semibold"
-                      title={
-                        liveOk
-                          ? "Mercato chiuso — il prezzo mostrato è l'ultima chiusura"
-                          : "Live quote non disponibile — mostra l'ultima chiusura giornaliera"
-                      }
-                    >
-                      Ultima chiusura
-                    </span>
-                  )}
-                </div>
-                {/* La valuta e quella di QUOTAZIONE, non il dollaro: 312 titoli su
-                    1010 non sono in dollari e questo era il numero piu grande
-                    della pagina con il simbolo sbagliato sopra. */}
-                <FlashValue
-                  value={displayPrice}
-                  format={(v) => formatMoney(v, stock.currency)}
-                  className="text-4xl sm:text-5xl font-bold leading-none"
-                />
-              </>
-            )}
-            {change != null && (
-              <div className={cn("inline-flex items-baseline gap-1.5 text-xl sm:text-2xl font-bold mt-1", tone.text)}>
-                <span className="text-lg">{tone.arrow}</span>
-                {changeAbs != null && (
-                  <span className="text-base font-semibold opacity-80">
-                    {formatMoneySigned(changeAbs, stock.currency)}
-                  </span>
-                )}
-                <span>{change >= 0 ? "+" : ""}{change.toFixed(2)}%</span>
-              </div>
-            )}
-            {/* V3.3: quando il mercato è aperto (o in pre-market) e il
-                prezzo "live" differisce dalla chiusura precedente, mostra
-                la previous close come contesto. La variazione % è già
-                coperta sopra; questa caption fornisce il prezzo di
-                riferimento da cui si calcola il movimento. In pre-market
-                è la base del movimento pre-apertura; intraday è il prezzo
-                di partenza della giornata. Nascosto a mercato chiuso (in
-                quel caso il prezzo mostrato È già la chiusura). */}
-            {/* FA-158: col breaker di Yahoo aperto il prezzo viene da Finnhub,
-                e si dice. */}
-            {liveOk && live.data!.source === "finnhub" && (
-              <div className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground">
-                Prezzo da Finnhub (Yahoo non risponde)
-              </div>
-            )}
-            {(isMarketOpen || isPremarket) && live.data?.prev_close != null && (
-              <div
-                className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
-                title={
-                  isPremarket
-                    ? "Chiusura di ieri — riferimento da cui si calcola il movimento pre-apertura"
-                    : "Chiusura della sessione di trading precedente — riferimento da cui calcolare la variazione intraday"
-                }
-              >
-                Prev close:{" "}
-                <span className="text-foreground/80 font-semibold tabular-nums">
-                  {formatMoney(live.data.prev_close, stock.currency)}
-                </span>
-              </div>
-            )}
-          </div>
         </div>
 
         <EtfMembershipStrip ticker={stock.ticker} funds={stock.in_etfs} />

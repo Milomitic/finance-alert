@@ -1443,6 +1443,7 @@ export interface PariRigaOut {
   qualita?: number | null;
   tecnico?: number | null;
   pe?: number | null;
+  pe_forward?: number | null;
   crescita_ricavi?: number | null;
   rendimento_3m?: number | null;
 }

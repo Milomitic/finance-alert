@@ -19,12 +19,14 @@ import { cn } from "@/lib/utils";
  * - quanto si e' mosso alle trimestrali passate: la misura del rischio che la
  *   prossima data porta. Non una previsione, e lo dice. */
 
-const CELLA = "py-1.5 pr-3 text-right tabular-nums";
+// `whitespace-nowrap`: «177 B» andava a capo dentro la cella (richiesta del
+// 2026-11-22, da telefono). La tabella scorre di lato invece di spezzare.
+const CELLA = "whitespace-nowrap py-1.5 pr-3 text-right tabular-nums";
 
 function RigaPari({ r, mia }: { r: PariRiga; mia: boolean }) {
   return (
     <tr className={cn("border-b last:border-0", mia && "bg-muted/40 font-semibold")}>
-      <td className="py-1.5 pr-3">
+      <td className="whitespace-nowrap py-1.5 pr-3">
         {mia ? r.ticker : (
           <Link to={`/stocks/${encodeURIComponent(r.ticker)}`} className="hover:underline">{r.ticker}</Link>
         )}
@@ -34,7 +36,9 @@ function RigaPari({ r, mia }: { r: PariRiga; mia: boolean }) {
       <td className={CELLA}>{numero(r.qualita, 0)}</td>
       <td className={CELLA}>{numero(r.tecnico, 0)}</td>
       <td className={CELLA}>{numero(r.pe, 1)}</td>
-      <td className={CELLA}>{percentuale(r.crescita_ricavi)}</td>
+      <td className={CELLA}>{numero(r.pe_forward, 1)}</td>
+      {/* I ricavi colorati come i rendimenti: verde se crescono, rosso se calano. */}
+      <td className={cn(CELLA, toneDiRendimento(r.crescita_ricavi))}>{percentuale(r.crescita_ricavi)}</td>
       <td className={cn(CELLA, toneDiRendimento(r.rendimento_3m))}>{percentuale(r.rendimento_3m)}</td>
     </tr>
   );
@@ -62,7 +66,8 @@ function Pari({ ticker }: { ticker: string }) {
               <th className="py-1.5 pr-3 text-right font-medium">Cap. $</th>
               <th className="py-1.5 pr-3 text-right font-medium">Qualità</th>
               <th className="py-1.5 pr-3 text-right font-medium">Tecnico</th>
-              <th className="py-1.5 pr-3 text-right font-medium">P/E</th>
+              <th className="whitespace-nowrap py-1.5 pr-3 text-right font-medium">P/E</th>
+              <th className="whitespace-nowrap py-1.5 pr-3 text-right font-medium">P/E fwd</th>
               <th className="py-1.5 pr-3 text-right font-medium">Ricavi</th>
               <th className="py-1.5 pr-3 text-right font-medium">3 mesi</th>
             </tr>

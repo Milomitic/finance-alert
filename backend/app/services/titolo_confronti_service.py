@@ -68,6 +68,7 @@ def _riga(db: Session, s: Stock, cap: float | None, qualita: dict, tecnico: dict
         "ticker": s.ticker, "nome": s.name, "cap_usd": cap,
         "qualita": qualita.get(s.id), "tecnico": tecnico.get(s.id),
         "pe": getattr(micro, "trailing_pe", None),
+        "pe_forward": getattr(micro, "forward_pe", None),
         "crescita_ricavi": getattr(micro, "revenue_growth", None),
         "rendimento_3m": _rendimento_3m(db, s.id),
     }

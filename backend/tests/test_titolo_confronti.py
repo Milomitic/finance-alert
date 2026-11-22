@@ -172,3 +172,17 @@ def test_la_nota_si_scrive_si_rilegge_e_si_toglie(db, client):
     assert client.get("/api/stocks/NOTA/nota").json()["testo"] == ""
     assert client.put("/api/stocks/NOTA/nota", json={"testo": "x" * 5000}).status_code == 422
     assert client.put("/api/stocks/NONC/nota", json={"testo": "x"}).status_code == 404
+
+
+def test_i_pari_portano_il_pe_storico_e_quello_forward(db, monkeypatch):
+    """Richiesta del 2026-11-22: il P/E forward accanto a quello storico."""
+    from types import SimpleNamespace
+
+    mio = _titolo(db, "MIO", 100e9)
+    _titolo(db, "VICINO", 90e9)
+    _titolo(db, "ALTRO", 80e9)
+    db.commit()
+    fondamentali = SimpleNamespace(micro=SimpleNamespace(trailing_pe=30.0, forward_pe=24.5, revenue_growth=0.1))
+    monkeypatch.setitem(sfs._CACHE, "MIO", fondamentali)
+    riga = next(r for r in tc.pari(db, "MIO")["righe"] if r["ticker"] == mio.ticker)
+    assert (riga["pe"], riga["pe_forward"]) == (30.0, 24.5)

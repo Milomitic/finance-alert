@@ -29,12 +29,13 @@ export const buttonVariants = cva(
         testo: "text-foreground underline underline-offset-2 hover:opacity-80",
       },
       size: {
-        // `coarse:` = dove c'e' un dito (E-19): 44px, il bersaglio che un
-        // pollice colpisce al primo tentativo. Su desktop resta la densita' di prima.
-        default: "h-9 px-4 py-2 coarse:min-h-11",
-        sm: "h-8 rounded-md px-3 text-xs coarse:min-h-11",
+        // `coarse:` = dove c'e' un dito (E-19). Erano 44px; ridotti a 36-40 su
+        // richiesta dell'utente (2026-11-22, da telefono: bottoni troppo alti),
+        // sopra il minimo di 24 che il gate fa rispettare.
+        default: "h-9 px-4 py-2 coarse:min-h-10",
+        sm: "h-8 rounded-md px-3 text-xs coarse:min-h-9",
         lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9 coarse:min-h-11 coarse:min-w-11",
+        icon: "h-9 w-9 coarse:min-h-10 coarse:min-w-10",
         // Alto quanto il testo e capace di andare a capo: per i bottoni che
         // stanno dentro una frase. Sostituisce i <button> sottolineati
         // scritti a mano (B-39).

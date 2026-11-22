@@ -54,7 +54,7 @@ export function Segmentato<T extends string | number | null>({
           aria-label={v.nome}
           onClick={() => onCambia(v.id)}
           className={cn(
-            "whitespace-nowrap rounded font-semibold transition-colors coarse:min-h-11",
+            "whitespace-nowrap rounded font-semibold transition-colors coarse:min-h-8",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             TAGLIA[taglia],
             valore === v.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",

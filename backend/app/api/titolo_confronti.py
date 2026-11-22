@@ -30,6 +30,8 @@ class PariRigaOut(BaseModel):
     qualita: float | None = None
     tecnico: float | None = None
     pe: float | None = None
+    #: P/E sugli utili attesi (richiesta del 2026-11-22), accanto al P/E storico.
+    pe_forward: float | None = None
     crescita_ricavi: float | None = None
     rendimento_3m: float | None = None
 
