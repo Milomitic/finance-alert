@@ -41,13 +41,14 @@ function trimestreBreve(iso: string | null | undefined): string {
   return `T${Math.ceil(m / 3)} ${a}`;
 }
 
-/** L'azione in una pastiglia: piena per le mosse decisive (apre o chiude
- *  una posizione), tenue per gli aggiustamenti; il verso nel colore. */
+/** L'azione in una pastiglia: il verso nel colore, e un bordo pieno per le
+ *  mosse decisive (apre o chiude una posizione). Fondi tenui per tutte: la
+ *  versione piena col testo bianco non passava il contrasto nel gate. */
 const PASTIGLIA: Record<string, string> = {
-  new: "bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950",
-  add: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
-  reduce: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
-  sold_out: "bg-rose-700 text-white dark:bg-rose-500 dark:text-rose-950",
+  new: "border border-emerald-600 bg-emerald-100 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-950/60 dark:text-emerald-300",
+  add: "border border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
+  reduce: "border border-transparent bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+  sold_out: "border border-rose-600 bg-rose-100 text-rose-700 dark:border-rose-400 dark:bg-rose-950/60 dark:text-rose-300",
 };
 
 function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
