@@ -59,6 +59,13 @@ describe("OperazioniFondiCard", () => {
     expect(within(righe[1]).getByRole("link", { name: "Berkshire Hathaway" })).toHaveAttribute("href", "/institutionals/brk");
   });
 
+  it("un titolo noto solo per CUSIP mostra il nome della societa'", async () => {
+    fetchMock.mockReturnValue({ ...dati, operazioni: [{ ...dati.operazioni[1], ticker: "CUSIP:46090E103", company_name: "INVESCO QQQ TR" }] });
+    monta();
+    expect(await screen.findByText("INVESCO QQQ TR")).toBeInTheDocument();
+    expect(screen.queryByText("CUSIP:46090E103")).toBeNull();
+  });
+
   it("senza operazioni lo dice", async () => {
     fetchMock.mockReturnValue({ trimestre: null, fondi: 0, operazioni: [] });
     monta();

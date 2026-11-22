@@ -29,7 +29,15 @@ function trimestreBreve(iso: string | null): string {
 
 function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
   const su = o.delta_pp >= 0;
-  const ticker = (
+  // Un 13F identifica a volte un titolo solo col CUSIP (gli ETF, in
+  // produzione «CUSIP:46090E103»): il codice non dice niente a chi legge, il
+  // nome della societa' si'.
+  const soloCusip = o.ticker.startsWith("CUSIP:");
+  const ticker = soloCusip ? (
+    <span className="block max-w-[9rem] truncate font-semibold" title={o.ticker}>
+      {o.company_name ?? o.ticker}
+    </span>
+  ) : (
     <span className="inline-flex items-center gap-1.5 font-semibold">
       <StockLogo ticker={o.ticker} size="xs" />
       {o.ticker}
