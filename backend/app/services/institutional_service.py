@@ -383,6 +383,60 @@ def persist_scrape_results(
     return summary
 
 
+#: I rapporti di split che si riconoscono. Un 13F conta le azioni DOPO lo
+#: split, e il confronto con il trimestre prima lo leggeva come un acquisto:
+#: CRWD (4:1, giugno 2026) risultava +322% per BlackRock, +412% per Fidelity.
+_RAPPORTI_SPLIT = (2.0, 3.0, 4.0, 5.0, 8.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0)
+_TOLLERANZA_SPLIT = 0.04
+
+
+def _chiusure_prima_di(db: Session, tickers: set[str], giorno: date) -> dict[str, float]:
+    """L'ultima chiusura (rettificata) entro `giorno`, per i titoli del catalogo."""
+    from app.models import OhlcvDaily  # noqa: PLC0415
+
+    if not tickers:
+        return {}
+    ultima = (
+        select(OhlcvDaily.stock_id, func.max(OhlcvDaily.date).label("d"))
+        .where(OhlcvDaily.date <= giorno, OhlcvDaily.date > giorno - timedelta(days=10))
+        .group_by(OhlcvDaily.stock_id)
+        .subquery()
+    )
+    righe = db.execute(
+        select(Stock.ticker, OhlcvDaily.close)
+        .join(OhlcvDaily, OhlcvDaily.stock_id == Stock.id)
+        .join(ultima, (ultima.c.stock_id == OhlcvDaily.stock_id) & (ultima.c.d == OhlcvDaily.date))
+        .where(Stock.ticker.in_(tickers))
+    ).all()
+    return {t: float(c) for t, c in righe if c}
+
+
+def _fattore_split(
+    prima: InstitutionalHolding, dopo: InstitutionalHolding,
+    chiusura_prima: float | None, chiusura_dopo: float | None,
+) -> float:
+    """Il fattore per cui moltiplicare le quote di PRIMA per portarle sulla
+    base di DOPO; 1.0 se non c'e' uno split riconoscibile.
+
+    Il prezzo implicito nel 13F (valore / quote) cambia fra i due trimestri
+    per il mercato e per lo split; le barre rettificate del catalogo dicono
+    quanto e' il mercato, il resto e' lo split. Senza barre del titolo non si
+    corregge: meglio un difetto noto che uno split inventato da un crollo.
+    """
+    if not (prima.shares and dopo.shares and prima.value_usd and dopo.value_usd):
+        return 1.0
+    if not (chiusura_prima and chiusura_dopo):
+        return 1.0
+    implicito = (prima.value_usd / prima.shares) / (dopo.value_usd / dopo.shares)
+    mercato = chiusura_prima / chiusura_dopo
+    k = implicito / mercato
+    for r in _RAPPORTI_SPLIT:
+        for candidato in (r, 1.0 / r):
+            if abs(k / candidato - 1.0) <= _TOLLERANZA_SPLIT:
+                return candidato
+    return 1.0
+
+
 def compute_qoq_deltas(
     db: Session,
     institutional: Institutional,
@@ -449,12 +503,21 @@ def compute_qoq_deltas(
         ).scalars().all()
     }
 
+    comuni = {h.ticker for h in cur_holdings if h.ticker in prev_by_ticker}
+    chiusure_prima = _chiusure_prima_di(db, comuni, prev.period_end_date)
+    chiusure_dopo = _chiusure_prima_di(db, comuni, filing.period_end_date)
+
     cur_tickers: set[str] = set()
     for h in cur_holdings:
         cur_tickers.add(h.ticker)
         prev_h = prev_by_ticker.get(h.ticker)
         cur_shares = h.shares or 0
         prev_shares = (prev_h.shares if prev_h else 0) or 0
+        if prev_h is not None and prev_shares:
+            # Le quote di prima sulla base di dopo, se in mezzo c'e' uno split.
+            prev_shares = prev_shares * _fattore_split(
+                prev_h, h, chiusure_prima.get(h.ticker), chiusure_dopo.get(h.ticker),
+            )
 
         if prev_h is None or prev_shares == 0:
             h.action = "new" if cur_shares > 0 else "hold"
@@ -462,7 +525,7 @@ def compute_qoq_deltas(
             h.qoq_change_shares = cur_shares if cur_shares else None
             continue
 
-        delta_shares = cur_shares - prev_shares
+        delta_shares = int(round(cur_shares - prev_shares))
         delta_pct = (delta_shares / prev_shares) * 100 if prev_shares else 0.0
         h.qoq_change_shares = delta_shares
         h.qoq_change_pct = round(delta_pct, 2)
