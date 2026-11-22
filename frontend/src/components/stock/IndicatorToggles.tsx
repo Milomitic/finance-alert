@@ -175,7 +175,7 @@ export function IndicatorToggles({ state, onChange, periods }: Props) {
         return (
           <div
             key={meta.key}
-            className="inline-flex h-8 items-center rounded-md overflow-hidden transition-colors"
+            className="inline-flex h-7 items-center rounded-md overflow-hidden transition-colors"
             style={{
               backgroundColor: activeBg,
               border: `1px solid ${activeBorder ?? "hsl(var(--border))"}`,
@@ -185,7 +185,7 @@ export function IndicatorToggles({ state, onChange, periods }: Props) {
               type="button"
               onClick={() => onChange(meta.key, { ...s, visible: !on })}
               className={cn(
-                "h-full px-2.5 text-sm font-semibold transition-colors flex items-center gap-1.5",
+                "h-full px-2 text-xs font-semibold transition-colors flex items-center gap-1.5",
                 on ? "text-foreground" : "text-muted-foreground",
               )}
               title={`${on ? "Nascondi" : "Mostra"} ${live.label} — ${live.description}`}

@@ -51,14 +51,14 @@ export function RangeSelector({ value, onChange }: Props) {
     // the pills land on exactly the same pixels as before. Height stays h-8
     // so the selector still matches ChartOptionsToolbar beside it, which is
     // built from the identical h-8 shell + h-7 pills.
-    <div className="inline-flex h-8 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 px-0.5">
+    <div className="inline-flex h-7 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 px-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}
           type="button"
           onClick={() => onChange(opt.key)}
           className={cn(
-            "h-7 px-3 text-sm font-medium rounded transition-colors flex items-center",
+            "h-6 px-2 text-xs font-medium rounded transition-colors flex items-center",
             value === opt.key
               ? "bg-background shadow-sm text-foreground"
               : "text-muted-foreground hover:text-foreground",

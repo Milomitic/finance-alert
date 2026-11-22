@@ -1,5 +1,5 @@
 import type { IChartApi } from "lightweight-charts";
-import { ArrowLeft, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
@@ -58,6 +58,7 @@ import {
   ChartOptionsToolbar,
 } from "@/components/stock/ChartOptionsToolbar";
 import { BENCHMARKS } from "@/lib/benchmarks";
+import { PulsanteStrumenti } from "@/components/stock/PulsanteStrumenti";
 import { RangeSelector } from "@/components/stock/RangeSelector";
 import { ResizableSection } from "@/components/stock/ResizableSection";
 import { RsiPanel } from "@/components/stock/RsiPanel";
@@ -467,7 +468,7 @@ export default function StockDetailPage() {
                 space equally, so the indicators sit centred between the
                 left/right clusters (and wrap gracefully when space runs
                 out). All controls share the 32px (h-8) height. */}
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-3 min-w-0">
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-2 min-w-0">
               {/* LEFT — timeframe + chart-render options */}
               <RangeSelector
                 value={range}
@@ -486,19 +487,7 @@ export default function StockDetailPage() {
               {/* Phone-only disclosure. The timeframe stays out (it is the one
                   control that gets used on every visit); everything else hides
                   behind this until asked for. */}
-              <button
-                type="button"
-                onClick={() => setToolsOpen((o) => !o)}
-                aria-expanded={toolsOpen}
-                className="sm:hidden inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border bg-muted/30 text-xs font-semibold hover:bg-accent transition-colors"
-              >
-                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
-                Strumenti
-                <ChevronDown
-                  className={cn("h-3.5 w-3.5 transition-transform", toolsOpen && "rotate-180")}
-                  aria-hidden
-                />
-              </button>
+              <PulsanteStrumenti aperto={toolsOpen} onCambia={() => setToolsOpen((o) => !o)} />
               {/* `sm:contents` is the crux: at sm+ this wrapper is removed from
                   layout entirely and its children become direct flex items of
                   the row above — i.e. the desktop toolbar is unchanged. On a

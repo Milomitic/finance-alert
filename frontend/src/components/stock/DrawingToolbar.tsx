@@ -55,7 +55,7 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
             aria-pressed={active}
             onClick={() => onSetMode(active ? "none" : target)}
             title={title}
-            className="text-sm h-8"
+            className="text-xs h-7"
           >
             <Icon className="h-3.5 w-3.5 mr-1" aria-hidden />
             {label}
@@ -65,7 +65,7 @@ export function DrawingToolbar({ mode, onSetMode, onClearAll }: Props) {
       <Button
         type="button" size="sm" variant="ghost" onClick={pulisci.premi}
         title="Rimuovi tutti i disegni di questo titolo"
-        className={cn("text-sm h-8", pulisci.armato && "text-destructive")}
+        className={cn("text-xs h-7", pulisci.armato && "text-destructive")}
       >
         <Trash2 className="h-3.5 w-3.5 mr-1" aria-hidden /> {pulisci.armato ? "Conferma: togli tutti" : "Pulisci"}
       </Button>

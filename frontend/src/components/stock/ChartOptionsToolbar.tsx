@@ -62,7 +62,7 @@ export function ChartOptionsToolbar({
         title="Confronta con un indice"
         aria-label="Benchmark"
         className={cn(
-          "h-8 px-2 text-sm font-medium rounded-md border bg-muted/30 cursor-pointer",
+          "h-7 px-1.5 text-xs font-medium rounded-md border bg-muted/30 cursor-pointer",
           "transition-colors hover:text-foreground",
           benchmark ? "text-foreground" : "text-muted-foreground",
         )}
@@ -86,7 +86,7 @@ export function ChartOptionsToolbar({
           aria-label="Confronta con un titolo"
           title="Sovrapponi un altro titolo (ribasato)"
           className={cn(
-            "h-8 w-24 px-2 text-sm rounded-md border bg-muted/30",
+            "h-7 w-20 px-2 text-xs rounded-md border bg-muted/30",
             compareTicker ? "pr-6 text-foreground" : "text-muted-foreground",
           )}
         />
@@ -110,18 +110,18 @@ export function ChartOptionsToolbar({
         onClick={onResetZoom}
         title="Reimposta zoom e posizione"
         aria-label="Reimposta zoom e posizione"
-        variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        variant="outline" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
       >
-        <Maximize2 className="h-4 w-4" />
+        <Maximize2 className="h-3.5 w-3.5" />
       </Button>
       <Button
         type="button"
         onClick={onExport}
         title="Esporta PNG"
         aria-label="Esporta PNG"
-        variant="outline" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+        variant="outline" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
       >
-        <Download className="h-4 w-4" />
+        <Download className="h-3.5 w-3.5" />
       </Button>
     </div>
   );

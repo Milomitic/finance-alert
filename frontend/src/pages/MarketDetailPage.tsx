@@ -21,6 +21,7 @@ import { HeaderSparkline } from "@/components/stock/StockHeader";
 import { NewsCard } from "@/components/stock/NewsCard";
 import { TechnicalKpiCard } from "@/components/stock/TechnicalKpiCard";
 import { RangeSelector } from "@/components/stock/RangeSelector";
+import { PulsanteStrumenti } from "@/components/stock/PulsanteStrumenti";
 import {
   IndicatorToggles,
   type IndicatorKey,
@@ -102,6 +103,7 @@ export default function MarketDetailPage() {
   // user-controllable via IndicatorToggles, and the price/RSI/MACD
   // charts share a chart-sync registrar so pan/zoom on any one
   // propagates to the others.
+  const [strumentiAperti, setStrumentiAperti] = useState(false);
   const [indicators, setIndicators] = useState(DEFAULT_INDICATOR_STATE);
   const onIndicatorChange = (key: IndicatorKey, next: IndicatorStyle) =>
     setIndicators((prev) => ({ ...prev, [key]: next }));
@@ -293,16 +295,18 @@ export default function MarketDetailPage() {
       <div className="grid lg:grid-cols-[1fr_480px] gap-3 [&>*]:min-w-0">
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          {/* Su telefono gli indicatori stanno dietro «Strumenti», chiusi di
+              default (richiesta del 2026-11-22), come nella scheda titolo. */}
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
             <RangeSelector
               value={range}
               onChange={(r) => setSearchParams({ range: r })}
             />
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30 border border-border/50">
-              <span className="text-[0.7647rem] uppercase tracking-wider font-bold text-muted-foreground shrink-0">
+            <PulsanteStrumenti aperto={strumentiAperti} onCambia={() => setStrumentiAperti((o) => !o)} />
+            <div className={cn(strumentiAperti ? "flex w-full" : "hidden", "sm:flex sm:w-auto items-center gap-2 flex-wrap")}>
+              <span className="hidden md:block text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground shrink-0">
                 Indicatori
               </span>
-              <div className="h-4 w-px bg-border" />
               <IndicatorToggles
                 state={indicators}
                 onChange={onIndicatorChange}
