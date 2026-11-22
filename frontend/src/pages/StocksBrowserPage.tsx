@@ -443,16 +443,15 @@ export default function StocksBrowserPage() {
       {/* Header summary — "Screener" label per user request; the route
           stays /stocks for URL stability + back-compat with shared links. */}
       <Card>
-        <CardContent className="p-4 flex items-center gap-4">
+        <CardContent className="p-3 sm:p-4 flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Screener</h1>
-            {/* ⚠️ Due righe riservate sul telefono (FA-106). Prima dei dati la
-                frase e' «— con i filtri attuali · 0 indici · 0 paesi» e sta su
-                una riga; coi numeri va a capo, la scheda cresce di 20px e
-                spinge giu' filtri e tabella: CLS 0,19 nel gate a 375px, nelle
-                corse in cui i conteggi arrivano dopo il primo frame. Da `sm` la
-                frase sta su una riga in entrambe le forme. */}
-            <p className="min-h-10 text-sm text-muted-foreground sm:min-h-0">
+            <h1 className="text-xl sm:text-2xl font-bold">Screener</h1>
+            {/* Su telefono i conteggi lasciano spazio ai dati (richiesta del
+                2026-11-22): il numero di titoli sta gia' sotto la tabella.
+                ⚠️ Da `sm` la frase sta su una riga in entrambe le forme, quindi
+                non sposta niente quando arrivano i conteggi (FA-106: sul
+                telefono andava a capo, CLS 0,19). */}
+            <p className="hidden sm:block text-sm text-muted-foreground">
               {total > 0 ? `${total.toLocaleString()} stock` : "—"} con i filtri attuali ·{" "}
               {totalIndices} indici · {totalCountries} paesi
             </p>

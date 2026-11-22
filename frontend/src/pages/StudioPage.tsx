@@ -159,7 +159,8 @@ export default function StudioPage() {
       <Card>
         <CardContent className="space-y-3 p-4">
           <SectionTitle icon={FlaskConical} label="Studio" />
-          <p className="text-xs text-muted-foreground">
+          {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
+          <p className="hidden sm:block text-xs text-muted-foreground">
             Statistica storica: che cosa è successo, non che cosa succederà. Ogni numero ha accanto il caso base e
             le finestre indipendenti.
           </p>

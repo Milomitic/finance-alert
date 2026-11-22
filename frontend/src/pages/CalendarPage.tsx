@@ -296,7 +296,8 @@ export default function CalendarPage() {
         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight">
           Calendario eventi
         </h1>
-        <p className="text-sm text-muted-foreground max-w-2xl">
+        {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
+        <p className="hidden sm:block text-sm text-muted-foreground max-w-2xl">
           Pubblicazione utili per i titoli monitorati e principali appuntamenti
           macro. Cliccare su una giornata per il dettaglio completo.
         </p>

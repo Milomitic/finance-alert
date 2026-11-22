@@ -232,7 +232,8 @@ export default function PositionsPage() {
         <CardContent className="p-4 flex items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold">Posizioni</h1>
-            <p className="text-sm text-muted-foreground">
+            {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
+            <p className="hidden sm:block text-sm text-muted-foreground">
               Trade tracciati dal piano operativo dei segnali — {open.length}{" "}
               apert{open.length === 1 ? "a" : "e"} · {closed.length} chius
               {closed.length === 1 ? "a" : "e"}. Stop e target vengono

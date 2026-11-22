@@ -343,7 +343,8 @@ export default function InstitutionalsPage() {
           <Building2 className="h-6 w-6 text-foreground/80" />
           <div>
             <h1 className="text-xl font-semibold">Superinvestor &amp; istituzionali</h1>
-            <p className="flex items-center gap-1 text-sm text-muted-foreground">
+            {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
+            <p className="hidden sm:flex items-center gap-1 text-sm text-muted-foreground">
               <span className="min-w-0">
                 Portafogli 13F-equivalenti tracciati. {counts} fondi disponibili.
               </span>

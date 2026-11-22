@@ -139,10 +139,11 @@ export default function SectorsOverviewPage() {
           <Grid3x3 className="h-7 w-7 text-muted-foreground" aria-hidden />
           Esplora
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
+        <p className="hidden sm:block text-sm text-muted-foreground mt-1">
           Dove guardare oggi, e come si posizionano i settori del catalogo.
         </p>
-        <dl className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <dl className="mt-2 hidden sm:flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
           <div>
             <dt className="inline">Stock</dt>{" "}
             <dd className="inline font-medium tabular-nums text-foreground">

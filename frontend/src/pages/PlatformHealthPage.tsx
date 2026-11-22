@@ -237,7 +237,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
           ) : (
             <div className="space-y-1.5">
               <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Salute piattaforma</h1>
-              <p className="text-base text-muted-foreground">
+              <p className="hidden sm:block text-base text-muted-foreground">
                 Stato live di sorgenti dati, scheduler, scan e log — aggiornato in tempo reale via SSE.
               </p>
             </div>
