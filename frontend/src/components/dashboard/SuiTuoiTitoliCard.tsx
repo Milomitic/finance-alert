@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Briefcase, CalendarClock, Gavel, Newspaper, Star } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { Children, cloneElement, isValidElement, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { dashboard, type AnalistaMio, type NotiziaMia, type TrimestraleMia } from "@/api/dashboard";
@@ -42,7 +42,13 @@ function ricordaAveaTitoli(v: boolean): void {
   }
 }
 
-const SEZIONE = "h-[148px] md:h-[188px] overflow-y-auto";
+/** ⚠️ Altezza fissa SOLO da lg (regola «One scroll context below lg» in
+ *  index.css): sotto i 1024px lo scorrimento interno delle schede e'
+ *  spento, e con un'altezza fissa il contenuto usciva dal riquadro e si
+ *  sovrapponeva alle sezioni sotto (segnalato da telefono il 2026-11-22).
+ *  Su telefono le sezioni crescono, ma mostrano le prime cinque voci. */
+const SEZIONE = "lg:h-[188px] overflow-y-auto";
+const PRIME_SU_TELEFONO = 5;
 
 function Segno({ r }: { r: string }) {
   return (
@@ -75,7 +81,22 @@ function Sezione({ icona, titolo, vuoto, children, n }: {
         {titolo}
       </div>
       <div className={SEZIONE}>
-        {n === 0 ? <p className="py-2 text-xs text-muted-foreground">{vuoto}</p> : <ul className="space-y-1">{children}</ul>}
+        {n === 0 ? <p className="py-2 text-xs text-muted-foreground">{vuoto}</p> : (
+          <>
+            {/* Oltre la quinta voce le righe spariscono sotto lg. In JS e non
+                con una variante arbitraria di Tailwind, che il purger non ha
+                generato (verificato sul CSS prodotto). */}
+            <ul className="space-y-1">
+              {Children.map(children, (c, i) =>
+                i >= PRIME_SU_TELEFONO && isValidElement<{ className?: string }>(c)
+                  ? cloneElement(c, { className: cn(c.props.className, "max-lg:hidden") })
+                  : c)}
+            </ul>
+            {n > PRIME_SU_TELEFONO && (
+              <p className="pt-1 text-xs text-muted-foreground lg:hidden">+{n - PRIME_SU_TELEFONO} altre</p>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

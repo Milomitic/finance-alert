@@ -330,6 +330,19 @@
  * app shell must keep their own scrolling. And overflow-X is untouched, so
  * the wide tables still scroll sideways as designed.
  */
+/* Un'etichetta `sr-only` sta all'angolo del suo blocco contenitore, non dove
+ * cadrebbe nel flusso. `.sr-only` e' `position: absolute` senza coordinate,
+ * quindi si piazzava nella sua posizione statica: dentro un contenitore che
+ * scorre (il nastro degli indici, una lista) il suo blocco contenitore sta
+ * FUORI da quel contenitore, il ritaglio non la tocca, e l'etichetta
+ * allungava la pagina. Misurato da telefono il 2026-11-22: 14 etichette del
+ * nastro portavano la home da 412 a 3.546px di larghezza (prima, A-50: 8.000px
+ * in altezza). `:where` lascia vincere qualunque coordinata esplicita. */
+:where(.sr-only) {
+  top: 0;
+  left: 0;
+}
+
 @media (max-width: 1023px) {
   [data-card] .overflow-y-auto {
     overflow-y: visible;
