@@ -153,7 +153,10 @@ function Colonna({ azione, label, limit }: { azione: Azione; label: string; limi
   const q = useOperazioniFondi({ limit, azione });
   return (
     <section aria-label={label} className="min-w-0">
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</h3>
+      {/* Un paragrafo, non un h3: sopra non c'e' un h2 (il titolo della
+          scheda non e' un'intestazione) e axe lo segnalava come salto di
+          livello. La colonna ha gia' il suo nome come regione. */}
+      <p aria-hidden className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <Righe q={q} n={limit} conAzione={false} vuoto="Nessuna nel trimestre." />
     </section>
   );
