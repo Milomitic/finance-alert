@@ -47,7 +47,12 @@ function ricordaAveaTitoli(v: boolean): void {
  *  spento, e con un'altezza fissa il contenuto usciva dal riquadro e si
  *  sovrapponeva alle sezioni sotto (segnalato da telefono il 2026-11-22).
  *  Su telefono le sezioni crescono, ma mostrano le prime cinque voci. */
-const SEZIONE = "lg:h-[188px] overflow-y-auto";
+// ⚠️ Altezza fissa a OGNI larghezza: e' anche quella dello scheletro, e senza
+// la sezione nasceva alta 0 e il contenuto spingeva giu' la home (CLS 0,26 nel
+// gate a 375px). Sotto lg cinque righe da 20px + 4 spazi + «+N altre» = 136px.
+// Lo scorrimento interno solo da lg: sotto, la regola globale lo spegne, e
+// `overflow-hidden` tiene il contenuto dentro la sua sezione.
+const SEZIONE = "h-[140px] overflow-hidden lg:h-[188px] lg:overflow-y-auto";
 const PRIME_SU_TELEFONO = 5;
 
 function Segno({ r }: { r: string }) {
