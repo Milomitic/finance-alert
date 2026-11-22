@@ -1599,6 +1599,28 @@ export interface ActionAggregate {
   stock_id: number | null;
 }
 
+/** Un'operazione di un fondo nell'ultimo trimestre: pesi in punti di
+ *  portafoglio, e `delta_pp` e' la rilevanza con cui il server ordina. */
+export interface OperazioneFondo {
+  ticker: string;
+  company_name: string | null;
+  stock_id: number | null;
+  institutional_slug: string;
+  institutional_name: string;
+  action: string;
+  peso_prima: number;
+  peso_dopo: number;
+  delta_pp: number;
+  qoq_change_pct: number | null;
+  value_usd: number | null;
+}
+
+export interface OperazioniTrimestre {
+  trimestre: string | null;
+  fondi: number;
+  operazioni: OperazioneFondo[];
+}
+
 export interface AggregateStats {
   most_picked: TickerAggregate[];
   recent_buys: ActionAggregate[];

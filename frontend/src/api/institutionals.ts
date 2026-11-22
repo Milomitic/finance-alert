@@ -2,6 +2,7 @@ import { api } from "./client";
 import type {
   AggregateStats,
   InstitutionalDetail,
+  OperazioniTrimestre,
   InstitutionalSummary,
   TickerHolders,
 } from "./types";
@@ -35,6 +36,15 @@ export const institutionals = {
       qs.set("recent_actions_limit", String(params.recent_actions_limit));
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     return api<AggregateStats>(`/api/institutionals/aggregate${suffix}`, { signal });
+  },
+
+  /** Le operazioni dell'ultimo trimestre, dalla piu' rilevante. */
+  operazioni: (params: { type?: string; limit?: number } = {}, signal?: AbortSignal) => {
+    const qs = new URLSearchParams();
+    if (params.type) qs.set("type", params.type);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return api<OperazioniTrimestre>(`/api/institutionals/operazioni${suffix}`, { signal });
   },
 
   detail: (

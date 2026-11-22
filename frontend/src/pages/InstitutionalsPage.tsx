@@ -17,6 +17,7 @@ import { StockLogo } from "@/components/dashboard/StockLogo";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
 import { SectionTitle } from "@/components/ui/section-title";
+import { OperazioniFondiCard } from "@/components/dashboard/OperazioniFondiCard";
 import { SmartMoneyHighlights } from "@/components/institutionals/SmartMoneyHighlights";
 
 /* ─── TickerNameCell — local copy of dashboard's StockIdentity ────────── *
@@ -382,6 +383,12 @@ export default function InstitutionalsPage() {
           isRetrying={agg.isFetching || list.isFetching}
         />
       )}
+
+      {/* In cima le operazioni dell'ultimo trimestre, di tutti i fondi, dalla
+          piu' rilevante (richiesta del 2026-11-22). Fuori dallo scheletro
+          della pagina: ha la sua query e il suo caricamento alto quanto i
+          dati. */}
+      <OperazioniFondiCard limit={15} />
 
       {/* La fascia iniziale: le mosse piu' pesanti dei fondi, con le
           statistiche che dicono su che base sono calcolate. Ha ASSORBITO le

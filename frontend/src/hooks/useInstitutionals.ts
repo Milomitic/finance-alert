@@ -31,6 +31,16 @@ export function useInstitutionalsAggregate(params?: {
   });
 }
 
+/** Le operazioni dei fondi nell'ultimo trimestre, per spostamento di peso. */
+export function useOperazioniFondi(params: { type?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: ["institutionals", "operazioni", params],
+    queryFn: ({ signal }) => institutionals.operazioni(params, signal),
+    staleTime: STALE_LONG,
+    retry: 1,
+  });
+}
+
 /** Il dettaglio di una dichiarazione, con le holdings a PAGINE.
  *
  *  ⚠️ `limit` fa parte della chiave: una finestra piu grande e un risultato

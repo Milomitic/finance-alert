@@ -141,3 +141,11 @@ def test_sulla_pagina_titolo_l_uscita_si_vede(client, fondi) -> None:
 def test_un_titolo_senza_fondi_non_e_un_errore(client, fondi) -> None:
     r = client.get("/api/stocks/ZZZZ/institutional-holders?include_historical=true")
     assert (r.status_code, r.json()["holders"], r.json()["historical"]) == (200, [], [])
+
+
+def test_le_operazioni_del_trimestre_non_sono_scambiate_per_un_fondo(client, fondi) -> None:
+    r = client.get("/api/institutionals/operazioni?limit=5")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert set(corpo) == {"trimestre", "fondi", "operazioni"}
+    assert len(corpo["operazioni"]) <= 5

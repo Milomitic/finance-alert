@@ -25,10 +25,11 @@ from app.schemas.institutional import (
     HoldingDetailOut,
     InstitutionalDetailOut,
     InstitutionalSummaryOut,
+    OperazioniTrimestreOut,
     TickerHolderOut,
     TickerHoldersOut,
 )
-from app.services import institutional_service
+from app.services import institutional_service, operazioni_fondi_service
 
 router = APIRouter(prefix="/api", tags=["institutionals"])
 
@@ -74,6 +75,22 @@ def aggregate(
         recent_actions_limit=recent_actions_limit,
     )
     return AggregateStatsOut.model_validate(stats)
+
+
+@router.get(
+    "/institutionals/operazioni",
+    response_model=OperazioniTrimestreOut,
+)
+def operazioni_trimestre(
+    type: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 30,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> OperazioniTrimestreOut:
+    """Le operazioni dei fondi nell'ultimo trimestre, dalla piu' rilevante
+    (spostamento del peso nel portafoglio). Dichiarata PRIMA di `/{slug}`."""
+    r = operazioni_fondi_service.operazioni_ultimo_trimestre(db, type_=type, limit=limit)
+    return OperazioniTrimestreOut.model_validate(r)
 
 
 @router.get(

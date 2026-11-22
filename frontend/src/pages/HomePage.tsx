@@ -17,6 +17,7 @@ import { TopMoversCard } from "@/components/dashboard/TopMoversCard";
 import { TopPicksCard } from "@/components/dashboard/TopPicksCard";
 import { SectorsHeatmapCard } from "@/components/dashboard/SectorsHeatmapCard";
 import { SuperinvestorPicksCard } from "@/components/dashboard/SuperinvestorPicksCard";
+import { OperazioniFondiCard } from "@/components/dashboard/OperazioniFondiCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { CardUpdatedAt } from "@/components/stock/CardUpdatedAt";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
@@ -105,10 +106,13 @@ function DashboardSkeleton() {
       <SpotlightRowSkeleton />
       <BreadthRowSkeleton />
       {/* Discovery row: [2fr_1fr_1fr] at lg+. */}
-      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
+      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
         <CardSkeleton label="TOP PICKS" rows={10} strongHeader />
-        <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader />
         <CardSkeleton label="VALUTAZIONI ANALISTI" rows={8} strongHeader />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 [&>*]:min-w-0">
+        <CardSkeleton label="SUPERINVESTOR" rows={8} strongHeader className="lg:h-[420px]" />
+        <CardSkeleton label="OPERAZIONI DEI FONDI" rows={8} strongHeader className="lg:h-[420px]" />
       </div>
       {/* Footer (DataSources). */}
       <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
@@ -464,7 +468,7 @@ function HomePageContent() {
           sub-columns of ~155px and the ticker column resolved to 0px: the
           tier lists rendered their rows with no ticker at all. Two columns
           between md and dense-3 gives TopPicks a full row of its own. */}
-      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
+      <div className="grid grid-cols-1 dense-3:grid-cols-[2fr_1fr] gap-3 dense-3:h-[420px] [&>*]:min-w-0">
         {/* No fixed mobile height: TopPicksCard flows its 3 tiers
             (24 rows) at natural height and the page scrolls. A capped
             height here would crush the rows (text overlap). dense-3+: fills
@@ -473,10 +477,19 @@ function HomePageContent() {
           <TopPicksCard />
         </div>
         <div className="lg:h-[420px] dense-3:h-full dense-3:min-h-0">
+          <AnalystActionsCard />
+        </div>
+      </div>
+      {/* I fondi in una riga loro (2026-11-22): cosa detengono in tanti e cosa
+          hanno mosso nell'ultimo trimestre, una accanto all'altra. Con una
+          quarta colonna nella riga sopra Top picks tornerebbe a dividersi in
+          sotto-colonne da ~150px, dove il ticker sparisce. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 [&>*]:min-w-0">
+        <div className="lg:h-[420px]">
           <SuperinvestorPicksCard />
         </div>
-        <div className="lg:h-[420px] dense-3:h-full dense-3:min-h-0">
-          <AnalystActionsCard />
+        <div className="lg:h-[420px]">
+          <OperazioniFondiCard />
         </div>
       </div>
     </div>

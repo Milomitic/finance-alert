@@ -103,6 +103,28 @@ class AggregateStatsOut(BaseModel):
     sector_tilt: dict[str, int]
 
 
+class OperazioneFondoOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    ticker: str
+    company_name: str | None = None
+    stock_id: int | None = None
+    institutional_slug: str
+    institutional_name: str
+    action: str
+    peso_prima: float
+    peso_dopo: float
+    delta_pp: float
+    qoq_change_pct: float | None = None
+    value_usd: int | None = None
+
+
+class OperazioniTrimestreOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    trimestre: date | None = None
+    fondi: int
+    operazioni: list[OperazioneFondoOut]
+
+
 class TickerHolderOut(BaseModel):
     """Used by the `InstitutionalHoldersCard` on stock detail pages.
 

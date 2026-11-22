@@ -1407,6 +1407,26 @@ export interface OhlcvFreshnessOut {
   stocks_at_max?: number;
 }
 
+export interface OperazioneFondoOut {
+  ticker: string;
+  company_name?: string | null;
+  stock_id?: number | null;
+  institutional_slug: string;
+  institutional_name: string;
+  action: string;
+  peso_prima: number;
+  peso_dopo: number;
+  delta_pp: number;
+  qoq_change_pct?: number | null;
+  value_usd?: number | null;
+}
+
+export interface OperazioniTrimestreOut {
+  trimestre?: string | null;
+  fondi: number;
+  operazioni: OperazioneFondoOut[];
+}
+
 export interface OrizzonteCellOut {
   orizzonte: number;
   proprio: boolean;
