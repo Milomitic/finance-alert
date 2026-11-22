@@ -49,6 +49,8 @@ describe("OperazioniFondiCard", () => {
     expect(righe[0]).toHaveTextContent("−9,0%");
     expect(righe[1]).toHaveTextContent("+8,0%");
     expect(righe[0]).toHaveTextContent("$7");
+    // Etichetta, variazione, valore: in quest'ordine (richiesta del 2026-11-22).
+    expect(righe[0].textContent).toMatch(/uscita−9,0%\$7/);
     expect(screen.getByText("T3 2026 · 96 fondi")).toBeInTheDocument();
   });
 

@@ -41,7 +41,16 @@ function trimestreBreve(iso: string | null | undefined): string {
   return `T${Math.ceil(m / 3)} ${a}`;
 }
 
-function Riga({ o, primo, conAzione }: { o: OperazioneFondo; primo: boolean; conAzione: boolean }) {
+/** L'azione in una pastiglia: piena per le mosse decisive (apre o chiude
+ *  una posizione), tenue per gli aggiustamenti; il verso nel colore. */
+const PASTIGLIA: Record<string, string> = {
+  new: "bg-emerald-700 text-white dark:bg-emerald-500 dark:text-emerald-950",
+  add: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
+  reduce: "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+  sold_out: "bg-rose-700 text-white dark:bg-rose-500 dark:text-rose-950",
+};
+
+function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
   const su = o.delta_pp >= 0;
   // Un 13F identifica a volte un titolo solo col CUSIP (gli ETF, in
   // produzione «CUSIP:46090E103»): il codice non dice niente a chi legge, il
@@ -58,7 +67,7 @@ function Riga({ o, primo, conAzione }: { o: OperazioneFondo; primo: boolean; con
     </span>
   );
   return (
-    <li className={cn("flex items-center gap-2 py-1.5 text-sm", !primo && "border-t border-border/40")}>
+    <li className={cn("flex h-7 items-center gap-2 text-sm", !primo && "border-t border-border/40")}>
       {o.stock_id != null ? (
         <Link to={`/stocks/${encodeURIComponent(o.ticker)}`} className="shrink-0 hover:underline">{ticker}</Link>
       ) : (
@@ -71,19 +80,23 @@ function Riga({ o, primo, conAzione }: { o: OperazioneFondo; primo: boolean; con
       >
         {o.institutional_name}
       </Link>
-      {conAzione && (
-        <span className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
-          {AZIONE_LABEL[o.action] ?? o.action}
-        </span>
-      )}
-      <span className="shrink-0 whitespace-nowrap text-xs font-semibold tabular-nums">
-        {o.valore_operazione != null ? fmtBig(o.valore_operazione) : "—"}
+      {/* Etichetta, variazione, valore: l'ordine chiesto il 2026-11-22. */}
+      <span
+        className={cn(
+          "w-[4.5rem] shrink-0 rounded px-1 py-px text-center text-[0.6765rem] font-semibold",
+          PASTIGLIA[o.action] ?? "bg-muted text-muted-foreground",
+        )}
+      >
+        {AZIONE_LABEL[o.action] ?? o.action}
       </span>
       <span
         className={cn("w-12 shrink-0 text-right text-xs tabular-nums", su ? TESTO_SU : TESTO_GIU)}
         title={`Peso nel portafoglio del fondo: ${PESO.format(o.peso_prima)}% prima, ${PESO.format(o.peso_dopo)}% dopo`}
       >
         {su ? "+" : "−"}{PESO.format(Math.abs(o.delta_pp))}%
+      </span>
+      <span className="w-14 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+        {o.valore_operazione != null ? fmtBig(o.valore_operazione) : "—"}
       </span>
     </li>
   );
@@ -92,13 +105,13 @@ function Riga({ o, primo, conAzione }: { o: OperazioneFondo; primo: boolean; con
 type Interrogazione = ReturnType<typeof useOperazioniFondi>;
 
 /** Lo scheletro e' fatto delle stesse righe: alto quanto i dati, niente salto. */
-function Righe({ q, n, conAzione, vuoto }: { q: Interrogazione; n: number; conAzione: boolean; vuoto: string }) {
+function Righe({ q, n, vuoto }: { q: Interrogazione; n: number; vuoto: string }) {
   if (q.isLoading) {
     return (
       <ul aria-hidden>
         {Array.from({ length: n }).map((_, i) => (
-          <li key={i} className={cn("py-1.5", i > 0 && "border-t border-border/40")}>
-            <div className="h-5 animate-pulse rounded bg-muted/40" />
+          <li key={i} className={cn("flex h-7 items-center", i > 0 && "border-t border-border/40")}>
+            <div className="h-4 w-full animate-pulse rounded bg-muted/40" />
           </li>
         ))}
       </ul>
@@ -112,7 +125,7 @@ function Righe({ q, n, conAzione, vuoto }: { q: Interrogazione; n: number; conAz
   return (
     <ul>
       {righe.map((o, i) => (
-        <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} conAzione={conAzione} />
+        <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} />
       ))}
     </ul>
   );
@@ -142,7 +155,7 @@ export function OperazioniFondiCard({ limit = 12, className }: { limit?: number;
         </div>
         <div className="relative min-h-0 flex-1 overflow-y-auto p-3 pr-2">
           <p className="sr-only">{SPIEGAZIONE}</p>
-          <Righe q={q} n={limit} conAzione vuoto="Nessuna operazione nell'ultimo trimestre." />
+          <Righe q={q} n={limit} vuoto="Nessuna operazione nell'ultimo trimestre." />
         </div>
       </CardContent>
     </Card>
@@ -157,7 +170,7 @@ function Colonna({ azione, label, limit }: { azione: Azione; label: string; limi
           scheda non e' un'intestazione) e axe lo segnalava come salto di
           livello. La colonna ha gia' il suo nome come regione. */}
       <p aria-hidden className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <Righe q={q} n={limit} conAzione={false} vuoto="Nessuna nel trimestre." />
+      <Righe q={q} n={limit} vuoto="Nessuna nel trimestre." />
     </section>
   );
 }
@@ -166,10 +179,11 @@ function Colonna({ azione, label, limit }: { azione: Azione; label: string; limi
  *  quattro sugli schermi larghi e due sui medi. Su telefono una alla volta,
  *  scelta con un selettore: quattro elenchi impilati sarebbero quattro
  *  schermate prima del resto della pagina. */
-export function PannelloOperazioniFondi({ limit = 8 }: { limit?: number }) {
+export function PannelloOperazioniFondi({ limit = 12 }: { limit?: number }) {
   const isPhone = useIsPhone();
   const [scelta, setScelta] = useState<Azione>("new");
-  const riepilogo = useOperazioniFondi({ limit: 1 });
+  // La stessa chiave della colonna «Nuove»: una richiesta sola, dalla cache.
+  const riepilogo = useOperazioniFondi({ limit, azione: "new" });
   const attiva = COLONNE.find((c) => c.id === scelta) ?? COLONNE[0];
   return (
     <Card>

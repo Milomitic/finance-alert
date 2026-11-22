@@ -662,3 +662,29 @@ def test_la_migrazione_EMITTED_AT_riempie_lo_storico_su_POSTGRES(monkeypatch) ->
         command.downgrade(cfg, _PRIMA)
         assert "emitted_at" not in {col["name"] for col in inspect(eng).get_columns("alerts")}
         command.upgrade(cfg, "head")
+
+
+def test_il_valore_delle_operazioni_dei_fondi_non_trabocca_su_POSTGRES(pg) -> None:
+    """Quote per valore di un fondo gigante superano il bigint (2026-11-22:
+    500 in produzione su /api/institutionals/operazioni). SQLite promuove a
+    decimale da solo, quindi solo questa corsia lo vede."""
+    from datetime import timedelta as _td
+
+    from app.models import Institutional, InstitutionalFiling, InstitutionalHolding
+    from app.services import operazioni_fondi_service as svc
+
+    oggi = date.today()
+    f = Institutional(slug="gigante", name="GIGANTE", type="institutional", source="sec_13f")
+    pg.add(f)
+    pg.flush()
+    prima = InstitutionalFiling(institutional_id=f.id, period_end_date=oggi - _td(days=130))
+    dopo = InstitutionalFiling(institutional_id=f.id, period_end_date=oggi - _td(days=40))
+    pg.add_all([prima, dopo])
+    pg.flush()
+    # 3 miliardi di quote per 400 miliardi di dollari: il prodotto e' 1,2e21.
+    pg.add(InstitutionalHolding(filing_id=dopo.id, ticker="NVDA", company_name="NVDA",
+                                shares=3_000_000_000, value_usd=400_000_000_000, portfolio_pct=6.0,
+                                action="reduce", qoq_change_pct=-10.0, qoq_change_shares=-300_000_000))
+    pg.flush()
+    r = svc.operazioni_ultimo_trimestre(pg)
+    assert r.operazioni[0].valore_operazione == 40_000_000_000

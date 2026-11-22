@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import Float, and_, case, cast, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.models import Institutional, InstitutionalFiling, InstitutionalHolding, Stock
@@ -112,11 +112,15 @@ def operazioni_ultimo_trimestre(
         (InstitutionalHolding.action == "new", InstitutionalHolding.value_usd),
         (
             and_(InstitutionalHolding.qoq_change_shares.is_not(None), quote > 0),
-            func.abs(InstitutionalHolding.qoq_change_shares) * InstitutionalHolding.value_usd * 1.0 / quote,
+            # ⚠️ In decimale e DIVIDENDO prima: quote (fino a ~10^9) per valore
+            # (fino a ~10^11) traboccano il bigint di Postgres. SQLite promuove
+            # da solo e non lo vede (2026-11-22, 500 in produzione).
+            cast(InstitutionalHolding.value_usd, Float) / cast(quote, Float)
+            * func.abs(cast(InstitutionalHolding.qoq_change_shares, Float)),
         ),
         (
             InstitutionalHolding.qoq_change_pct > -100.0,
-            InstitutionalHolding.value_usd * func.abs(InstitutionalHolding.qoq_change_pct)
+            cast(InstitutionalHolding.value_usd, Float) * func.abs(InstitutionalHolding.qoq_change_pct)
             / (100.0 + InstitutionalHolding.qoq_change_pct),
         ),
         else_=None,
