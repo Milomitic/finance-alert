@@ -65,7 +65,7 @@ function fmtPct(v: number | null | undefined): string {
 function fmtDelta(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v) || Math.abs(v) > 100) return "";
   if (Math.abs(v) < 0.05) return "=";
-  return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}pp`;
+  return `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
 }
 
 function fmtSharesChange(v: number | null | undefined): string {

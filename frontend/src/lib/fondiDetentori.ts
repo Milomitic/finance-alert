@@ -60,7 +60,7 @@ export function variazione(h: TickerHolder): Variazione | null {
     const corpo = Math.abs(pp).toFixed(1);
     if (Number(corpo) === 0) return { testo: "=", tono: "fermo", spiegazione: "peso invariato" };
     return {
-      testo: `${pp > 0 ? "+" : "−"}${corpo} pp`,
+      testo: `${pp > 0 ? "+" : "−"}${corpo}%`,
       tono: pp > 0 ? "su" : "giu",
       spiegazione: `peso ${pp > 0 ? "aumentato" : "ridotto"} di ${corpo} punti nell'ultimo trimestre`,
     };

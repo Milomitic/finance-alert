@@ -139,7 +139,7 @@ export function AndamentoCard({ a, nTitoli }: { a: AndamentoSettore; nTitoli: nu
                   const d = r.settore != null && r.spy != null ? r.settore - r.spy : null;
                   return (
                     <td key={r.finestra} className={cn("py-1.5 text-right font-semibold", tonoRendimento(d))}>
-                      {d == null ? "—" : `${formatRendimento(d).replace("%", "")} pp`}
+                      {d == null ? "—" : formatRendimento(d)}
                     </td>
                   );
                 })}

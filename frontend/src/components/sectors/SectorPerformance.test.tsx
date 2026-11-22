@@ -48,9 +48,9 @@ describe("le schede dell'andamento di un settore", () => {
     expect(within(righe[2]).getAllByRole("cell")[0].textContent).toBe("XLK");
     const scarto = within(righe[4]).getAllByRole("cell");
     // 54,4 − 14,6 = +39,8 punti in un anno; −2,7 nel mese.
-    expect(scarto.at(-1)!.textContent).toBe("+39.8 pp");
+    expect(scarto.at(-1)!.textContent).toBe("+39.8%");
     expect(scarto.at(-1)!.className).toContain("emerald");
-    expect(scarto[2].textContent).toBe("−2.7 pp");
+    expect(scarto[2].textContent).toBe("−2.7%");
     expect(scarto[2].className).toContain("rose");
     expect(screen.getByText(/pesi uguali dei suoi 131 titoli/)).toBeInTheDocument();
   });

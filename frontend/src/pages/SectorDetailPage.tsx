@@ -173,7 +173,7 @@ export default function SectorDetailPage() {
             <Numero
               etichetta="Un anno"
               sotto={scartoAnno != null
-                ? <span className={tonoRendimento(scartoAnno)}>{formatRendimento(scartoAnno).replace("%", "")} pp contro l'S&P 500</span>
+                ? <span className={tonoRendimento(scartoAnno)}>{formatRendimento(scartoAnno)} contro l'S&P 500</span>
                 : undefined}
             >
               <span className={tonoRendimento(anno?.settore)}>{formatRendimento(anno?.settore)}</span>

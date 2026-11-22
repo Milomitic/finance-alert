@@ -38,7 +38,7 @@ describe("MacroRow — attuale, previsto e precedente nella stessa unita'", () =
   it("uscito il dato: la sorpresa e' una differenza in punti, non un rapporto", () => {
     monta({ ...CPI, actual_value: 0.3, attuale_consenso: 0.3, precedente_consenso: 0.4, surprise_pct: -50, previsto_attuale: 0.6 });
     expect(screen.getByText("+0.3%").className).toContain("rose");
-    expect(screen.getByText(/Sorpresa/)).toHaveTextContent(/-0\.3 pp/);
+    expect(screen.getByText(/Sorpresa/)).toHaveTextContent(/-0\.3%/);
     expect(screen.queryByText(/-50/)).toBeNull();
     expect(screen.queryByText(/vs prec\./)).toBeNull();
   });

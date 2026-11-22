@@ -10,14 +10,14 @@ describe("la variazione di un indicatore macro", () => {
     expect(formatVariazioneMacro(-1.234, "%")).toBe("−1.2%");
     expect(formatVariazioneMacro(3.35, "%")).toBe("+3.4%");
     // Un taglio dei tassi di 0,25 punti non diventa «0,3 pp».
-    expect(formatVariazioneMacro(0.25, "pp")).toBe("+0.25 pp");
-    expect(formatVariazioneMacro(0.1, "pp")).toBe("+0.1 pp");
+    expect(formatVariazioneMacro(0.25, "pp")).toBe("+0.25%");
+    expect(formatVariazioneMacro(0.1, "pp")).toBe("+0.1%");
     expect(formatVariazioneMacro(null, "%")).toBe("—");
   });
 
   it("il segno segue il numero scritto", () => {
     expect(formatVariazioneMacro(0.04, "%")).toBe("0.0%");
-    expect(formatVariazioneMacro(-0.001, "pp")).toBe("0 pp");
+    expect(formatVariazioneMacro(-0.001, "pp")).toBe("0%");
   });
 
   it("l'esito contro la stima, non il segno", () => {

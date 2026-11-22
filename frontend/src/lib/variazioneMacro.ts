@@ -22,7 +22,7 @@ export function formatVariazioneMacro(v: number | null | undefined, unita: strin
   // Il segno segue il numero SCRITTO: +0,04% si legge «0.0%», non «+0.0%».
   const zero = Number(corpo) === 0;
   const segno = zero ? "" : v > 0 ? "+" : "−";
-  return unita === "pp" ? `${segno}${corpo} pp` : `${segno}${corpo}%`;
+  return `${segno}${corpo}%`;
 }
 
 export const TONO_VARIAZIONE = {

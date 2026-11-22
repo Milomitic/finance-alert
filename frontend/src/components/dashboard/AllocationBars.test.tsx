@@ -54,8 +54,8 @@ describe("la colonna mostra il movimento, non il verbo della transazione", () =>
       item({ key: "a", label: "Su", deltaPct: 1.2 }),
       item({ key: "b", label: "Giu", deltaPct: -0.4 }),
     ]} />);
-    expect(screen.getByText("+1.2pp")).toBeInTheDocument();
-    expect(screen.getByText("−0.4pp")).toBeInTheDocument();
+    expect(screen.getByText("+1.2%")).toBeInTheDocument();
+    expect(screen.getByText("−0.4%")).toBeInTheDocument();
   });
 
   it("never prints ADD or REDUCE — the bar is a position, not a change", () => {
@@ -78,7 +78,7 @@ describe("la colonna mostra il movimento, non il verbo della transazione", () =>
     render(<AllocationBars title="t" items={[
       item({ key: "bad", label: "Dato errato", deltaPct: 7663.7 }),
     ]} />);
-    expect(screen.queryByText("+7663.7pp")).not.toBeInTheDocument();
+    expect(screen.queryByText("+7663.7%")).not.toBeInTheDocument();
   });
 
   it("falls back to the share change with its percent unit", () => {

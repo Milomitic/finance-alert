@@ -228,7 +228,7 @@ function MacroInsightStrip({ event }: { event: MacroEvent }) {
           title={`Previsto ${formatConsenso(previstoC, formato, conSegno)} → uscito ${formatConsenso(attualeC, formato, conSegno)}`}
         >
           Sorpresa {sorpresaC > 0 ? "▲" : sorpresaC < 0 ? "▼" : "·"}{" "}
-          {formato === "%" ? `${formatConsenso(sorpresaC, "", true)} pp` : formatConsenso(sorpresaC, formato, true)}
+          {formato === "%" ? `${formatConsenso(sorpresaC, "", true)}%` : formatConsenso(sorpresaC, formato, true)}
         </div>
       ) : !nelConsenso && surprise != null && (
         <div
@@ -373,7 +373,7 @@ function KpiSlot({
       // Percentage points (ΔPP) for rate decisions / CPI rates: a move
       // from 3.75 → 4.00 reads as "+0.25 pp", which is unambiguous.
       const sign = diff > 0 ? "+" : "";
-      deltaLabel = `${sign}${diff.toFixed(2)} pp vs prec.`;
+      deltaLabel = `${sign}${diff.toFixed(2)}% vs prec.`;
     } else {
       // Relative percent change for index/level/dollars indicators.
       const pct = (diff / Math.abs(compareTo)) * 100;

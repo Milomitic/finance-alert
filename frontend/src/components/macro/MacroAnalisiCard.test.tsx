@@ -31,7 +31,7 @@ describe("MacroAnalisiCard", () => {
 
   it("dove i dati non bastano lo dice, e la scheda non cambia forma", () => {
     render(<MacroAnalisiCard a={{ ultima: 0.25, n_variazioni: 5, serie: 0 }} unita="pp" valueKind="pct" sourceScale={null} />);
-    expect(screen.getByText("+0.25 pp")).toBeInTheDocument();
+    expect(screen.getByText("+0.25%")).toBeInTheDocument();
     expect(screen.getByText(/Servono almeno 12 variazioni/)).toBeInTheDocument();
     expect(screen.getByText(/Servono almeno 6 rilasci/)).toBeInTheDocument();
     expect(screen.getAllByText("Non applicabile").length).toBeGreaterThanOrEqual(2);
