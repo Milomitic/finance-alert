@@ -10,6 +10,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { BarraInferiore } from "@/components/BarraInferiore";
+import { useTestataNascosta } from "@/hooks/useTestataNascosta";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UsoPagineReporter } from "@/components/UsoPagineReporter";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
@@ -202,6 +203,9 @@ export default function Layout() {
   // Lo scorrimento dell'app sta in <main>, non nella finestra: la sua posizione
   // segue la cronologia (vedi l'hook).
   const mainRef = useRef<HTMLElement>(null);
+  // Su telefono e tablet la testata esce scorrendo in giu' e torna scorrendo
+  // in su (richiesta del 2026-11-22). Da lg resta sempre: c'e' spazio.
+  const testataNascosta = useTestataNascosta(mainRef, { chiave: location.pathname });
   useScrollRestoration(mainRef);
   // Al cambio di pagina il focus va al contenuto (E-02): restava sul link
   // del menu appena premuto, e chi naviga da tastiera o con un lettore di
@@ -442,7 +446,15 @@ export default function Layout() {
           unless this column allows itself to shrink below its
           content. Same trick applied on `<main>`. */}
       <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-14 items-center gap-2 border-b px-3 sm:gap-4 sm:px-6">
+        {/* ⚠️ Esce col margine, non con una trasformazione: cosi' `<main>`
+            si allunga davvero e i 56px vanno ai dati. `focus-within` la
+            tiene visibile mentre si scrive nella ricerca. */}
+        <header
+          className={cn(
+            "flex h-14 shrink-0 items-center gap-2 border-b px-3 transition-[margin-top] duration-200 motion-reduce:transition-none sm:gap-4 sm:px-6",
+            testataNascosta && "max-lg:-mt-14 focus-within:!mt-0",
+          )}
+        >
           {/* Hamburger — only on screens without the persistent
               sidebar. */}
           <Button
