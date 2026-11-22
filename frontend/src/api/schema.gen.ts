@@ -2298,6 +2298,7 @@ export interface TickerHolderOut {
   shares_change_pct?: number | null;
   portfolio_weight_delta_pp?: number | null;
   action?: string | null;
+  valore_operazione?: number | null;
 }
 
 export interface TickerHoldersOut {

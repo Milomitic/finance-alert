@@ -1647,6 +1647,9 @@ export interface TickerHolder {
   /** Quarter-on-quarter change in portfolio weight, in percentage points. */
   portfolio_weight_delta_pp: number | null;
   action: string | null;
+  /** Valore delle sole quote scambiate nel trimestre (la posizione intera per
+   *  una nuova, quella di prima per un'uscita), in dollari. */
+  valore_operazione?: number | null;
 }
 
 export interface TickerHolders {

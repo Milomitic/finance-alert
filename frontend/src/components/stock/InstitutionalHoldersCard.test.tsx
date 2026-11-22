@@ -103,7 +103,7 @@ describe("la scheda dei fondi che detengono il titolo", () => {
   });
 
   it("le due viste hanno la stessa riga", async () => {
-    dati = { ticker: "AAPL", holders: [fondo(1, "Dorsey Asset Management", { value_usd: 5e8 })], historical: [] };
+    dati = { ticker: "AAPL", holders: [fondo(1, "Dorsey Asset Management", { value_usd: 5e8, action: "add" })], historical: [] };
     const { container } = monta();
     const riga = (v: "detentori" | "operazioni") => righe(container, v)[0].className.replace(/grid-cols-\S+|sm:grid-cols-\S+|min-w-\S+|md:min-w-0/g, "").split(/\s+/).filter(Boolean).join(" ");
     const detentori = riga("detentori");
@@ -115,11 +115,11 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     dati = {
       ticker: "AAPL",
       holders: [
-        fondo(1, "Dorsey Asset Management", { action: "add", period_end_date: "2026-03-31" }),
+        fondo(1, "Dorsey Asset Management", { action: "add", period_end_date: "2026-03-31", value_usd: 24.4e9, valore_operazione: 0.5e9, portfolio_weight_delta_pp: 0.1 }),
         fondo(2, "Dodge & Cox", { action: "new" }),
       ],
       historical: [
-        fondo(9, "AKO Capital", { action: "sold_out", period_end_date: "2026-06-30", value_usd: 210.19e6 }),
+        fondo(9, "AKO Capital", { action: "sold_out", period_end_date: "2026-06-30", value_usd: 210.19e6, valore_operazione: 210.19e6 }),
         // Un fondo ancora presente non si ripete fra le uscite.
         fondo(1, "Dorsey Asset Management", { action: "sold_out", period_end_date: "2025-12-31" }),
       ],
@@ -130,8 +130,12 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(screen.getByRole("button", { name: "Ultime operazioni" })).toHaveAttribute("aria-pressed", "true");
     const r = righe(container, "operazioni");
     expect(r.map((li) => li.querySelector("a")?.textContent)).toEqual(["AKO Capital", "Dodge & Cox", "Dorsey Asset Management"]);
-    expect(within(r[0]).getByText("Sold out")).toBeInTheDocument();
-    expect(within(r[1]).getByText("Nuovo")).toBeInTheDocument();
+    expect(within(r[0]).getByText("Uscita")).toBeInTheDocument();
+    expect(within(r[1]).getByText("Nuova")).toBeInTheDocument();
+    // Il valore e' quello della SOLA operazione, non della posizione (2026-11-22).
+    expect(within(r[2]).getByText("Aumento")).toBeInTheDocument();
+    expect(within(r[2]).getByText("+0.1%")).toBeInTheDocument();
+    expect(within(r[2]).queryByText(/24\.40B/)).toBeNull();
     expect(within(r[2]).getByText("31/03/26")).toBeInTheDocument();
     // Il nome della scheda resta lo stesso in entrambe le viste.
     expect(screen.getByText("Superinvestor / fondi")).toBeInTheDocument();
@@ -141,5 +145,12 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     dati = { ticker: "AAPL", holders: [], historical: [] };
     monta();
     expect(screen.getByText("Nessun fondo tracciato detiene questo titolo.")).toBeInTheDocument();
+  });
+
+  it("una posizione invariata non e' un'operazione", async () => {
+    dati = { ticker: "AAPL", holders: [fondo(1, "Fermo"), fondo(2, "Mosso", { action: "add" })], historical: [] };
+    const { container } = monta();
+    await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
+    expect(righe(container, "operazioni").map((li) => li.querySelector("a")?.textContent)).toEqual(["Mosso"]);
   });
 });

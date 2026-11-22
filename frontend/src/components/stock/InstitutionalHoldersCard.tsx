@@ -22,9 +22,12 @@ import { Button } from "@/components/ui/button";
  *     linea sola: nome, barra del peso (stessa scala per tutti), peso,
  *     movimento del trimestre, valore. Subito solo le posizioni da 10 milioni
  *     in su; le altre a richiesta.
- *   - «Ultime operazioni»: il verbo del 13F (Nuovo / Add / Reduce / Sold out)
- *     con la data, dal piu' recente. I fondi usciti stanno qui, perche' sono
- *     un'operazione, non una posizione.
+ *   - «Ultime operazioni»: il verbo del 13F (nuova, aumento, riduzione,
+ *     uscita) con lo spostamento di peso, il valore della SOLA operazione e la
+ *     data, dal piu' recente. I fondi usciti stanno qui, perche' sono
+ *     un'operazione, non una posizione. ⚠️ Fino al 2026-11-22 le colonne «%» e
+ *     «Valore» mostravano peso e valore della POSIZIONE, cioe' gli stessi
+ *     numeri dei Detentori: 24 miliardi di BlackRock in entrambe le viste.
  *
  * Le due viste hanno la stessa grafica: stessa testata, stessa altezza di
  * riga, stessi corpi (RIGA, TESTATA, NUMERO).
@@ -100,19 +103,19 @@ function RigaFondo({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
   );
 }
 
-/** Il verbo del 13F, col vocabolario di Dataroma. */
+/** Il verbo del 13F, in italiano come nel pannello dei fondi. */
 function verbo(action: string | null): { label: string; tone: string } {
   switch (action) {
     case "new":
-      return { label: "Nuovo", tone: TESTO_SU };
+      return { label: "Nuova", tone: TESTO_SU };
     case "add":
-      return { label: "Add", tone: TESTO_SU };
+      return { label: "Aumento", tone: TESTO_SU };
     case "reduce":
-      return { label: "Reduce", tone: "text-amber-700 dark:text-amber-300" };
+      return { label: "Riduzione", tone: TESTO_GIU };
     case "sold_out":
-      return { label: "Sold out", tone: TESTO_GIU };
+      return { label: "Uscita", tone: TESTO_GIU };
     case "hold":
-      return { label: "Hold", tone: "text-muted-foreground" };
+      return { label: "Invariata", tone: "text-muted-foreground" };
     default:
       return { label: action ?? "—", tone: "text-muted-foreground" };
   }
@@ -121,15 +124,15 @@ function verbo(action: string | null): { label: string; tone: string } {
 /* Testata e righe usano la STESSA stringa: le colonne si allineano per
  * costruzione. `minmax(0,1fr)` e' cio' che lascia troncare il nome. */
 const GRIGLIA_OPERAZIONI =
-  "grid grid-cols-[minmax(0,1fr)_3.75rem_2.75rem_4rem_3.25rem] items-center gap-x-2 min-w-[320px] md:min-w-0";
+  "grid grid-cols-[minmax(0,1fr)_4.25rem_2.75rem_4rem_3.25rem] items-center gap-x-2 min-w-[320px] md:min-w-0";
 
 function TestataOperazioni() {
   return (
     <li className={cn(GRIGLIA_OPERAZIONI, TESTATA)}>
       <span>Fondo</span>
       <span>Azione</span>
-      <span className="text-right">%</span>
-      <span className="text-right">Valore</span>
+      <span className="text-right" title="Spostamento del peso nel portafoglio del fondo">Peso</span>
+      <span className="text-right" title="Valore delle sole quote comprate o vendute nel trimestre">Valore op.</span>
       <span className="text-right">Data</span>
     </li>
   );
@@ -137,6 +140,13 @@ function TestataOperazioni() {
 
 function RigaOperazione({ h }: { h: TickerHolder }) {
   const a = verbo(h.action);
+  // Lo spostamento di peso per aumenti e riduzioni; per una nuova e un'uscita
+  // il peso intero, col segno: e' tutto il peso che entra o esce.
+  const v = h.action === "new"
+    ? { testo: h.portfolio_pct != null ? `+${h.portfolio_pct.toFixed(1)}%` : "—", tono: "su" as const }
+    : h.action === "sold_out"
+      ? { testo: "uscita", tono: "giu" as const }
+      : variazione(h);
   return (
     <li className={cn(GRIGLIA_OPERAZIONI, RIGA)}>
       <Link
@@ -147,8 +157,8 @@ function RigaOperazione({ h }: { h: TickerHolder }) {
         {h.institutional_name}
       </Link>
       <span className={cn("truncate text-[0.7059rem] font-semibold", a.tone)}>{a.label}</span>
-      <span className={NUMERO}>{pct(h.portfolio_pct)}</span>
-      <span className={NUMERO}>{fmtBig(h.value_usd)}</span>
+      <span className={cn(NUMERO, v && toneDi(v.tono))}>{v?.testo ?? "—"}</span>
+      <span className={NUMERO}>{h.valore_operazione != null ? fmtBig(h.valore_operazione) : "—"}</span>
       <span className={NUMERO}>{dataBreve(h.period_end_date)}</span>
     </li>
   );
@@ -214,7 +224,8 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
   const operazioni = useMemo(() => {
     const attuali = new Set(fondi.map((h) => h.institutional_id));
     const usciti = (q.data?.historical ?? []).filter((h) => !attuali.has(h.institutional_id));
-    return ordinaPerData([...fondi, ...usciti]);
+    // «Invariata» non e' un'operazione: resta nei Detentori.
+    return ordinaPerData([...fondi, ...usciti].filter((h) => h.action !== "hold"));
   }, [fondi, q.data]);
   // La scala della barra e' quella di TUTTI i detentori, mostrati o no: aprire
   // «mostra altri» non deve ridisegnare le barre gia' a schermo.

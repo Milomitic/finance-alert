@@ -144,6 +144,7 @@ class TickerHolderOut(BaseModel):
     shares_change_pct: float | None = None
     portfolio_weight_delta_pp: float | None = None
     action: str | None = None
+    valore_operazione: int | None = None
 
 
 class TickerHoldersOut(BaseModel):

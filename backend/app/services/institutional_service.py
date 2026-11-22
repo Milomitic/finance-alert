@@ -1204,14 +1204,44 @@ class TickerHolder:
     shares_change_pct: float | None
     portfolio_weight_delta_pp: float | None
     action: str | None
+    # Il valore della SOLA operazione del trimestre, non della posizione
+    # (2026-11-22): le quote comprate o vendute al prezzo della dichiarazione.
+    valore_operazione: int | None = None
+
+
+def _valore_operazione(
+    action: str | None,
+    value_usd: int | None,
+    qoq_change_pct: float | None,
+    valore_prima: int | None,
+) -> int | None:
+    """Quanto vale l'operazione del trimestre, in dollari.
+
+    nuova      il valore della posizione: e' tutta comprata nel trimestre;
+    uscita     il valore della posizione PRECEDENTE (quella attuale e' zero);
+    aumento /  le quote scambiate al prezzo della dichiarazione:
+    riduzione  valore x |q/q| / (100 + q/q), perche' q/q e' sulle quote di
+               prima. Senza q/q, la differenza fra i due valori (che contiene
+               anche il movimento del prezzo, ed e' quindi solo un ripiego).
+    """
+    if action == "new":
+        return value_usd
+    if action == "sold_out":
+        return valore_prima if valore_prima else (value_usd or None)
+    if action in ("add", "reduce") and value_usd is not None:
+        if qoq_change_pct is not None and qoq_change_pct > -100.0:
+            return int(round(value_usd * abs(qoq_change_pct) / (100.0 + qoq_change_pct)))
+        if valore_prima is not None:
+            return abs(value_usd - valore_prima)
+    return None
 
 
 def _previous_portfolio_weights(
     db: Session,
     ticker: str,
     current_period_by_institution: dict[int, date],
-) -> dict[int, float | None]:
-    """Return the ticker weight in each fund's immediately prior filing.
+) -> dict[int, tuple[float | None, int | None]]:
+    """Return the ticker weight AND value in each fund's immediately prior filing.
 
     The previous *filing* matters here, not merely the previous row containing
     the ticker: skipping a quarter where the position was absent would invent
@@ -1251,21 +1281,22 @@ def _previous_portfolio_weights(
         filing_id: institutional_id
         for institutional_id, filing_id in previous_filing_by_institution.items()
     }
-    weights: dict[int, float | None] = {
-        institutional_id: None
+    weights: dict[int, tuple[float | None, int | None]] = {
+        institutional_id: (None, None)
         for institutional_id in previous_filing_by_institution
     }
     rows = db.execute(
         select(
             InstitutionalHolding.filing_id,
             InstitutionalHolding.portfolio_pct,
+            InstitutionalHolding.value_usd,
         ).where(
             InstitutionalHolding.filing_id.in_(institution_by_filing),
             InstitutionalHolding.ticker == ticker,
         )
     ).all()
-    for filing_id, portfolio_pct in rows:
-        weights[institution_by_filing[filing_id]] = portfolio_pct
+    for filing_id, portfolio_pct, value_usd in rows:
+        weights[institution_by_filing[filing_id]] = (portfolio_pct, value_usd)
     return weights
 
 
@@ -1379,9 +1410,13 @@ def holders_for_ticker(
                 shares_change_pct=qoq_change_pct,
                 portfolio_weight_delta_pp=_portfolio_weight_delta_pp(
                     portfolio_pct,
-                    previous_weights.get(inst_id),
+                    previous_weights.get(inst_id, (None, None))[0],
                 ),
                 action=action,
+                valore_operazione=_valore_operazione(
+                    action, value_usd, qoq_change_pct,
+                    previous_weights.get(inst_id, (None, None))[1],
+                ),
             )
         )
     return out
@@ -1547,9 +1582,13 @@ def historical_holders_for_ticker(
                 shares_change_pct=qoq_change_pct,
                 portfolio_weight_delta_pp=_portfolio_weight_delta_pp(
                     portfolio_pct,
-                    previous_weights.get(inst_id),
+                    previous_weights.get(inst_id, (None, None))[0],
                 ),
                 action=action,
+                valore_operazione=_valore_operazione(
+                    action, value_usd, qoq_change_pct,
+                    previous_weights.get(inst_id, (None, None))[1],
+                ),
             )
         )
         if len(out) >= limit:
