@@ -32,7 +32,7 @@ export function useInstitutionalsAggregate(params?: {
 }
 
 /** Le operazioni dei fondi nell'ultimo trimestre, per spostamento di peso. */
-export function useOperazioniFondi(params: { type?: string; limit?: number } = {}) {
+export function useOperazioniFondi(params: { type?: string; limit?: number; azione?: string } = {}) {
   return useQuery({
     queryKey: ["institutionals", "operazioni", params],
     queryFn: ({ signal }) => institutionals.operazioni(params, signal),

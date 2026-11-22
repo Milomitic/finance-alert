@@ -1611,6 +1611,8 @@ export interface OperazioneFondo {
   peso_prima: number;
   peso_dopo: number;
   delta_pp: number;
+  /** Valore dell'operazione in dollari: l'ordine del server. */
+  valore_operazione: number | null;
   qoq_change_pct: number | null;
   value_usd: number | null;
 }

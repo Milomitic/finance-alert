@@ -13,7 +13,7 @@ router because the underlying query lives in `institutional_service`
 and we want all institutional-domain code grouped.
 """
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -84,12 +84,19 @@ def aggregate(
 def operazioni_trimestre(
     type: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 30,
+    azione: Annotated[
+        Literal["new", "add", "reduce", "sold_out"] | None,
+        Query(description="Un solo tipo di operazione; assente = tutti"),
+    ] = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> OperazioniTrimestreOut:
-    """Le operazioni dei fondi nell'ultimo trimestre, dalla piu' rilevante
-    (spostamento del peso nel portafoglio). Dichiarata PRIMA di `/{slug}`."""
-    r = operazioni_fondi_service.operazioni_ultimo_trimestre(db, type_=type, limit=limit)
+    """Le operazioni dei fondi nell'ultimo trimestre, dalla piu' grande in
+    dollari. Dichiarata PRIMA di `/{slug}`."""
+    r = operazioni_fondi_service.operazioni_ultimo_trimestre(
+        db, type_=type, limit=limit,
+        azioni=(azione,) if azione else operazioni_fondi_service.AZIONI,
+    )
     return OperazioniTrimestreOut.model_validate(r)
 
 

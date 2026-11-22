@@ -1,10 +1,10 @@
-"""Le operazioni dei fondi nell'ultimo trimestre, dalla piu' rilevante.
+"""Le operazioni dei fondi nell'ultimo trimestre, dalla piu' grande.
 
-La RILEVANZA e' lo spostamento del peso nel portafoglio del fondo, in punti:
-peso dopo meno peso prima. Non il valore in dollari, che metterebbe in cima
-ogni ritocco dei fondi indice da migliaia di miliardi (un +0,02% di Vanguard
-vale piu' dollari di un 10% di un investitore concentrato) e direbbe quanto e'
-grande il fondo, non quanto conta la mossa per chi l'ha fatta.
+L'ordine e' il VALORE dell'operazione in dollari (richiesta dell'utente del
+2026-11-22): quote comprate o vendute per il prezzo implicito nella
+dichiarazione, il valore intero per una posizione nuova, quello della
+dichiarazione precedente per un'uscita. Accanto resta lo spostamento del peso
+nel portafoglio del fondo, che dice quanto contava la mossa per chi l'ha fatta.
 
 Il peso prima viene dalla dichiarazione PRECEDENTE dello stesso fondo. Quando
 la posizione non c'e' (Dataroma calcola da se' l'azione e a volte la riga
@@ -41,6 +41,7 @@ class Operazione:
     peso_prima: float
     peso_dopo: float
     delta_pp: float
+    valore_operazione: int | None
     qoq_change_pct: float | None
     value_usd: int | None
 
@@ -54,8 +55,9 @@ class OperazioniTrimestre:
 
 def operazioni_ultimo_trimestre(
     db: Session, *, type_: str | None = None, limit: int = 30,
+    azioni: tuple[str, ...] = AZIONI,
 ) -> OperazioniTrimestre:
-    """Le operazioni del trimestre piu' recente, per spostamento di peso."""
+    """Le operazioni del trimestre piu' recente, dalla piu' grande in dollari."""
     fresche = select(InstitutionalFiling.period_end_date).join(
         Institutional, Institutional.id == InstitutionalFiling.institutional_id,
     ).where(InstitutionalFiling.period_end_date >= _freshness_cutoff())
@@ -83,6 +85,7 @@ def operazioni_ultimo_trimestre(
             f_prec.institutional_id.label("iid"),
             InstitutionalHolding.ticker.label("ticker"),
             func.sum(InstitutionalHolding.portfolio_pct).label("peso"),
+            func.sum(InstitutionalHolding.value_usd).label("valore"),
         )
         .join(f_prec, f_prec.id == InstitutionalHolding.filing_id)
         .join(prec, and_(prec.c.iid == f_prec.institutional_id, prec.c.pp == f_prec.period_end_date))
@@ -103,10 +106,25 @@ def operazioni_ultimo_trimestre(
     )
     prima = func.coalesce(pesi_prec.c.peso, stima_prima)
     delta = (dopo - prima).label("delta")
+    quote = InstitutionalHolding.shares
+    valore = case(
+        (InstitutionalHolding.action == "sold_out", pesi_prec.c.valore),
+        (InstitutionalHolding.action == "new", InstitutionalHolding.value_usd),
+        (
+            and_(InstitutionalHolding.qoq_change_shares.is_not(None), quote > 0),
+            func.abs(InstitutionalHolding.qoq_change_shares) * InstitutionalHolding.value_usd * 1.0 / quote,
+        ),
+        (
+            InstitutionalHolding.qoq_change_pct > -100.0,
+            InstitutionalHolding.value_usd * func.abs(InstitutionalHolding.qoq_change_pct)
+            / (100.0 + InstitutionalHolding.qoq_change_pct),
+        ),
+        else_=None,
+    )
 
     filtro = [
         InstitutionalFiling.period_end_date == trimestre,
-        InstitutionalHolding.action.in_(AZIONI),
+        InstitutionalHolding.action.in_(azioni),
     ]
     if type_:
         filtro.append(Institutional.type == type_)
@@ -121,6 +139,7 @@ def operazioni_ultimo_trimestre(
             prima.label("prima"),
             dopo.label("dopo"),
             delta,
+            valore.label("valore_op"),
             InstitutionalHolding.qoq_change_pct,
             InstitutionalHolding.value_usd,
             select(func.min(Stock.id)).where(Stock.ticker == InstitutionalHolding.ticker)
@@ -137,7 +156,7 @@ def operazioni_ultimo_trimestre(
             ),
         )
         .where(*filtro)
-        .order_by(func.abs(dopo - prima).desc(), func.coalesce(InstitutionalHolding.value_usd, 0).desc())
+        .order_by(func.coalesce(valore, 0).desc(), func.abs(dopo - prima).desc())
         .limit(limit)
     )
     righe = db.execute(stmt).all()
@@ -156,7 +175,9 @@ def operazioni_ultimo_trimestre(
                 ticker=r.ticker, company_name=r.company_name, stock_id=r.stock_id,
                 institutional_slug=r.slug, institutional_name=r.name, action=r.action,
                 peso_prima=round(float(r.prima or 0.0), 2), peso_dopo=round(float(r.dopo or 0.0), 2),
-                delta_pp=round(float(r.delta or 0.0), 2), qoq_change_pct=r.qoq_change_pct,
+                delta_pp=round(float(r.delta or 0.0), 2),
+                valore_operazione=None if r.valore_op is None else int(round(float(r.valore_op))),
+                qoq_change_pct=r.qoq_change_pct,
                 value_usd=r.value_usd,
             )
             for r in righe

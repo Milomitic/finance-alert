@@ -149,3 +149,5 @@ def test_le_operazioni_del_trimestre_non_sono_scambiate_per_un_fondo(client, fon
     corpo = r.json()
     assert set(corpo) == {"trimestre", "fondi", "operazioni"}
     assert len(corpo["operazioni"]) <= 5
+    assert client.get("/api/institutionals/operazioni?azione=sold_out").status_code == 200
+    assert client.get("/api/institutionals/operazioni?azione=boh").status_code == 422

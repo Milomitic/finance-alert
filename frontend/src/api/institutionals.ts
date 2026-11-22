@@ -39,8 +39,9 @@ export const institutionals = {
   },
 
   /** Le operazioni dell'ultimo trimestre, dalla piu' rilevante. */
-  operazioni: (params: { type?: string; limit?: number } = {}, signal?: AbortSignal) => {
+  operazioni: (params: { type?: string; limit?: number; azione?: string } = {}, signal?: AbortSignal) => {
     const qs = new URLSearchParams();
+    if (params.azione) qs.set("azione", params.azione);
     if (params.type) qs.set("type", params.type);
     if (params.limit) qs.set("limit", String(params.limit));
     const suffix = qs.toString() ? `?${qs.toString()}` : "";

@@ -1,11 +1,15 @@
 import { ArrowLeftRight } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { OperazioneFondo } from "@/api/types";
+import type { OperazioneFondo, OperazioniTrimestre } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
+import { Segmentato } from "@/components/ui/segmentato";
 import { useOperazioniFondi } from "@/hooks/useInstitutionals";
+import { useIsPhone } from "@/hooks/useMediaQuery";
+import { fmtBig } from "@/lib/format";
 import { AZIONE_LABEL } from "@/lib/smartMoney";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { cn } from "@/lib/utils";
@@ -14,27 +18,37 @@ import { StockLogo } from "./StockLogo";
 
 /* ─── Le operazioni dei fondi nell'ultimo trimestre (2026-11-22) ──────────
  *
- * Ordinate dal server per SPOSTAMENTO DI PESO nel portafoglio di chi le ha
- * fatte, in punti: dice quanto contava la mossa per il fondo, non quanto e'
- * grande il fondo. Ogni riga sta su una riga: titolo, fondo (cede per primo),
- * azione, peso prima → dopo, e lo spostamento colorato per verso. */
+ * Ordinate dal server per VALORE dell'operazione in dollari. Ogni riga sta su
+ * una riga: titolo, fondo (cede per primo), valore, e lo spostamento del peso
+ * nel portafoglio del fondo, colorato per verso.
+ *
+ * Due forme: la scheda della home (un elenco solo, con l'azione scritta) e il
+ * pannello della pagina dei fondi, a colonne per tipo di operazione. */
 
-const PUNTI = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+type Azione = "new" | "add" | "reduce" | "sold_out";
+const COLONNE: { id: Azione; label: string; breve: string }[] = [
+  { id: "new", label: "Nuove posizioni", breve: "Nuove" },
+  { id: "add", label: "Aumenti", breve: "Aumenti" },
+  { id: "reduce", label: "Riduzioni", breve: "Riduzioni" },
+  { id: "sold_out", label: "Uscite", breve: "Uscite" },
+];
 
-function trimestreBreve(iso: string | null): string {
+const PESO = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function trimestreBreve(iso: string | null | undefined): string {
   if (!iso) return "";
   const [a, m] = iso.split("-").map(Number);
   return `T${Math.ceil(m / 3)} ${a}`;
 }
 
-function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
+function Riga({ o, primo, conAzione }: { o: OperazioneFondo; primo: boolean; conAzione: boolean }) {
   const su = o.delta_pp >= 0;
   // Un 13F identifica a volte un titolo solo col CUSIP (gli ETF, in
   // produzione «CUSIP:46090E103»): il codice non dice niente a chi legge, il
   // nome della societa' si'.
   const soloCusip = o.ticker.startsWith("CUSIP:");
   const ticker = soloCusip ? (
-    <span className="block max-w-[9rem] truncate font-semibold" title={o.ticker}>
+    <span className="block max-w-[8rem] truncate font-semibold" title={o.ticker}>
       {o.company_name ?? o.ticker}
     </span>
   ) : (
@@ -57,72 +71,123 @@ function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
       >
         {o.institutional_name}
       </Link>
-      <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-        {AZIONE_LABEL[o.action] ?? o.action}
-        <span className="hidden sm:inline">
-          {" · "}
-          {PUNTI.format(o.peso_prima)}→{PUNTI.format(o.peso_dopo)}%
+      {conAzione && (
+        <span className="hidden shrink-0 whitespace-nowrap text-xs text-muted-foreground sm:inline">
+          {AZIONE_LABEL[o.action] ?? o.action}
         </span>
+      )}
+      <span className="shrink-0 whitespace-nowrap text-xs font-semibold tabular-nums">
+        {o.valore_operazione != null ? fmtBig(o.valore_operazione) : "—"}
       </span>
       <span
-        className={cn("w-14 shrink-0 text-right text-xs font-semibold tabular-nums", su ? TESTO_SU : TESTO_GIU)}
-        title={`Peso nel portafoglio del fondo: ${PUNTI.format(o.peso_prima)}% prima, ${PUNTI.format(o.peso_dopo)}% dopo`}
+        className={cn("w-12 shrink-0 text-right text-xs tabular-nums", su ? TESTO_SU : TESTO_GIU)}
+        title={`Peso nel portafoglio del fondo: ${PESO.format(o.peso_prima)}% prima, ${PESO.format(o.peso_dopo)}% dopo`}
       >
-        {su ? "+" : "−"}{PUNTI.format(Math.abs(o.delta_pp))} pt
+        {su ? "+" : "−"}{PESO.format(Math.abs(o.delta_pp))}%
       </span>
     </li>
   );
 }
 
+type Interrogazione = ReturnType<typeof useOperazioniFondi>;
+
+/** Lo scheletro e' fatto delle stesse righe: alto quanto i dati, niente salto. */
+function Righe({ q, n, conAzione, vuoto }: { q: Interrogazione; n: number; conAzione: boolean; vuoto: string }) {
+  if (q.isLoading) {
+    return (
+      <ul aria-hidden>
+        {Array.from({ length: n }).map((_, i) => (
+          <li key={i} className={cn("py-1.5", i > 0 && "border-t border-border/40")}>
+            <div className="h-5 animate-pulse rounded bg-muted/40" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (q.isError) {
+    return <QueryError message="delle operazioni dei fondi" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
+  }
+  const righe = q.data?.operazioni ?? [];
+  if (righe.length === 0) return <p className="py-2 text-sm text-muted-foreground">{vuoto}</p>;
+  return (
+    <ul>
+      {righe.map((o, i) => (
+        <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} conAzione={conAzione} />
+      ))}
+    </ul>
+  );
+}
+
+const SPIEGAZIONE =
+  "Ordinate per valore dell'operazione in dollari; la percentuale e' lo spostamento del peso nel portafoglio del fondo.";
+
+function Riepilogo({ d }: { d?: OperazioniTrimestre }) {
+  /* Sempre presente, anche vuoto: arrivando coi dati alzava l'intestazione
+     di 5px e la pagina saltava (CLS nel gate). */
+  return (
+    <span className="text-xs text-muted-foreground">
+      {d?.trimestre ? `${trimestreBreve(d.trimestre)} · ${d.fondi} fondi` : " "}
+    </span>
+  );
+}
+
+/** La scheda della home: un elenco solo, dalla piu' grande. */
 export function OperazioniFondiCard({ limit = 12, className }: { limit?: number; className?: string }) {
   const q = useOperazioniFondi({ limit });
-  const d = q.data;
   return (
     <Card className={cn("flex h-full flex-col overflow-hidden", className)}>
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">
         <div className="shrink-0 border-b bg-muted/30 px-3 py-2">
-          <SectionTitle
-            icon={ArrowLeftRight}
-            label="Operazioni dei fondi"
-            /* Sempre presente, anche vuoto: arrivando coi dati alzava
-               l'intestazione di 5px e la pagina saltava (CLS nel gate). */
-            right={
-              <span className="text-xs text-muted-foreground">
-                {d?.trimestre ? `${trimestreBreve(d.trimestre)} · ${d.fondi} fondi` : " "}
-              </span>
-            }
-          />
+          <SectionTitle icon={ArrowLeftRight} label="Operazioni dei fondi" right={<Riepilogo d={q.data} />} />
         </div>
-        <div className="flex min-h-0 flex-1 flex-col p-3">
-          {q.isLoading ? (
-            /* Le stesse righe dei dati, una per operazione attesa: il
-               caricamento ha l'altezza del contenuto e la pagina non salta. */
-            <ul aria-hidden className="flex-1">
-              {Array.from({ length: limit }).map((_, i) => (
-                <li key={i} className={cn("py-1.5", i > 0 && "border-t border-border/40")}>
-                  <div className="h-5 animate-pulse rounded bg-muted/40" />
-                </li>
-              ))}
-            </ul>
-          ) : q.isError ? (
-            <QueryError message="delle operazioni dei fondi" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />
-          ) : d && d.operazioni.length > 0 ? (
-            <div className="relative min-h-0 flex-1 overflow-y-auto pr-1">
-              <p className="sr-only">
-                Ordinate per spostamento del peso nel portafoglio del fondo, in punti percentuali.
-              </p>
-              <ul>
-                {d.operazioni.map((o, i) => (
-                  <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} />
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="grid flex-1 place-items-center text-sm text-muted-foreground">
-              Nessuna operazione nell'ultimo trimestre.
-            </div>
-          )}
+        <div className="relative min-h-0 flex-1 overflow-y-auto p-3 pr-2">
+          <p className="sr-only">{SPIEGAZIONE}</p>
+          <Righe q={q} n={limit} conAzione vuoto="Nessuna operazione nell'ultimo trimestre." />
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Colonna({ azione, label, limit }: { azione: Azione; label: string; limit: number }) {
+  const q = useOperazioniFondi({ limit, azione });
+  return (
+    <section aria-label={label} className="min-w-0">
+      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</h3>
+      <Righe q={q} n={limit} conAzione={false} vuoto="Nessuna nel trimestre." />
+    </section>
+  );
+}
+
+/** Il pannello della pagina dei fondi: una colonna per tipo di operazione,
+ *  quattro sugli schermi larghi e due sui medi. Su telefono una alla volta,
+ *  scelta con un selettore: quattro elenchi impilati sarebbero quattro
+ *  schermate prima del resto della pagina. */
+export function PannelloOperazioniFondi({ limit = 8 }: { limit?: number }) {
+  const isPhone = useIsPhone();
+  const [scelta, setScelta] = useState<Azione>("new");
+  const riepilogo = useOperazioniFondi({ limit: 1 });
+  const attiva = COLONNE.find((c) => c.id === scelta) ?? COLONNE[0];
+  return (
+    <Card>
+      <CardContent className="space-y-2 p-3">
+        <SectionTitle icon={ArrowLeftRight} label="Operazioni dei fondi" right={<Riepilogo d={riepilogo.data} />} />
+        <p className="sr-only">{SPIEGAZIONE}</p>
+        {isPhone ? (
+          <>
+            <Segmentato
+              etichetta="Tipo di operazione"
+              valore={scelta}
+              onCambia={(id) => setScelta(id as Azione)}
+              voci={COLONNE.map((c) => ({ id: c.id, label: c.breve }))}
+            />
+            <Colonna key={scelta} azione={attiva.id} label={attiva.label} limit={limit} />
+          </>
+        ) : (
+          <div className="grid gap-x-6 gap-y-3 md:grid-cols-2 2xl:grid-cols-4 [&>*]:min-w-0">
+            {COLONNE.map((c) => <Colonna key={c.id} azione={c.id} label={c.label} limit={limit} />)}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

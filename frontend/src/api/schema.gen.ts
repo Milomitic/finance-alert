@@ -1417,6 +1417,7 @@ export interface OperazioneFondoOut {
   peso_prima: number;
   peso_dopo: number;
   delta_pp: number;
+  valore_operazione?: number | null;
   qoq_change_pct?: number | null;
   value_usd?: number | null;
 }

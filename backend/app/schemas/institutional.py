@@ -114,6 +114,7 @@ class OperazioneFondoOut(BaseModel):
     peso_prima: float
     peso_dopo: float
     delta_pp: float
+    valore_operazione: int | None = None
     qoq_change_pct: float | None = None
     value_usd: int | None = None
 

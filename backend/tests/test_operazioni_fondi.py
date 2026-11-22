@@ -33,7 +33,7 @@ def _riga(db, d, ticker, pct, action=None, qoq=None, valore=1_000_000):
     db.flush()
 
 
-def test_ordina_per_spostamento_di_peso_non_per_dollari(db: Session) -> None:
+def test_ordina_per_valore_dell_operazione(db: Session) -> None:
     grande = _fondo(db, "indice")
     p = _dich(db, grande, PREC)
     _riga(db, p, "NVDA", 6.00)
@@ -52,11 +52,36 @@ def test_ordina_per_spostamento_di_peso_non_per_dollari(db: Session) -> None:
     r = svc.operazioni_ultimo_trimestre(db)
     assert r.trimestre == TRIM
     assert r.fondi == 2
-    assert [(o.ticker, o.delta_pp) for o in r.operazioni] == [
-        ("KO", -9.0), ("OXY", 8.0), ("AAPL", 3.0), ("NVDA", 0.02),
+    # Valore: quota aumentata del valore di oggi (NVDA 400 mld x 0,5/100,5,
+    # OXY 5 mln x 150/250), il valore intero per una nuova, quello precedente
+    # per un'uscita; a parita' decide lo spostamento di peso (KO prima di AAPL).
+    assert [(o.ticker, o.valore_operazione) for o in r.operazioni] == [
+        ("NVDA", 1_990_049_751), ("OXY", 3_000_000), ("KO", 1_000_000), ("AAPL", 1_000_000),
     ]
-    ko = r.operazioni[0]
-    assert (ko.peso_prima, ko.peso_dopo, ko.action) == (9.0, 0.0, "sold_out")
+    ko = r.operazioni[2]
+    assert (ko.peso_prima, ko.peso_dopo, ko.delta_pp, ko.action) == (9.0, 0.0, -9.0, "sold_out")
+
+
+def test_il_valore_usa_le_quote_scambiate_quando_ci_sono(db: Session) -> None:
+    f = _fondo(db, "sec")
+    _dich(db, f, PREC)
+    c = _dich(db, f, TRIM)
+    db.add(InstitutionalHolding(filing_id=c.id, ticker="AMZN", company_name="AMZN", shares=1_000,
+                                value_usd=200_000, portfolio_pct=2.0, action="add",
+                                qoq_change_pct=25.0, qoq_change_shares=200))
+    db.flush()
+    assert svc.operazioni_ultimo_trimestre(db).operazioni[0].valore_operazione == 40_000
+
+
+def test_filtro_per_tipo_di_operazione(db: Session) -> None:
+    f = _fondo(db, "misto")
+    p = _dich(db, f, PREC)
+    _riga(db, p, "KO", 9.0)
+    c = _dich(db, f, TRIM)
+    _riga(db, c, "AAPL", 3.0, "new")
+    _riga(db, c, "KO", 0.0, "sold_out", -100.0, valore=0)
+    r = svc.operazioni_ultimo_trimestre(db, azioni=("sold_out",))
+    assert [o.ticker for o in r.operazioni] == ["KO"]
 
 
 def test_senza_riga_precedente_il_peso_prima_si_stima_dal_cambio_di_quote(db: Session) -> None:
