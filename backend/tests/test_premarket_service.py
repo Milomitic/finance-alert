@@ -386,3 +386,30 @@ def test_il_bottone_non_avvia_un_secondo_aggiornamento(monkeypatch, stato, clien
     r = client.post("/api/dashboard/premarket-movers/refresh")
     assert (r.status_code, r.json()) == (202, {"accepted": True})
     assert len(fatte) == chiamate
+
+
+def test_la_pagina_titolo_legge_subito_il_prezzo_del_job(monkeypatch) -> None:
+    """FA-180: il bacino del job ha gia' il prezzo di oggi, che esce senza scaricare."""
+    from datetime import UTC, datetime
+
+    p._SINGLE_CACHE.clear()
+    p._JOB_CACHE.clear()
+    p._JOB_CACHE["AAPL"] = (datetime.now(UTC), (104.0, 100.0), LUN)
+
+    def vietato(*_a, **_k):
+        raise AssertionError("non deve scaricare")
+
+    monkeypatch.setattr("yfinance.download", vietato)
+    assert p.premarket_quote("AAPL", oggi_et=LUN) == (104.0, 100.0)
+    p._JOB_CACHE.clear()
+
+
+def test_il_prezzo_del_job_di_un_altra_seduta_non_vale(monkeypatch) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    p._SINGLE_CACHE.clear()
+    p._JOB_CACHE.clear()
+    p._JOB_CACHE["AAPL"] = (datetime.now(UTC), (104.0, 100.0), LUN - timedelta(days=3))
+    monkeypatch.setattr("yfinance.download", lambda *a, **k: None)
+    assert p.premarket_quote("AAPL", oggi_et=LUN) is None
+    p._JOB_CACHE.clear()

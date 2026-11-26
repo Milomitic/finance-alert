@@ -109,7 +109,16 @@ def _candidate_us_tickers(db: Session) -> list[str]:
         .limit(_LIQUID_BASE_N)
     ).scalars().all()
 
-    want = set(mover_tickers) | set(liquid)
+    # FA-180: i titoli seguiti (posizioni e preferiti) entrano sempre, e per
+    # primi: sono quelli di cui si apre la pagina.
+    from app.services import rilevanza_service  # noqa: PLC0415
+
+    ids_seguiti = list(rilevanza_service.titoli_rilevanti(db))
+    seguiti: list[str] = list(
+        db.execute(select(Stock.ticker).where(Stock.id.in_(ids_seguiti))).scalars()
+    ) if ids_seguiti else []
+
+    want = set(mover_tickers) | set(liquid) | set(seguiti)
     if not want:
         return []
     rows = db.execute(
@@ -125,7 +134,7 @@ def _candidate_us_tickers(db: Session) -> list[str]:
     _TYPE_BY_TICKER.clear()
     ordered: list[str] = []
     seen: set[str] = set()
-    for t in [*mover_tickers, *liquid]:  # movers first
+    for t in [*seguiti, *mover_tickers, *liquid]:  # seguiti, poi movers
         if t in us_set and t not in seen:
             seen.add(t)
             ordered.append(t)
@@ -218,6 +227,36 @@ def _premarket_from_frame(df) -> LetturaPremarket | None:
 _SINGLE_TTL = timedelta(seconds=60)
 _SINGLE_CACHE: dict[str, tuple[datetime, tuple[float, float] | None]] = {}
 
+#: Il prezzo pre-market di OGNI titolo del bacino, calcolato dal job ogni 5
+#: minuti (FA-180). Prima il job ne teneva solo i primi movimenti per la home,
+#: e la pagina di un titolo riscaricava lo stesso dato da capo, un titolo alla
+#: volta, mostrando intanto l'ultima chiusura. ticker -> (quando, (prezzo,
+#: chiusura precedente), seduta).
+_JOB_TTL = timedelta(minutes=10)
+_JOB_CACHE: dict[str, tuple[datetime, tuple[float, float], date]] = {}
+_IN_RINFRESCO: set[str] = set()
+
+
+def _rinfresca_dietro(ticker: str, oggi: date) -> None:
+    """Il prezzo del job esce subito; il dato al minuto arriva dietro.
+
+    ⚠️ Mai un thread sotto i test (il segfault di SQLite annotato in
+    CLAUDE.md), e uno solo per titolo alla volta."""
+    import os
+    import threading
+
+    if os.environ.get("PYTEST_CURRENT_TEST") or ticker in _IN_RINFRESCO:
+        return
+    _IN_RINFRESCO.add(ticker)
+
+    def corri() -> None:
+        try:
+            _scarica_singolo(ticker, oggi)
+        finally:
+            _IN_RINFRESCO.discard(ticker)
+
+    threading.Thread(target=corri, name=f"premarket-{ticker}", daemon=True).start()
+
 
 def premarket_quote(
     ticker: str, *, oggi_et: date | None = None,
@@ -237,6 +276,19 @@ def premarket_quote(
     cached = _SINGLE_CACHE.get(ticker)
     if cached is not None and (now - cached[0]) < _SINGLE_TTL:
         return cached[1]
+    # FA-180: il bacino del job ha gia' il prezzo di oggi. Esce SUBITO, e il
+    # dato al minuto si scarica dietro per le richieste successive.
+    dal_job = _JOB_CACHE.get(ticker)
+    if dal_job is not None and dal_job[2] == oggi and (now - dal_job[0]) < _JOB_TTL:
+        _rinfresca_dietro(ticker, oggi)
+        return dal_job[1]
+    return _scarica_singolo(ticker, oggi)
+
+
+def _scarica_singolo(ticker: str, oggi: date) -> tuple[float, float] | None:
+    """Lo scaricamento di un titolo solo (5 giorni a 5 minuti, pre-market
+    compreso), conservato per `_SINGLE_TTL`."""
+    now = datetime.now(UTC)
     result: tuple[float, float] | None = None
     try:
         import yfinance as yf
@@ -419,6 +471,10 @@ def _recompute(db: Session) -> None:
     # l'etichetta della scheda dichiara QUELLA — non la data di oggi, che alle
     # 03:55 ET e' un giorno dopo i dati.
     session = max((r["_session"] for r in rows), default=None)
+    quando = datetime.now(UTC)
+    for r in rows:
+        if r["_session"] == session and session is not None:
+            _JOB_CACHE[r["ticker"]] = (quando, (float(r["price"]), float(r["prev_close"])), session)
     rows = [r for r in rows if r.pop("_session") == session]
 
     rows.sort(key=lambda r: r["change_pct"], reverse=True)
