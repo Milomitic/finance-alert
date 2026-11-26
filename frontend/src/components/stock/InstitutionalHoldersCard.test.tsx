@@ -147,10 +147,13 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(screen.getByText("Nessun fondo tracciato detiene questo titolo.")).toBeInTheDocument();
   });
 
-  it("una posizione invariata non e' un'operazione", async () => {
-    dati = { ticker: "AAPL", holders: [fondo(1, "Fermo"), fondo(2, "Mosso", { action: "add" })], historical: [] };
+  it("le posizioni invariate compaiono, senza valore d'operazione", async () => {
+    dati = { ticker: "AAPL", holders: [fondo(1, "Fermo"), fondo(2, "Mosso", { action: "add", valore_operazione: 5e6 })], historical: [] };
     const { container } = monta();
     await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
-    expect(righe(container, "operazioni").map((li) => li.querySelector("a")?.textContent)).toEqual(["Mosso"]);
+    const r = righe(container, "operazioni");
+    const fermo = r.find((li) => li.querySelector("a")?.textContent === "Fermo")!;
+    expect(within(fermo).getByText("Invariata")).toBeInTheDocument();
+    expect(r).toHaveLength(2);
   });
 });

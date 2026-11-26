@@ -24,8 +24,8 @@ import { Button } from "@/components/ui/button";
  *     in su; le altre a richiesta.
  *   - «Ultime operazioni»: il verbo del 13F (nuova, aumento, riduzione,
  *     uscita) con lo spostamento di peso, il valore della SOLA operazione e la
- *     data, dal piu' recente. I fondi usciti stanno qui, perche' sono
- *     un'operazione, non una posizione. ⚠️ Fino al 2026-11-22 le colonne «%» e
+ *     data, dal piu' recente, invariate comprese. I fondi usciti stanno qui,
+ *     perche' sono un'operazione, non una posizione. ⚠️ Fino al 2026-11-22 le colonne «%» e
  *     «Valore» mostravano peso e valore della POSIZIONE, cioe' gli stessi
  *     numeri dei Detentori: 24 miliardi di BlackRock in entrambe le viste.
  *
@@ -224,8 +224,9 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
   const operazioni = useMemo(() => {
     const attuali = new Set(fondi.map((h) => h.institutional_id));
     const usciti = (q.data?.historical ?? []).filter((h) => !attuali.has(h.institutional_id));
-    // «Invariata» non e' un'operazione: resta nei Detentori.
-    return ordinaPerData([...fondi, ...usciti].filter((h) => h.action !== "hold"));
+    // Anche le posizioni invariate (richiesta del 2026-11-26): dicono che il
+    // fondo c'era e non ha mosso le quote. Valore dell'operazione «—».
+    return ordinaPerData([...fondi, ...usciti]);
   }, [fondi, q.data]);
   // La scala della barra e' quella di TUTTI i detentori, mostrati o no: aprire
   // «mostra altri» non deve ridisegnare le barre gia' a schermo.
