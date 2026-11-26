@@ -68,4 +68,23 @@ describe("StudioPage", () => {
     monta("/studio?simbolo=AAPL&modello=evento");
     expect(await screen.findByText(/Nessuna trimestrale passata nota/)).toBeInTheDocument();
   });
+
+  it("un effetto che cambia segno fra le due meta' non e' «diverso», e la distribuzione si vede (ondata 1)", async () => {
+    risposte["/api/studio/dopo_movimento"] = {
+      simbolo: "AAPL",
+      condizione: { ...misura(0.03, 40), mediana: -0.01, p10: -0.08, p90: 0.12, peggiore: -0.2, migliore: 0.3 },
+      base: misura(0.01, 120), differenza: 0.02, intervallo_differenza: [0.005, 0.035], verdetto: "instabile",
+      stabilita: { prima: 0.05, seconda: -0.01, concordi: false },
+      istogramma: [{ da: -0.1, a: 0, condizione: 0.4, base: 0.5 }, { da: 0, a: 0.1, condizione: 0.6, base: 0.5 }],
+      parametri: { sedute: 5, soglia_pct: -10, orizzonte: 21 },
+    };
+    monta("/studio?simbolo=AAPL&modello=dopo_movimento&soglia=-10&sedute=5&orizzonte=21");
+    expect(await screen.findByText("Non regge nelle due metà")).toBeInTheDocument();
+    expect(screen.getByText(/Prima metà \+5,00% · seconda metà −1,00%/)).toBeInTheDocument();
+    expect(screen.getByText("Distribuzione")).toBeInTheDocument();
+    expect(screen.getByText("−20,0%")).toBeInTheDocument();
+    // D-87: il risultato ripete la domanda.
+    expect(screen.getByRole("heading", { name: /AAPL · Dopo un movimento/ })).toBeInTheDocument();
+  });
 });
+

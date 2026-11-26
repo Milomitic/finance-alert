@@ -106,3 +106,83 @@ def test_il_confronto_ha_intervallo_e_verdetto():
     netta = {"media": 0.08, "finestre": 40, "intervallo": [0.06, 0.10]}
     assert ss.confronto(netta, base)["verdetto"] == "diversa_dalla_base"
     assert ss.confronto({"media": None}, base)["verdetto"] == "non_concludente"
+
+
+def test_la_distribuzione_accompagna_la_media():
+    """F1: percentili, peggiore e migliore accanto alla media."""
+    d = [date(2020, 1, 1) + timedelta(days=30 * i) for i in range(11)]
+    m = ss._misura([float(i) for i in range(11)], d, 1)
+    assert (m["p10"], m["mediana"], m["p90"]) == (1.0, 5.0, 9.0)
+    assert (m["peggiore"], m["migliore"]) == (0.0, 10.0)
+
+
+def test_l_istogramma_usa_la_stessa_griglia_per_le_due_forme():
+    h = ss.istogramma([0.1, 0.2, 0.3], [0.0, 0.1, 0.2, 0.3, 0.4], fasce=4)
+    assert len(h) == 4
+    assert sum(r["condizione"] for r in h) == pytest.approx(1.0)
+    assert sum(r["base"] for r in h) == pytest.approx(1.0)
+    assert ss.istogramma([], [1.0]) == []
+
+
+def test_un_effetto_che_cambia_segno_fra_le_meta_e_instabile():
+    """F4: escludere lo zero nel complesso non basta se le due meta' non concordano."""
+    g = [date(2010, 1, 1) + timedelta(days=i) for i in range(10)]
+    base = [0.0] * 10
+    cond = [0.10, 0.10, 0.10, 0.10, 0.10, -0.01, -0.01, -0.01, -0.01, -0.01]
+    st = ss.stabilita(cond, g, base, g)
+    assert st["concordi"] is False
+    netta = {"media": 0.05, "finestre": 40, "intervallo": [0.03, 0.07]}
+    zero = {"media": 0.0, "finestre": 100, "intervallo": [-0.001, 0.001]}
+    assert ss.confronto(netta, zero, st)["verdetto"] == "instabile"
+    assert ss.confronto(netta, zero, {"concordi": True})["verdetto"] == "diversa_dalla_base"
+
+
+def test_la_correzione_per_famiglia_toglie_i_falsi_positivi():
+    """F5: Benjamini-Hochberg su diciassette confronti."""
+    p = [0.001, 0.04, 0.2, None] + [0.5] * 13
+    passa = ss.benjamini_hochberg(p)
+    assert passa[0] is True
+    assert passa[1] is False   # 0,04 da solo passerebbe, nella famiglia no
+    assert passa[3] is False   # non stimabile non passa mai
+    assert ss.p_valore([1.0, 1.0], 2) is None   # dispersione nulla
+
+
+def test_la_stagionalita_dichiara_quanti_confronti_sopravvivono():
+    g = [date(2000, 1, 3) + timedelta(days=i) for i in range(800)]
+    serie = ss.Serie(g, [100.0 + (i % 7) * 0.5 for i in range(800)])
+    r = ss.stagionalita(serie)
+    assert r["confronti"] == 17
+    assert all("significativo" in m for m in r["mesi"] + r["giorni"])
+    assert r["sopravvissuti"] == sum(m["significativo"] for m in r["mesi"] + r["giorni"])
+
+
+def test_la_serie_di_un_mercato_si_tiene_per_il_giorno(monkeypatch):
+    chiamate = []
+
+    class B:
+        def __init__(self, d, c):
+            self.data, self.chiusura = d, c
+
+    from app.services import rischio_posizioni_service as rp
+
+    def finte(simbolo):
+        chiamate.append(simbolo)
+        return [B("2026-01-02", 1.0), B("2026-01-05", 2.0)]
+
+    monkeypatch.setattr(rp, "_barre_indice", finte)
+    ss._SERIE_MERCATI.clear()
+
+    class Db:
+        def execute(self, *_a, **_k):
+            class R:
+                def scalars(self):
+                    class S:
+                        def first(self):
+                            return None
+                    return S()
+            return R()
+
+    a = ss.serie_di(Db(), "^XYZ")
+    b = ss.serie_di(Db(), "^xyz")
+    assert a is b and chiamate == ["^XYZ"]
+    ss._SERIE_MERCATI.clear()

@@ -31,7 +31,7 @@ from statistics import mean, median
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.stats.media import mean_interval
+from app.stats.media import mean_interval, t_cdf
 from app.stats.sizing import independent_blocks
 
 MODELLI = ("dopo_movimento", "stagionalita", "evento")
@@ -45,25 +45,110 @@ class Serie:
     chiusure: list[float]
 
 
+def _percentile(ordinati: list[float], q: float) -> float:
+    """Interpolazione lineare fra i due ranghi vicini (la definizione di numpy)."""
+    pos = q * (len(ordinati) - 1)
+    lo = int(pos)
+    hi = min(lo + 1, len(ordinati) - 1)
+    return ordinati[lo] + (ordinati[hi] - ordinati[lo]) * (pos - lo)
+
+
 def _misura(valori: list[float], date_: list[date], orizzonte: int) -> dict:
-    """Media, mediana, quota positiva, finestre indipendenti e intervallo."""
+    """Media, mediana, quota positiva, finestre indipendenti, intervallo e la
+    FORMA della distribuzione (ondata 1, F1): con venti casi la media da sola
+    inganna — NVDA attorno alle trimestrali, media +0,6% e mediana −3,6%."""
     if not valori:
         return {"casi": 0, "finestre": 0, "media": None, "mediana": None,
-                "quota_positivi": None, "intervallo": None}
+                "quota_positivi": None, "intervallo": None,
+                "p10": None, "p90": None, "peggiore": None, "migliore": None}
     finestre = independent_blocks(date_, orizzonte)
     iv = mean_interval(valori, effective_n=finestre)
+    ordinati = sorted(valori)
     return {
         "casi": len(valori), "finestre": finestre,
         "media": mean(valori), "mediana": median(valori),
         "quota_positivi": sum(1 for v in valori if v > 0) / len(valori),
         "intervallo": list(iv) if iv else None,
+        "p10": _percentile(ordinati, 0.10), "p90": _percentile(ordinati, 0.90),
+        "peggiore": ordinati[0], "migliore": ordinati[-1],
     }
+
+
+def istogramma(cond: list[float], base: list[float], fasce: int = 12) -> list[dict]:
+    """La quota dei casi per fascia, per la condizione e per la base sulla
+    STESSA griglia, cosi' le due forme si confrontano a occhio. La griglia va
+    dal 2° al 98° percentile dell'unione: le code estreme finiscono nelle
+    fasce di bordo invece di schiacciare tutto il resto."""
+    if not cond or not base:
+        return []
+    tutti = sorted(cond + base)
+    lo, hi = _percentile(tutti, 0.02), _percentile(tutti, 0.98)
+    if hi <= lo:
+        return []
+    passo = (hi - lo) / fasce
+
+    def quote(valori: list[float]) -> list[float]:
+        n = [0] * fasce
+        for v in valori:
+            i = min(fasce - 1, max(0, int((v - lo) / passo)))
+            n[i] += 1
+        return [c / len(valori) for c in n]
+
+    qc, qb = quote(cond), quote(base)
+    return [{"da": lo + i * passo, "a": lo + (i + 1) * passo, "condizione": qc[i], "base": qb[i]}
+            for i in range(fasce)]
+
+
+def stabilita(cond: list[float], date_cond: list[date], base: list[float], date_base: list[date]) -> dict:
+    """La differenza dalla base nella prima e nella seconda meta' della storia
+    (ondata 1, F4). Il progetto si fida di un effetto solo se regge su
+    campioni disgiunti: un risultato che cambia segno fra le due meta' e'
+    rumore anche quando l'intervallo complessivo esclude lo zero."""
+    if not date_base:
+        return {"prima": None, "seconda": None, "concordi": False}
+    taglio = date_base[len(date_base) // 2]
+
+    def diff(prima: bool) -> float | None:
+        c = [v for v, g in zip(cond, date_cond, strict=True) if (g < taglio) == prima]
+        b = [v for v, g in zip(base, date_base, strict=True) if (g < taglio) == prima]
+        return mean(c) - mean(b) if c and b else None
+
+    a, z = diff(True), diff(False)
+    return {"prima": a, "seconda": z, "taglio": taglio.isoformat(),
+            "concordi": a is not None and z is not None and (a > 0) == (z > 0)}
+
+
+def p_valore(valori: list[float], finestre: int) -> float | None:
+    """La t della media contro zero, con le finestre indipendenti come gradi
+    di liberta' (la stessa convenzione di `mean_interval`)."""
+    n = len(valori)
+    if n < 2 or finestre < 2:
+        return None
+    m = mean(valori)
+    sd = (sum((v - m) ** 2 for v in valori) / (n - 1)) ** 0.5
+    if sd == 0:
+        return None
+    t = m / (sd / finestre ** 0.5)
+    return 2.0 * (1.0 - t_cdf(abs(t), finestre - 1))
+
+
+def benjamini_hochberg(pvals: list[float | None], q: float = 0.05) -> list[bool]:
+    """Quali confronti sopravvivono alla correzione per famiglia (ondata 1, F5).
+    I None (non stimabili) contano nella famiglia e non sopravvivono mai."""
+    m = len(pvals)
+    validi = sorted((p, i) for i, p in enumerate(pvals) if p is not None)
+    soglia_k = 0
+    for k, (p, _) in enumerate(validi, start=1):
+        if p <= q * k / m:
+            soglia_k = k
+    passano = {i for _, i in validi[:soglia_k]}
+    return [i in passano for i in range(m)]
 
 
 MIN_FINESTRE = 20
 
 
-def confronto(cond: dict, base: dict) -> dict:
+def confronto(cond: dict, base: dict, stab: dict | None = None) -> dict:
     """La differenza dalla base col suo intervallo e un verdetto (D-84).
 
     L'intervallo somma in quadratura le due semi-ampiezze: tratta i due
@@ -85,6 +170,9 @@ def confronto(cond: dict, base: dict) -> dict:
         verdetto = "non_concludente"
     elif intervallo[0] <= 0 <= intervallo[1]:
         verdetto = "compatibile_con_zero"
+    elif stab is not None and not stab.get("concordi"):
+        # Esclude lo zero nel complesso ma cambia segno fra le due meta'.
+        verdetto = "instabile"
     else:
         verdetto = "diversa_dalla_base"
     return {"differenza": diff, "intervallo_differenza": intervallo, "verdetto": verdetto}
@@ -109,7 +197,10 @@ def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) 
     out = {"condizione": _misura(casi, date_casi, orizzonte),
            "base": _misura(base, date_base, orizzonte),
            "parametri": {"sedute": sedute, "soglia_pct": soglia_pct, "orizzonte": orizzonte}}
-    out.update(confronto(out["condizione"], out["base"]))
+    stab = stabilita(casi, date_casi, base, date_base)
+    out.update(confronto(out["condizione"], out["base"], stab))
+    out["stabilita"] = stab
+    out["istogramma"] = istogramma(casi, base)
     return out
 
 
@@ -143,11 +234,23 @@ def stagionalita(s: Serie) -> dict:
                 "quota_positivi": sum(1 for v in valori if v > 0) / len(valori) if valori else None,
                 "intervallo": list(iv) if iv else None}
 
+    mesi = [{"mese": MESI[m - 1], **gruppo(per_mese.get(m, []))} for m in range(1, 13)]
+    giorni = [{"giorno": GIORNI[g], **gruppo(per_giorno.get(g, []))} for g in range(5)]
+    # F5: diciassette confronti contro lo zero sono una famiglia. Senza la
+    # correzione su ^GSPC quattro mesi «uscivano», circa uno per pura
+    # combinatoria. `significativo` e' cio' che sopravvive a Benjamini-Hochberg.
+    pv = [p_valore(per_mese.get(m, []), len(per_mese.get(m, []))) for m in range(1, 13)] + [
+        p_valore(per_giorno.get(g, []), len(per_giorno.get(g, []))) for g in range(5)]
+    passano = benjamini_hochberg(pv)
+    for i, riga in enumerate(mesi + giorni):
+        riga["significativo"] = passano[i]
     return {
-        "mesi": [{"mese": MESI[m - 1], **gruppo(per_mese.get(m, []))} for m in range(1, 13)],
+        "mesi": mesi,
         "base_mesi": gruppo(tutti_mesi),
-        "giorni": [{"giorno": GIORNI[g], **gruppo(per_giorno.get(g, []))} for g in range(5)],
+        "giorni": giorni,
         "base_giorni": gruppo(tutti_giorni),
+        "confronti": len(pv),
+        "sopravvissuti": sum(passano),
     }
 
 
@@ -181,8 +284,9 @@ def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
     ] if percorsi else []
     a_orizzonte = _misura(a_h, date_h, orizzonte)
     base_m = _misura(base, date_base, orizzonte)
+    stab = stabilita(a_h, date_h, base, date_base)
     return {"percorso": percorso, "a_orizzonte": a_orizzonte, "base": base_m, "orizzonte": orizzonte,
-            **confronto(a_orizzonte, base_m)}
+            **confronto(a_orizzonte, base_m, stab), "stabilita": stab, "istogramma": istogramma(a_h, base)}
 
 
 def _primo_da(date_: list[date], g: date) -> int:
@@ -198,6 +302,11 @@ def _primo_da(date_: list[date], g: date) -> int:
 
 # ─── Le fonti ──────────────────────────────────────────────────────────────
 
+#: simbolo di mercato -> (giorno, serie). Piccolo per costruzione: i mercati
+#: sono una ventina.
+_SERIE_MERCATI: dict[str, tuple[date, Serie]] = {}
+
+
 def serie_di(db: Session, simbolo: str) -> Serie | None:
     """Le chiusure del simbolo: dal catalogo per un titolo, dal dettaglio
     mercati per un indice o una materia prima."""
@@ -210,12 +319,21 @@ def serie_di(db: Session, simbolo: str) -> Serie | None:
                            .where(OhlcvDaily.stock_id == s.id).order_by(OhlcvDaily.date)).all()
         d = [g if isinstance(g, date) else date.fromisoformat(str(g)[:10]) for g, _ in righe]
         return Serie(d, [float(c) for _, c in righe]) if righe else None
+    # F20: la serie di un mercato passa dal dettaglio completo (indicatori
+    # compresi): 3,5 s a freddo per la stagionalita' di ^GSPC. Vale per il
+    # giorno, quindi si tiene per il giorno.
+    oggi = date.today()
+    in_cache = _SERIE_MERCATI.get(t)
+    if in_cache is not None and in_cache[0] == oggi:
+        return in_cache[1]
     from app.services import rischio_posizioni_service as rp  # noqa: PLC0415
 
     barre = rp._barre_indice(t)
     if not barre:
         return None
-    return Serie([date.fromisoformat(b.data[:10]) for b in barre], [b.chiusura for b in barre])
+    serie = Serie([date.fromisoformat(b.data[:10]) for b in barre], [b.chiusura for b in barre])
+    _SERIE_MERCATI[t] = (oggi, serie)
+    return serie
 
 
 def date_trimestrali(simbolo: str) -> list[date]:

@@ -9,14 +9,26 @@ export type Misura = {
   mediana?: number | null;
   quota_positivi: number | null;
   intervallo: [number, number] | null;
+  /** Forma della distribuzione (ondata 1, F1); assenti nella stagionalita'. */
+  p10?: number | null;
+  p90?: number | null;
+  peggiore?: number | null;
+  migliore?: number | null;
+  /** Solo nella stagionalita': sopravvive alla correzione per famiglia (F5). */
+  significativo?: boolean;
 };
 
-export type Verdetto = "non_concludente" | "compatibile_con_zero" | "diversa_dalla_base";
+export type Stabilita = { prima: number | null; seconda: number | null; concordi: boolean; taglio?: string };
+export type Fascia = { da: number; a: number; condizione: number; base: number };
+
+export type Verdetto = "non_concludente" | "compatibile_con_zero" | "instabile" | "diversa_dalla_base";
 
 export type Confronto = {
   differenza: number | null;
   intervallo_differenza: [number, number] | null;
   verdetto: Verdetto;
+  stabilita?: Stabilita;
+  istogramma?: Fascia[];
 };
 
 export type DopoMovimento = Confronto & {
@@ -32,6 +44,8 @@ export type Stagionalita = {
   base_mesi: Misura;
   giorni: ({ giorno: string } & Misura)[];
   base_giorni: Misura;
+  confronti?: number;
+  sopravvissuti?: number;
 };
 
 export type Evento = Confronto & {
