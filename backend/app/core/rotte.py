@@ -16,7 +16,7 @@ from __future__ import annotations
 #: Le pagine con un percorso fisso.
 ROTTE_STATICHE: frozenset[str] = frozenset({
     "/", "/login", "/alerts", "/positions", "/diagnostics", "/calendar",
-    "/stocks", "/sectors", "/institutionals", "/studio",
+    "/stocks", "/sectors", "/institutionals", "/studio", "/markets",
 })
 
 #: Percorsi che il router rimanda altrove. Il RUM misura la pagina d'arrivo;
