@@ -5,14 +5,20 @@ export interface ColumnDef { id: string; label: string; }
 /** Per-table column show/hide, persisted in localStorage. `columns` is the
  *  full set of toggleable columns; hidden ids are stored under
  *  `colvis:<tableId>`. Returns helpers to query + toggle visibility. */
-export function useColumnVisibility(tableId: string, columns: ColumnDef[]) {
+export function useColumnVisibility(
+  tableId: string,
+  columns: ColumnDef[],
+  /** Le colonne nascoste a chi non ha ancora scelto (C-27). Senza una scelta
+   *  salvata la tabella partiva da TUTTE le colonne. */
+  nascosteDiDefault: readonly string[] = [],
+) {
   const key = `colvis:${tableId}`;
   const [hidden, setHidden] = useState<Set<string>>(() => {
     try {
       const raw = localStorage.getItem(key);
-      return new Set<string>(raw ? JSON.parse(raw) : []);
+      return new Set<string>(raw ? JSON.parse(raw) : nascosteDiDefault);
     } catch {
-      return new Set();
+      return new Set(nascosteDiDefault);
     }
   });
   useEffect(() => {

@@ -78,9 +78,9 @@ describe("il pannello filtri non ha violazioni strutturali", () => {
     // Scanning without opening it would pass over a control that is simply
     // not in the DOM yet — a green result about an absence.
     const { user, container } = await renderAllAreasOpen();
-    await user.click(screen.getByRole("button", { name: /preset/i }));
+    await user.click(screen.getByRole("button", { name: /^viste/i }));
 
-    expect(screen.getByRole("textbox", { name: /nome del preset/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /nome della vista/i })).toBeInTheDocument();
 
     const violations = await axeViolations(container);
 

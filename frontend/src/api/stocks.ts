@@ -102,6 +102,7 @@ export interface SearchParams {
   /** Exclude instrument_type='etf' rows (ETF/ETN leveraged products). */
   exclude_etf?: boolean;
   solo_dati_completi?: boolean;
+  solo_miei?: boolean;
   sort_by?: StockSortBy;
   sort_dir?: SortDir;
   limit?: number;
@@ -153,6 +154,7 @@ function toQuery(params: SearchParams): string {
   if (params.volume_min !== undefined) sp.set("volume_min", String(params.volume_min));
   if (params.exclude_etf) sp.set("exclude_etf", "true");
   if (params.solo_dati_completi) sp.set("solo_dati_completi", "true");
+  if (params.solo_miei) sp.set("solo_miei", "true");
   if (params.sort_by) sp.set("sort_by", params.sort_by);
   if (params.sort_dir) sp.set("sort_dir", params.sort_dir);
   if (params.limit !== undefined) sp.set("limit", String(params.limit));

@@ -88,11 +88,11 @@ describe("every filter field says what it is", () => {
     // The field lives inside the Preset popover, so it does not exist until
     // the popover is opened. Asserting without this passes through
     // getByRole's "not found" error, not through a missing label.
-    await user.click(screen.getByRole("button", { name: /preset/i }));
+    await user.click(screen.getByRole("button", { name: /^viste/i }));
 
     // A placeholder disappears the moment you type into it, so it is not a label.
     expect(
-      screen.getByRole("textbox", { name: /nome del preset/i }),
+      screen.getByRole("textbox", { name: /nome della vista/i }),
     ).toBeInTheDocument();
   });
 });

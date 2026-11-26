@@ -568,7 +568,10 @@ export function StockBrowserTable({
               {/* Right-click on the header row opens the column-visibility menu. */}
               <tr onContextMenu={openColumnMenu}>
                 {/* Ticker column: always-on (identity). */}
-                <th className="px-3 py-1.5 text-left text-base">
+                {/* Fissa a sinistra (C-27): scorrendo le colonne il ticker
+                    restava indietro e le cifre perdevano il nome. Fondo
+                    opaco, altrimenti le celle passano sotto in trasparenza. */}
+                <th className="sticky left-0 z-[1] bg-card px-3 py-1.5 text-left text-base">
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       type="button"
@@ -712,10 +715,10 @@ export function StockBrowserTable({
                 return (
                   <tr
                     key={s.id}
-                    className="border-b border-border/50 hover:bg-muted/40 transition-colors"
+                    className="group border-b border-border/50 hover:bg-muted/40 transition-colors"
                   >
-                    {/* Identity cell — always visible */}
-                    <td className="px-3 py-1.5">
+                    {/* Identity cell — always visible, fissa a sinistra */}
+                    <td className="sticky left-0 z-[1] bg-card px-3 py-1.5 group-hover:bg-muted">
                       <div className="inline-flex items-center gap-2 min-w-0">
                         <StockLogo ticker={s.ticker} size="sm" />
                         <div className="flex flex-col min-w-0">

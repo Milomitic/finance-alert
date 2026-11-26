@@ -194,6 +194,7 @@ class StockFilter:
     #: Solo i titoli con la completezza dei fondamentali sopra la soglia della
     #: scheda (90%, `completezza_service`). FA-156.
     solo_dati_completi: bool = False
+    solo_miei: bool = False
     sort_by: str = "ticker"
     sort_dir: str = "asc"
     limit: int = 50
@@ -415,6 +416,12 @@ def _apply_filter(stmt, f: StockFilter):
         # ETFs are equities in every other respect (they have metrics +
         # technical scores) — this is a plain instrument_type predicate.
         stmt = stmt.where(Stock.instrument_type != "etf")
+    if f.solo_miei:
+        # Posizioni aperte o preferiti: un proprietario solo, lo stesso dei
+        # segnali (C-33).
+        from app.services import rilevanza_service  # noqa: PLC0415
+
+        stmt = stmt.where(rilevanza_service.filtro_rilevanti(Stock.id))
     if f.solo_dati_completi:
         # Dalla sola cache dei fondamentali: un titolo che la cache non ha
         # non e' «completo», e resta fuori invece di passare per difetto.

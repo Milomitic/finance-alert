@@ -59,7 +59,7 @@ function renderCard(overrides: Partial<Parameters<typeof StockFiltersCard>[0]> =
 }
 
 const openMenu = async (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole("button", { name: /preset/i }));
+  user.click(screen.getByRole("button", { name: /^viste/i }));
 
 describe("i preset gia nel browser non vengono persi", () => {
   it("mostra una vecchia voce salvata come solo filtri", async () => {
@@ -97,7 +97,7 @@ describe("una vista salva l'intera configurazione", () => {
     const { user } = renderCard();
     await openMenu(user);
 
-    await user.type(screen.getByRole("textbox", { name: /nome del preset/i }), "mia vista");
+    await user.type(screen.getByRole("textbox", { name: /nome della vista/i }), "mia vista");
     await user.click(screen.getByRole("button", { name: /^salva$/i }));
 
     const stored = JSON.parse(mem.get("screenerFilterPresets") as string);
@@ -112,7 +112,7 @@ describe("una vista salva l'intera configurazione", () => {
   it("riapplicandola restituisce tutte e tre le parti", async () => {
     const { user, onApply } = renderCard();
     await openMenu(user);
-    await user.type(screen.getByRole("textbox", { name: /nome del preset/i }), "completa");
+    await user.type(screen.getByRole("textbox", { name: /nome della vista/i }), "completa");
     await user.click(screen.getByRole("button", { name: /^salva$/i }));
 
     await user.click(screen.getByRole("button", { name: /^completa$/i }));
@@ -134,7 +134,7 @@ describe("una vista salva l'intera configurazione", () => {
       <StockFiltersCard state={EMPTY_FILTERS} onChange={onChange} filters={undefined} />,
     );
     await openMenu(user);
-    await user.type(screen.getByRole("textbox", { name: /nome del preset/i }), "senza tabella");
+    await user.type(screen.getByRole("textbox", { name: /nome della vista/i }), "senza tabella");
     await user.click(screen.getByRole("button", { name: /^salva$/i }));
 
     await user.click(screen.getByRole("button", { name: /^senza tabella$/i }));
@@ -144,3 +144,32 @@ describe("una vista salva l'intera configurazione", () => {
     expect(onChange.mock.calls[0][0]).not.toHaveProperty("hiddenColumns");
   });
 });
+
+describe("le viste dicono cosa fanno (C-30)", () => {
+  it("un nome gia' usato si sostituisce solo dicendolo", async () => {
+    mem.set("screenerFilterPresets", JSON.stringify({ mia: { minScore: 60 } }));
+    const { user } = renderCard();
+    await openMenu(user);
+    await user.type(screen.getByRole("textbox", { name: /nome della vista/i }), "mia");
+    expect(screen.getByRole("button", { name: "Sostituisci" })).toBeInTheDocument();
+  });
+
+  it("eliminare chiede un secondo tocco", async () => {
+    mem.set("screenerFilterPresets", JSON.stringify({ mia: { minScore: 60 } }));
+    const { user } = renderCard();
+    await openMenu(user);
+    await user.click(screen.getByRole("button", { name: "Elimina la vista mia" }));
+    expect(JSON.parse(mem.get("screenerFilterPresets") as string)).toHaveProperty("mia");
+    await user.click(screen.getByRole("button", { name: "Conferma: elimina la vista mia" }));
+    expect(JSON.parse(mem.get("screenerFilterPresets") as string)).not.toHaveProperty("mia");
+  });
+
+  it("applicata, il bottone dice quale vista e' attiva", async () => {
+    mem.set("screenerFilterPresets", JSON.stringify({ mia: { minScore: 60 } }));
+    const { user } = renderCard();
+    await openMenu(user);
+    await user.click(screen.getByRole("button", { name: /^mia$/i }));
+    expect(screen.getByRole("button", { name: /^Vista: mia/ })).toBeInTheDocument();
+  });
+});
+

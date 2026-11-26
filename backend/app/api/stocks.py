@@ -131,6 +131,9 @@ def search(
     signals_within_days: Annotated[int, Query(ge=1, le=90)] = 7,
     exclude_etf: bool = False,
     solo_dati_completi: bool = False,
+    # C-33: solo i titoli in posizione o fra i preferiti, la stessa regola
+    # del filtro «I miei titoli» dei segnali.
+    solo_miei: bool = False,
     sort_by: str = "ticker",
     sort_dir: str = "asc",
     limit: int = 50,
@@ -223,6 +226,7 @@ def search(
             signals_within_days=signals_within_days,
             exclude_etf=exclude_etf,
             solo_dati_completi=solo_dati_completi,
+            solo_miei=solo_miei,
             sort_by=sort_by,
             sort_dir=sort_dir,
             limit=limit,

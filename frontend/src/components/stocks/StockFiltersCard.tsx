@@ -33,6 +33,8 @@ export interface FiltersState {
   excludeEtf: boolean;
   /** Solo i titoli con i fondamentali completi al 90% o piu' (FA-156). */
   datiCompleti: boolean;
+  /** Solo i titoli in posizione o fra i preferiti (C-33). */
+  soloMiei: boolean;
   /** Min composite score 0–100, or null = no threshold. When set, unscored
    *  stocks are excluded by the backend. */
   minScore: number | null;
@@ -149,6 +151,10 @@ function PresetsMenu({
     loadPresets(defaults),
   );
   const [name, setName] = useState("");
+  // C-30: la vista applicata o salvata per ultima, detta sul bottone; e la
+  // vista di cui si e' chiesta l'eliminazione, che si conferma col secondo tocco.
+  const [attiva, setAttiva] = useState<string | null>(null);
+  const [daEliminare, setDaEliminare] = useState<string | null>(null);
   const persist = (next: Record<string, ScreenerView<FiltersState>>) => {
     setPresets(next);
     try {
@@ -175,16 +181,25 @@ function PresetsMenu({
         hiddenColumns: view?.hiddenColumns ?? [],
       },
     });
+    setAttiva(n);
     setName("");
   };
+  // Un nome gia' usato si SOSTITUISCE solo dicendolo: prima sovrascriveva in
+  // silenzio (C-30).
+  const esiste = name.trim() !== "" && name.trim() in presets;
   const names = Object.keys(presets).sort((a, b) => a.localeCompare(b));
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
           <Bookmark className="h-3.5 w-3.5" />
-          Preset
-          {names.length > 0 && (
+          {/* Un nome solo, «Viste», sul bottone e nel pannello (C-30). */}
+          {attiva && attiva in presets ? (
+            <span className="max-w-[10rem] truncate">Vista: {attiva}</span>
+          ) : (
+            "Viste"
+          )}
+          {names.length > 0 && !(attiva && attiva in presets) && (
             <Badge variant="secondary" className="h-4 px-1 text-[0.6765rem]">
               {names.length}
             </Badge>
@@ -195,7 +210,7 @@ function PresetsMenu({
       <PopoverContent align="start" className="w-72 p-0">
         <div className="px-3 py-2 border-b">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            {view ? "Viste salvate" : "Preset filtri"}
+            Viste salvate
           </span>
         </div>
         <div className="max-h-60 overflow-y-auto p-1">
@@ -203,7 +218,7 @@ function PresetsMenu({
             <div className="text-xs text-muted-foreground p-3">
               {view
                 ? "Nessuna vista salvata. Imposta filtri, ordinamento e colonne, poi salvali qui sotto."
-                : "Nessun preset salvato. Imposta i filtri e salvali qui sotto."}
+                : "Nessuna vista salvata. Imposta i filtri e salvali qui sotto."}
             </div>
           ) : (
             <ul>
@@ -217,23 +232,37 @@ function PresetsMenu({
                       // restored, and saying so beats half-restoring silently.
                       if (view) view.onApply(saved);
                       else onChange(saved.filters);
+                      setAttiva(n);
                     }}
                     className="flex-1 text-left px-2 py-1.5 text-sm truncate"
-                    title={view ? `Applica la vista "${n}": filtri, ordinamento e colonne` : `Applica il preset "${n}"`}
+                    title={view ? `Applica la vista "${n}": filtri, ordinamento e colonne` : `Applica la vista "${n}"`}
                   >
                     {n}
                   </button>
+                  {n === attiva && <span className="shrink-0 text-xs text-muted-foreground">attiva</span>}
+                  {/* Eliminare chiede un secondo tocco (C-30): prima spariva
+                      al primo, senza annullare. */}
                   <button
                     type="button"
                     onClick={() => {
+                      if (daEliminare !== n) {
+                        setDaEliminare(n);
+                        return;
+                      }
                       const next = { ...presets };
                       delete next[n];
                       persist(next);
+                      setDaEliminare(null);
+                      if (attiva === n) setAttiva(null);
                     }}
-                    className="p-1 mr-1 rounded hover:bg-background/60 text-muted-foreground"
-                    aria-label={`Elimina preset ${n}`}
+                    onBlur={() => setDaEliminare((d) => (d === n ? null : d))}
+                    className={cn(
+                      "mr-1 rounded p-1 text-xs hover:bg-background/60",
+                      daEliminare === n ? "font-semibold text-red-700 dark:text-red-300" : "text-muted-foreground",
+                    )}
+                    aria-label={daEliminare === n ? `Conferma: elimina la vista ${n}` : `Elimina la vista ${n}`}
                   >
-                    <X className="h-3.5 w-3.5" />
+                    {daEliminare === n ? "Elimina?" : <X className="h-3.5 w-3.5" />}
                   </button>
                 </li>
               ))}
@@ -244,16 +273,16 @@ function PresetsMenu({
           <input
             type="text"
             value={name}
-            aria-label="Nome del preset da salvare"
+            aria-label="Nome della vista da salvare"
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") save();
             }}
-            placeholder="Nome preset…"
+            placeholder="Nome della vista…"
             className="flex-1 h-8 px-2 text-sm rounded border border-input bg-transparent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <Button size="sm" className="h-8 text-xs" onClick={save} disabled={!name.trim()}>
-            Salva
+            {esiste ? "Sostituisci" : "Salva"}
           </Button>
         </div>
       </PopoverContent>
@@ -269,6 +298,10 @@ interface Props {
    *  where the card renders without a table under it, the menu keeps its old
    *  filters-only behaviour rather than pretending to restore a sort. */
   view?: ViewContext;
+  /** La ricerca testuale della tabella (C-29): conta fra i filtri attivi, ha
+   *  il suo chip e «Reset» la cancella. Viveva fuori dal sistema dei filtri,
+   *  e uno schermo con tre righe non diceva cosa le avesse ridotte. */
+  ricerca?: { q: string; onClear: () => void };
 }
 
 interface MultiSelectProps {
@@ -586,7 +619,7 @@ function RimuoviChip({ onClick, etichetta }: { onClick: () => void; etichetta: s
     </button>
   );
 }
-export function StockFiltersCard({ state, onChange, filters, view }: Props) {
+export function StockFiltersCard({ state, onChange, filters, view, ricerca }: Props) {
   const indexOptions = (filters?.indices ?? []).map((i) => ({
     value: i.code,
     label: `${i.code} — ${i.name}`,
@@ -607,10 +640,14 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
   const fondamentaliActive = conteggi.fondamentali;
   const tecniciActive = conteggi.tecnici;
   const prezzoVolumeActive = conteggi.prezzoVolume;
-  const totalActive = conteggi.totale;
+  const cercato = ricerca?.q.trim() ?? "";
+  const totalActive = conteggi.totale + (cercato ? 1 : 0);
   const pillarActiveCount = conteggi.pilastri;
 
-  const clearAll = () => onChange({ ...EMPTY_FILTERS });
+  const clearAll = () => {
+    onChange({ ...EMPTY_FILTERS });
+    ricerca?.onClear();
+  };
 
   const removeChip = (kind: keyof FiltersState, value: string) => {
     if (kind === "riskTiers") {
@@ -628,7 +665,7 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
     const isBool =
       kind === "aboveEma50" || kind === "aboveEma200" ||
       kind === "near52wHigh" || kind === "near52wLow" ||
-      kind === "volSpike" || kind === "excludeEtf" || kind === "datiCompleti";
+      kind === "volSpike" || kind === "excludeEtf" || kind === "datiCompleti" || kind === "soloMiei";
     onChange({ ...state, [kind]: isBool ? false : null });
   };
 
@@ -725,6 +762,13 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
                 label="Escludi ETF"
                 active={state.excludeEtf}
                 onToggle={() => set({ excludeEtf: !state.excludeEtf })}
+              />
+              {/* C-33: la home rimanda «sui tuoi titoli», e lo screener non
+                  sapeva restringersi a loro. Posizioni aperte o preferiti. */}
+              <ToggleChip
+                label="I miei titoli"
+                active={state.soloMiei}
+                onToggle={() => set({ soloMiei: !state.soloMiei })}
               />
             </div>
           </CollapsibleArea>
@@ -992,6 +1036,12 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
         {totalActive > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border/50">
             <span className="text-xs text-muted-foreground mr-1">Attivi:</span>
+            {cercato && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                <span className="text-muted-foreground">Cerca:</span> {cercato}
+                <RimuoviChip onClick={() => ricerca?.onClear()} etichetta={`Rimuovi la ricerca ${cercato}`} />
+              </Badge>
+            )}
             {state.indexCodes.map((v) => (
               <Badge key={`i-${v}`} variant="secondary" className="text-xs gap-1 pr-1">
                 <span className="text-muted-foreground">Indice:</span> {v}
@@ -1026,6 +1076,12 @@ export function StockFiltersCard({ state, onChange, filters, view }: Props) {
               <Badge variant="secondary" className="text-xs gap-1 pr-1">
                 Dati completi
                 <RimuoviChip onClick={() => removeChip("datiCompleti", "")} etichetta="Rimuovi filtro dati completi" />
+              </Badge>
+            )}
+            {state.soloMiei && (
+              <Badge variant="secondary" className="text-xs gap-1 pr-1">
+                I miei titoli
+                <RimuoviChip onClick={() => removeChip("soloMiei", "")} etichetta="Rimuovi filtro i miei titoli" />
               </Badge>
             )}
             {state.excludeEtf && (

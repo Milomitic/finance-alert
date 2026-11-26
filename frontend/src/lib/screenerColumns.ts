@@ -27,3 +27,13 @@ export const SCREENER_COLS = [
   { id: "tech_rel_strength", label: "T-RS" },
   { id: "risk",           label: "Risk" },
 ] as const;
+
+/** Le colonne nascoste di default (C-27): 24 colonne erano ~2.800px su uno
+ *  schermo da 1440, e il ticker usciva scorrendo. Restano dieci: settore,
+ *  prezzo, capitalizzazione, variazione, RSI, volume relativo, le due lenti,
+ *  il divario e il rischio. Le altre si accendono dal menu Colonne. */
+export const SCREENER_NASCOSTE_DI_DEFAULT = [
+  "exchange", "industry", "volume", "pct_from_high", "vs_ema200",
+  "profitability", "sustainability", "growth", "value", "sentiment",
+  "tech_trend", "tech_momentum", "tech_structure", "tech_volume", "tech_rel_strength",
+] as const;

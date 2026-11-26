@@ -21,7 +21,7 @@ import {
   StockBrowserTable,
   type TableSortKey,
 } from "@/components/stocks/StockBrowserTable";
-import { SCREENER_COLS } from "@/lib/screenerColumns";
+import { SCREENER_COLS, SCREENER_NASCOSTE_DI_DEFAULT } from "@/lib/screenerColumns";
 import {
   StockFiltersCard,
   type FiltersState,
@@ -84,7 +84,9 @@ function parseNullableNumber(raw: string | null): number | null {
 /** A URL bool param is "active" only when literally "true" (matches the
  *  serializer below). */
 function parseBoolParam(raw: string | null): boolean {
-  return raw === "true";
+  // «1» per i rimandi scritti a mano (`/stocks?miei=1`), «true» per quelli
+  // che la pagina scrive da se'.
+  return raw === "true" || raw === "1";
 }
 
 /** Signals recency window from the URL: the explicit `signals_within_days`
@@ -232,6 +234,8 @@ export default function StocksBrowserPage() {
     riskTiers: parseRiskList(searchParams),
     excludeEtf: parseBoolParam(searchParams.get("exclude_etf")),
     datiCompleti: parseBoolParam(searchParams.get("dati_completi")),
+    // `?miei=1` dall'URL: la destinazione dei rimandi «sui tuoi titoli» (C-33).
+    soloMiei: parseBoolParam(searchParams.get("miei")),
     minScore: parseMinScore(searchParams.get("min_score")),
     scoreMax: parseNullableScore(searchParams.get("score_max")),
     profitabilityMin: parseNullableScore(searchParams.get("profitability_min")),
@@ -291,6 +295,7 @@ export default function StocksBrowserPage() {
     state.riskTiers.forEach((v) => sp.append("risk", v));
     if (state.excludeEtf) sp.set("exclude_etf", "true");
     if (state.datiCompleti) sp.set("dati_completi", "true");
+    if (state.soloMiei) sp.set("miei", "true");
     if (state.minScore != null) sp.set("min_score", String(state.minScore));
     if (state.scoreMax != null) sp.set("score_max", String(state.scoreMax));
     if (state.profitabilityMin != null) sp.set("profitability_min", String(state.profitabilityMin));
@@ -356,7 +361,13 @@ export default function StocksBrowserPage() {
     toggle: toggleColumn,
     replace: replaceHiddenColumns,
     hidden: hiddenColumns,
-  } = useColumnVisibility("screener", SCREENER_COLS as unknown as ColumnDef[]);
+  } = useColumnVisibility(
+    // `:v2`: le scelte salvate sotto la chiave vecchia erano quasi sempre il
+    // «tutte visibili» scritto al primo montaggio, non una scelta.
+    "screener:v2",
+    SCREENER_COLS as unknown as ColumnDef[],
+    SCREENER_NASCOSTE_DI_DEFAULT,
+  );
 
   // A saved view is filters + sort + columns. Restoring it also resets the
   // page: staying on page 7 of a different result set shows an empty table and
@@ -423,6 +434,7 @@ export default function StocksBrowserPage() {
     volume_min: state.volumeMin ?? undefined,
     exclude_etf: state.excludeEtf || undefined,
     solo_dati_completi: state.datiCompleti || undefined,
+    solo_miei: state.soloMiei || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
     limit: pageSize,
@@ -463,7 +475,8 @@ export default function StocksBrowserPage() {
       {sottoMd ? (
         <>
           <Button variant="outline" className="w-full" onClick={() => setFiltriAperti(true)} aria-haspopup="dialog">
-            Filtri{conteggiFiltri(state).totale > 0 ? ` (${conteggiFiltri(state).totale})` : ""}
+            {/* La ricerca conta come un filtro (C-29). */}
+            Filtri{conteggiFiltri(state).totale + (q.trim() ? 1 : 0) > 0 ? ` (${conteggiFiltri(state).totale + (q.trim() ? 1 : 0)})` : ""}
           </Button>
           <Dialog open={filtriAperti} onOpenChange={setFiltriAperti}>
             <DialogContent className="max-h-[90dvh] gap-0 overflow-y-auto p-0">
@@ -482,6 +495,7 @@ export default function StocksBrowserPage() {
               defaults: { sortBy: "ticker", sortDir: "asc" },
               onApply: applySavedView,
             }}
+            ricerca={{ q, onClear: () => setQ("") }}
           />
               {/* Il risultato resta a vista mentre si filtra: il totale
                   arriva dalla stessa interrogazione della tabella. */}
@@ -508,6 +522,7 @@ export default function StocksBrowserPage() {
           defaults: { sortBy: "ticker", sortDir: "asc" },
           onApply: applySavedView,
         }}
+        ricerca={{ q, onClear: () => setQ("") }}
       />
       )}
 
