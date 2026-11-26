@@ -60,7 +60,7 @@ export function variazione(h: TickerHolder): Variazione | null {
     const corpo = Math.abs(pp).toFixed(1);
     if (Number(corpo) === 0) return { testo: "=", tono: "fermo", spiegazione: "peso invariato" };
     return {
-      testo: `${pp > 0 ? "+" : "−"}${corpo}%`,
+      testo: `${pp > 0 ? "+" : "−"}${corpo.replace(".", ",")}%`,
       tono: pp > 0 ? "su" : "giu",
       spiegazione: `peso ${pp > 0 ? "aumentato" : "ridotto"} di ${corpo} punti nell'ultimo trimestre`,
     };
@@ -99,4 +99,21 @@ export function separaPerValore(
   const principali = fondi.filter((h) => (h.value_usd ?? 0) >= soglia);
   if (principali.length === 0) return { principali: [...fondi], altri: [] };
   return { principali, altri: fondi.filter((h) => (h.value_usd ?? 0) < soglia) };
+}
+
+/** Lo spostamento di peso di un'OPERAZIONE (aumento, riduzione). «=» resta
+ *  dell'invariata soltanto: prima un peso arrotondato a un decimale scriveva
+ *  «=» anche su una riduzione vera, perche' per un fondo gigante AXON pesa lo
+ *  0,1% e una vendita lo sposta di centesimi (segnalato il 2026-11-26). Sotto
+ *  un decimo si scrivono due decimali, sotto un centesimo «<0,01%». */
+export function pesoOperazione(h: TickerHolder): Variazione | null {
+  if (h.action === "hold") return { testo: "=", tono: "fermo", spiegazione: "posizione invariata" };
+  const pp = h.portfolio_weight_delta_pp;
+  if (pp == null || !Number.isFinite(pp)) return variazione(h);
+  const segno = pp > 0 ? "+" : pp < 0 ? "−" : h.action === "reduce" ? "−" : "+";
+  const tono = segno === "+" ? "su" : "giu";
+  const a = Math.abs(pp);
+  const corpo = a >= 0.1 ? a.toFixed(1) : a >= 0.005 ? a.toFixed(2) : null;
+  const testo = corpo == null ? `${segno}<0,01%` : `${segno}${corpo.replace(".", ",")}%`;
+  return { testo, tono, spiegazione: `peso nel portafoglio ${segno === "+" ? "aumentato" : "ridotto"} di ${corpo ?? "meno di 0,01"} punti` };
 }

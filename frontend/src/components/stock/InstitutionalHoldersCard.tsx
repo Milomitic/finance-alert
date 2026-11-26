@@ -6,7 +6,7 @@ import type { TickerHolder } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useTickerInstitutionalHolders } from "@/hooks/useInstitutionals";
-import { ordina, ordinaPerData, riepilogo, separaPerValore, variazione } from "@/lib/fondiDetentori";
+import { ordina, ordinaPerData, pesoOperazione, riepilogo, separaPerValore, variazione } from "@/lib/fondiDetentori";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TONO_VARIAZIONE } from "@/lib/variazioneMacro";
@@ -146,7 +146,7 @@ function RigaOperazione({ h }: { h: TickerHolder }) {
     ? { testo: h.portfolio_pct != null ? `+${h.portfolio_pct.toFixed(1)}%` : "—", tono: "su" as const }
     : h.action === "sold_out"
       ? { testo: "uscita", tono: "giu" as const }
-      : variazione(h);
+      : pesoOperazione(h);
   return (
     <li className={cn(GRIGLIA_OPERAZIONI, RIGA)}>
       <Link

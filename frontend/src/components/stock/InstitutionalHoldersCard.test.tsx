@@ -67,8 +67,8 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(within(prima).getByRole("link", { name: "Dorsey Asset Management" })).toBeInTheDocument();
     expect(within(prima).getByText("$132,16M")).toBeInTheDocument();
     expect(within(prima).getByText("8.5%")).toBeInTheDocument();
-    expect(within(prima).getByText("+3.0%").className).toContain("emerald");
-    expect(within(seconda).getByText("−0.1%").className).toContain("rose");
+    expect(within(prima).getByText("+3,0%").className).toContain("emerald");
+    expect(within(seconda).getByText("−0,1%").className).toContain("rose");
     // Testata e righe hanno la stessa griglia: le colonne si allineano.
     const testata = container.querySelector("ul[data-vista=detentori] > li")!;
     const colonne = "sm:grid-cols-[minmax(0,1fr)_4.5rem_2.75rem_3.5rem_4rem]";
@@ -134,7 +134,7 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(within(r[1]).getByText("Nuova")).toBeInTheDocument();
     // Il valore e' quello della SOLA operazione, non della posizione (2026-11-22).
     expect(within(r[2]).getByText("Aumento")).toBeInTheDocument();
-    expect(within(r[2]).getByText("+0.1%")).toBeInTheDocument();
+    expect(within(r[2]).getByText("+0,1%")).toBeInTheDocument();
     expect(within(r[2]).queryByText(/24\.40B/)).toBeNull();
     expect(within(r[2]).getByText("31/03/26")).toBeInTheDocument();
     // Il nome della scheda resta lo stesso in entrambe le viste.

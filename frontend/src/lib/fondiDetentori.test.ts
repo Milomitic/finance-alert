@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TickerHolder } from "@/api/types";
 
-import { ordina, ordinaPerData, riepilogo, separaPerValore, variazione } from "./fondiDetentori";
+import { ordina, ordinaPerData, pesoOperazione, riepilogo, separaPerValore, variazione } from "./fondiDetentori";
 
 function fondo(id: number, nome: string, extra: Partial<TickerHolder> = {}): TickerHolder {
   return {
@@ -37,8 +37,8 @@ describe("i fondi che detengono un titolo", () => {
   });
 
   it("il movimento: nuovo, punti di peso, poi azioni", () => {
-    expect(variazione(FONDI[0])).toMatchObject({ testo: "+3.0%", tono: "su" });
-    expect(variazione(FONDI[2])).toMatchObject({ testo: "−0.3%", tono: "giu" });
+    expect(variazione(FONDI[0])).toMatchObject({ testo: "+3,0%", tono: "su" });
+    expect(variazione(FONDI[2])).toMatchObject({ testo: "−0,3%", tono: "giu" });
     expect(variazione(FONDI[3])).toMatchObject({ testo: "nuovo", tono: "su" });
     expect(variazione(fondo(5, "A", { portfolio_weight_delta_pp: 0.02 }))).toMatchObject({ testo: "=", tono: "fermo" });
     expect(variazione(fondo(6, "B", { shares_change_pct: -12.4, action: "reduce" })))
@@ -69,5 +69,18 @@ describe("le posizioni principali", () => {
   it("se nessuna arriva alla soglia, tutte", () => {
     const f = [fondo(1, "A", { value_usd: 2e6 }), fondo(2, "B", { value_usd: 1e6 })];
     expect(separaPerValore(f)).toEqual({ principali: f, altri: [] });
+  });
+});
+
+describe("il peso di un'operazione (2026-11-26)", () => {
+  const h = (action: string, pp: number | null) =>
+    ({ action, portfolio_weight_delta_pp: pp, shares_change_pct: -3 }) as unknown as Parameters<typeof pesoOperazione>[0];
+  it("una riduzione piccola non e' «=»", () => {
+    expect(pesoOperazione(h("reduce", -0.03))?.testo).toBe("−0,03%");
+    expect(pesoOperazione(h("reduce", -0.001))?.testo).toBe("−<0,01%");
+    expect(pesoOperazione(h("add", 0.4))?.testo).toBe("+0,4%");
+  });
+  it("«=» resta dell'invariata", () => {
+    expect(pesoOperazione(h("hold", 0.0))?.testo).toBe("=");
   });
 });
