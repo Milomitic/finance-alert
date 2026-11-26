@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { NavbarSearch } from "@/components/NavbarSearch";
 import { BarraInferiore } from "@/components/BarraInferiore";
 import { useTestataNascosta } from "@/hooks/useTestataNascosta";
+import { useRitornoInPrimoPiano } from "@/hooks/useRitornoInPrimoPiano";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UsoPagineReporter } from "@/components/UsoPagineReporter";
 import { ScanProgressToast } from "@/components/ScanProgressToast";
@@ -206,6 +207,8 @@ export default function Layout() {
   // Su telefono e tablet la testata esce scorrendo in giu' e torna scorrendo
   // in su (richiesta del 2026-11-22). Da lg resta sempre: c'e' spazio.
   const testataNascosta = useTestataNascosta(mainRef, { chiave: location.pathname });
+  // FA-179: al ritorno sulla pagina dopo un minuto, i dati si ricaricano subito.
+  useRitornoInPrimoPiano();
   useScrollRestoration(mainRef);
   // Al cambio di pagina il focus va al contenuto (E-02): restava sul link
   // del menu appena premuto, e chi naviga da tastiera o con un lettore di

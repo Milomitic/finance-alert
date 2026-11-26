@@ -37,6 +37,9 @@ import { useEtoroVivo } from "@/hooks/useEtoro";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { contoAtteso, ricordaConto } from "@/lib/contoAtteso";
 import { Button } from "@/components/ui/button";
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
+import { useNowTick } from "@/hooks/useNowTick";
+import { queryScadute } from "@/lib/freschezzaHome";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
 /* Each market-driven row has its own skeleton that mirrors the loaded
@@ -508,10 +511,38 @@ function HomePageContent() {
  * route outlet in an ErrorBoundary, so a crash under here costs this subtree
  * rather than the page.
  */
+/** FA-179, fase A: la home non mostra dati oltre la loro eta' massima. Se
+ *  una query critica e' scaduta (la scheda e' rimasta aperta giorni, il
+ *  computer ha dormito) si vede lo scheletro e la si richiede subito, invece
+ *  di mostrare i numeri di allora finche' non riparte il suo timer.
+ *
+ *  ⚠️ `refetchQueries`, non `invalidateQueries`: col contenuto sostituito
+ *  dallo scheletro le query non hanno osservatori, e l'invalidazione delle
+ *  sole attive non le richiederebbe mai. */
+function CancelloFreschezza({ children }: { children: React.ReactNode }) {
+  const qc = useQueryClient();
+  // Si rivaluta col tempo e a ogni richiesta che parte o arriva.
+  const ora = useNowTick(15_000);
+  useIsFetching();
+  const scadute = queryScadute((k) => qc.getQueryState(k), ora);
+  const chiaviScadute = scadute.map((q) => JSON.stringify(q.chiave)).join("|");
+  useEffect(() => {
+    if (!chiaviScadute) return;
+    for (const k of chiaviScadute.split("|")) {
+      const chiave = JSON.parse(k) as unknown[];
+      if (qc.getQueryState(chiave)?.fetchStatus !== "fetching") void qc.refetchQueries({ queryKey: chiave });
+    }
+  }, [chiaviScadute, qc]);
+  if (scadute.length > 0) return <DashboardSkeleton />;
+  return <>{children}</>;
+}
+
 export default function HomePage() {
   return (
     <FirstPaintGate>
-      <HomePageContent />
+      <CancelloFreschezza>
+        <HomePageContent />
+      </CancelloFreschezza>
     </FirstPaintGate>
   );
 }
