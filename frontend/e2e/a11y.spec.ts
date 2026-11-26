@@ -8,6 +8,7 @@ import { ROTTE, expect, test } from "./fixtures";
  * rispettare — un solo file, un solo proprietario. Due copie divergerebbero, e
  * quella a schermo sarebbe la piu' vecchia delle due. */
 import LINEA_BASE from "../../backend/app/data/a11y_baseline.json" with { type: "json" };
+import LINEA_BASE_SCURA from "../../backend/app/data/a11y_baseline.dark.json" with { type: "json" };
 
 const AXE = "node_modules/axe-core/axe.min.js";
 
@@ -37,6 +38,13 @@ const AXE = "node_modules/axe-core/axe.min.js";
 
 type Conteggi = Record<string, number>;
 const BASE = LINEA_BASE as { rotte: Record<string, Conteggi> };
+/* Il tema scuro ha la SUA linea di base (FA-175, B-66): le stesse rotte con
+ * gli stili scuri hanno altri contrasti, e un numero solo per i due temi
+ * nasconderebbe in uno cio' che migliora nell'altro. Finche' e' vuota il
+ * progetto `dark` misura e scrive la candidata senza asserire: un cancello che
+ * nasce rosso viene spento, quindi prima si misura in CI, poi si adotta. */
+const BASE_SCURA = LINEA_BASE_SCURA as { rotte: Record<string, Conteggi> };
+const SCURA_IN_COSTRUZIONE = Object.keys(BASE_SCURA.rotte).length === 0;
 
 const BASE_PERCHE =
   "Arretrato MISURATO di accessibilita', non un obiettivo. Il gate impedisce " +
@@ -97,7 +105,11 @@ const raccolto: Record<string, Conteggi> = {};
 
 for (const rotta of ROTTE) {
   test(`${rotta.nome} - nessuna NUOVA violazione con stili veri`, async ({ page }, info) => {
-    test.skip(info.project.name !== "desktop", "una misura basta: axe non dipende dal viewport");
+    test.skip(
+      info.project.name !== "desktop" && info.project.name !== "dark",
+      "una misura per tema basta: axe non dipende dal viewport",
+    );
+    const scuro = info.project.name === "dark";
     await page.goto(rotta.path, { waitUntil: "networkidle" });
     await page.waitForTimeout(1000);
 
@@ -109,11 +121,15 @@ for (const rotta of ROTTE) {
     expect(caratteri, `${rotta.path} e' vuota: axe non misurerebbe nulla`)
       .toBeGreaterThanOrEqual(rotta.minChars);
 
+    if (scuro) {
+      // Il tema c'e' davvero: senza, la misura sarebbe quella chiara col nome sbagliato.
+      expect(await page.evaluate(() => document.documentElement.classList.contains("dark"))).toBe(true);
+    }
     const { conteggi: trovate, bersagli } = await violazioni(page);
     raccolto[rotta.path] = trovate;
-    if (AGGIORNA) return;
+    if (AGGIORNA || (scuro && SCURA_IN_COSTRUZIONE)) return;
 
-    const attese = BASE.rotte[rotta.path] ?? {};
+    const attese = (scuro ? BASE_SCURA : BASE).rotte[rotta.path] ?? {};
     const cresciute = Object.entries(trovate)
       .filter(([id, n]) => n > (attese[id] ?? 0))
       .map(([id, n]) => `${id}: ${attese[id] ?? 0} -> ${n}`);
@@ -352,8 +368,10 @@ test("il focus da tastiera si VEDE", async ({ page }, info) => {
   expect(invisibili, `ricevono il focus senza mostrarlo: ${invisibili.join(", ")}`).toEqual([]);
 });
 
-test.afterAll(async () => {
+test.afterAll(async ({}, info) => {
   if (!Object.keys(raccolto).length) return;
+  const scuro = info.project.name === "dark";
+  const nome = scuro ? "a11y_baseline.dark" : "a11y_baseline";
   const fs = await import("node:fs");
   const file = JSON.stringify({ _perche: BASE_PERCHE, rotte: raccolto }, null, 2) + "\n";
 
@@ -375,7 +393,7 @@ test.afterAll(async () => {
    * CI. Un artefatto che non viene caricato e' esattamente come non scriverlo,
    * con in piu' la riga di log che fa credere il contrario. */
   fs.mkdirSync("test-results", { recursive: true });
-  fs.writeFileSync("test-results/a11y_baseline.candidata.json", file, "utf-8");
+  fs.writeFileSync(`test-results/${nome}.candidata.json`, file, "utf-8");
   console.log(
     "\nlinea di base CANDIDATA in playwright-report/a11y_baseline.candidata.json" +
       " (artefatto del job). Sostituisce backend/app/data/a11y_baseline.json" +
@@ -383,6 +401,6 @@ test.afterAll(async () => {
   );
 
   if (!AGGIORNA) return;
-  fs.writeFileSync("../backend/app/data/a11y_baseline.json", file, "utf-8");
+  fs.writeFileSync(`../backend/app/data/${nome}.json`, file, "utf-8");
   console.log(`linea di base riscritta su ${Object.keys(raccolto).length} rotte\n`);
 });

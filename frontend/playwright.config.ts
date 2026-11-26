@@ -78,6 +78,15 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
     },
     {
+      /* Il tema scuro (FA-175, B-66): 1.055 varianti `dark:` che nessun
+       * presidio misurava. Solo la specifica di accessibilita', a 1440, col
+       * tema del sistema scuro: `theme-init.js` lo segue quando non c'e' una
+       * scelta salvata, ed e' il caso di chi apre l'app la prima volta. */
+      name: "dark",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, colorScheme: "dark" },
+      testMatch: /a11y\.spec\.ts/,
+    },
+    {
       /* ⚠️ Il quarto viewport esiste per una ragione precisa, non per
        * completismo. La pagina dettaglio titolo si RIASSETTA oltre i 1920px —
        * il profilo societa' si sposta dentro l'intestazione, i due score si

@@ -75,7 +75,7 @@ def test_mutanti_sono_misurati():
 
 
 @pytest.mark.parametrize("nome", [
-    "dead_code_baseline.json", "a11y_baseline.json", "mutation_baseline.json",
+    "dead_code_baseline.json", "a11y_baseline.json", "a11y_baseline.dark.json", "mutation_baseline.json",
 ])
 def test_ogni_linea_di_base_dice_perche_esiste(nome):
     """Un arretrato senza la sua ragione diventa un obiettivo da azzerare.

@@ -230,6 +230,10 @@ jobs:
             argomenti: --project=mobile
           - parte: tablet
             argomenti: --project=tablet
+          # Il tema scuro (FA-175): solo accessibilita', con la sua linea di
+          # base. Stesso id del job, quindi `bump` lo aspetta come gli altri.
+          - parte: scuro · accessibilità
+            argomenti: --project=dark
     # ⚠️ Questo job esiste perché jsdom NON FA LAYOUT. L'11 settembre 2026 la
     # suite vitest era verde su 590 test e OTTO rotte traboccavano su un
     # telefono, in produzione: `getBoundingClientRect` restituisce zeri in
