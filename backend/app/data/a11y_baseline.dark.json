@@ -1,4 +1,25 @@
 {
-  "_perche": "Linea di base del tema scuro (FA-175). Vuota finche' non viene adottata la candidata prodotta dal progetto Playwright `dark` in CI: fino ad allora il progetto misura senza asserire.",
-  "rotte": {}
+  "_perche": "Linea di base del tema scuro (FA-175), adottata dalla candidata della corsa di CI 45732759393 (2026-11-26). Zero violazioni di contrasto su dieci rotte; le nove restanti sono strutturali (ARIA, regioni scorrevoli) e non dipendono dal tema. Arretrato misurato, non obiettivo: il gate impedisce che cresca. Si rigenera SOLO dalla candidata di CI (artefatto della parte scura), mai in locale, e solo dopo aver corretto qualcosa.",
+  "rotte": {
+    "/": {
+      "aria-hidden-focus": 1,
+      "aria-valid-attr-value": 2
+    },
+    "/alerts": {},
+    "/setups": {},
+    "/positions": {},
+    "/stocks": {},
+    "/calendar": {
+      "aria-prohibited-attr": 1,
+      "nested-interactive": 1
+    },
+    "/sectors": {},
+    "/institutionals": {},
+    "/diagnostics": {
+      "scrollable-region-focusable": 1
+    },
+    "/stocks/AAPL": {
+      "scrollable-region-focusable": 1
+    }
+  }
 }
