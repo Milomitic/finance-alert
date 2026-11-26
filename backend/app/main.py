@@ -177,6 +177,22 @@ def _warm_premarket_on_boot() -> None:
         logger.warning(f"[startup] premarket warm skipped: {exc}")
 
 
+def _warm_home_cache_on_boot() -> None:
+    """FA-179, fase B: dopo un rilascio la prima apertura della home non
+    paga il riepilogo a freddo (6,3 s). In un thread, e spento sotto i test
+    come gli altri lavori d'avvio."""
+    import os
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        from app.scheduler.jobs.riscalda_cache_home import run_riscalda_cache_home
+
+        threading.Thread(target=run_riscalda_cache_home, name="home-boot-warm", daemon=True).start()
+    except Exception as exc:  # noqa: BLE001 — never block startup
+        logger.warning(f"[startup] riscaldamento della home saltato: {exc}")
+
+
 def _warm_sector_performance_on_boot() -> None:
     """L'andamento dei settori costa decine di secondi a freddo nel worker vivo
     (`sector_performance_service`): lo si precalcola all'avvio, in un thread,
@@ -594,6 +610,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     start_scheduler()
     _warm_premarket_on_boot()
     _warm_sector_performance_on_boot()
+    _warm_home_cache_on_boot()
     _catch_up_scan_on_boot()
     _catch_up_institutionals_on_boot()
     try:

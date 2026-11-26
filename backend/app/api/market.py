@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache_fresca import CacheFresca
 from app.models import Stock, StockMetrics, StockScore, User
 from app.schemas.market import MarketSummaryOut
 from app.schemas.stock_detail import LiveQuoteOut
@@ -219,6 +220,13 @@ def _quote_is_live(category: str, using_futures: bool, cash_q, now: datetime) ->
 
 @router.get("/live-assets", response_model=LiveAssetsOut)
 def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
+    """Il paniere, servito dalla cache (FA-179, fase B): a freddo andava a
+    Yahoo per tutti i simboli e impiegava 1,7 s. Eta' massima 15 s, la stessa
+    cadenza del frontend: oltre, esce l'ultimo e uno solo lo rinfresca."""
+    return CACHE_PANIERE.leggi()
+
+
+def calcola_paniere() -> LiveAssetsOut:
     """Curated live snapshots of indices / commodities / crypto for the
     dashboard panel. Polled by the frontend on a 15s cadence; the live
     quote service caches each symbol for 10s so concurrent tabs share
@@ -285,6 +293,9 @@ def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
             is_live=is_live,
         ))
     return LiveAssetsOut(assets=out)
+
+
+CACHE_PANIERE = CacheFresca("paniere", 15, calcola_paniere)
 
 
 def _migrate_sma_keys_in_place(payload: dict) -> None:

@@ -31,6 +31,7 @@ from app.scheduler.jobs.refresh_sec_13f import run_refresh_sec_13f
 from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.riallinea_esiti import run_riallinea_esiti
+from app.scheduler.jobs.riscalda_cache_home import run_riscalda_cache_home
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.scheduler.jobs.sincronizza_etoro import (
@@ -224,6 +225,17 @@ def get_scheduler() -> BackgroundScheduler:
         # the dashboard 1G board can surface genuine intraday movers from the
         # whole universe (not just the EOD candidate pool). Self-gates to
         # open-market tickers, so off-hours ticks are no-ops. 0 disables.
+        # FA-179, fase B: le risposte della home sempre calde (riepilogo 6,3 s
+        # e paniere 1,7 s a freddo). Un minuto: entro l'eta' della cache del
+        # riepilogo, e il paniere si rinfresca anche da solo a ogni lettura.
+        _scheduler.add_job(
+            run_riscalda_cache_home,
+            trigger=IntervalTrigger(seconds=60),
+            id="riscalda_cache_home",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
         if settings.live_movers_sweep_seconds > 0:
             _scheduler.add_job(
                 run_live_universe_sweep,

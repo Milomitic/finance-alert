@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, require_json
+from app.core.cache_fresca import CacheFresca
 from app.core.db import SessionLocal
 from app.models import OhlcvDaily, ScanRun, Stock, User
 from app.schemas.alert import AlertOut, ScanStatusOut
@@ -203,11 +204,28 @@ def refresh_premarket_movers(
     return {"accepted": True}
 
 
+def _riepilogo_da_sessione() -> DashboardSummaryOut:
+    with SessionLocal() as db:
+        return calcola_riepilogo(db)
+
+
+#: FA-179, fase B: il riepilogo a freddo costava 6,3 s. Eta' massima 60 s; il
+#: job `riscalda_cache_home` e il riscaldamento all'avvio lo tengono pronto.
+CACHE_RIEPILOGO = CacheFresca("riepilogo", 60, _riepilogo_da_sessione)
+
+
 @router.get("/summary", response_model=DashboardSummaryOut)
 def get_summary(
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> DashboardSummaryOut:
+    # Senza cache (sotto i test) si calcola sulla sessione della richiesta.
+    if not CACHE_RIEPILOGO.accesa():
+        return calcola_riepilogo(db)
+    return CACHE_RIEPILOGO.leggi()
+
+
+def calcola_riepilogo(db: Session) -> DashboardSummaryOut:
     kpi = stats_service.get_kpi_summary(db)
     by_day = stats_service.get_alerts_by_day(db, days=30)
     top = stats_service.get_top_stocks(db, days=30, limit=10)
