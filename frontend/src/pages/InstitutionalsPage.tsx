@@ -92,6 +92,7 @@ import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { InfoHint } from "@/components/ui/info-hint";
 import { SchedePagina } from "@/components/ui/schede-pagina";
+import { TableSearchInput } from "@/components/ui/table-search-input";
 
 /* Le schede per tipo di fondo. `tutti` e' l'assenza di filtro: il valore
    `undefined` dello stato, che un id di scheda non puo' essere. */
@@ -258,7 +259,7 @@ function InstitutionalRow({ row }: { row: InstitutionalSummary }) {
 
 /** Colonne ordinabili client-side della tabella fondi. La lista è
  *  piccola (≤200 righe già in memoria) — nessun round-trip server. */
-type FundSortKey = "total_positions" | "total_value_usd" | "latest_period_end";
+type FundSortKey = "name" | "manager_name" | "type" | "total_positions" | "total_value_usd" | "latest_period_end";
 
 function FundSortHeader({
   label,
@@ -301,7 +302,12 @@ export default function InstitutionalsPage() {
     key: FundSortKey;
     dir: "asc" | "desc";
   } | null>(null);
-  const list = useInstitutionalsList({ type: typeFilter, limit: 200 });
+  // Il tetto e' ben sopra i fondi tracciati (112 a novembre 2026): il
+  // conteggio a schermo era la lunghezza di una risposta tagliata a 200 senza
+  // dirlo (D-72). Se un giorno lo raggiunge, la pagina lo scrive.
+  const TETTO_FONDI = 1000;
+  const list = useInstitutionalsList({ type: typeFilter, limit: TETTO_FONDI });
+  const [cerca, setCerca] = useState("");
   const agg = useInstitutionalsAggregate({
     type: typeFilter,
     most_picked_limit: 25,
@@ -336,6 +342,97 @@ export default function InstitutionalsPage() {
   }, [list.data, fundSort]);
 
   const counts = list.data?.length ?? 0;
+  // La ricerca guarda nome e manager, senza maiuscole ne' accenti.
+  const norm = (t: string | null) => (t ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const chiave = norm(cerca.trim());
+  const fondiVisibili = chiave
+    ? sortedFunds.filter((f) => norm(f.name).includes(chiave) || norm(f.manager_name).includes(chiave))
+    : sortedFunds;
+  const conteggio = chiave
+    ? `${fondiVisibili.length} di ${counts}`
+    : counts >= TETTO_FONDI ? `primi ${counts}` : String(counts);
+
+  const tabellaFondi = (
+    <Card>
+      <CardContent className="p-3">
+        <SectionTitle
+          icon={Building2}
+          label="Tutti i portafogli tracciati"
+          className="mb-2"
+          right={
+            <span className="text-sm text-muted-foreground tabular-nums">
+              {conteggio}
+            </span>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
+              <tr>
+                <th className="px-2 py-1.5 text-left">
+                  <FundSortHeader label="Portfolio" col="name" sort={fundSort} onClick={toggleFundSort} align="left" />
+                </th>
+                <th className="px-2 py-1.5 text-left">
+                  <FundSortHeader label="Manager" col="manager_name" sort={fundSort} onClick={toggleFundSort} align="left" />
+                </th>
+                <th className="px-2 py-1.5 text-left">
+                  <FundSortHeader label="Tipo" col="type" sort={fundSort} onClick={toggleFundSort} align="left" />
+                </th>
+                <th className="px-2 py-1.5 text-right">
+                  <FundSortHeader
+                    label="N° pos."
+                    col="total_positions"
+                    sort={fundSort}
+                    onClick={toggleFundSort}
+                  />
+                </th>
+                <th className="px-2 py-1.5 text-right">
+                  <FundSortHeader
+                    label="Tot $"
+                    col="total_value_usd"
+                    sort={fundSort}
+                    onClick={toggleFundSort}
+                  />
+                </th>
+                <th className="px-2 py-1.5 text-left">
+                  <FundSortHeader
+                    label="Q-end"
+                    col="latest_period_end"
+                    sort={fundSort}
+                    onClick={toggleFundSort}
+                    align="left"
+                  />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {fondiVisibili.map((row) => (
+                <InstitutionalRow key={row.id} row={row} />
+              ))}
+              {chiave && fondiVisibili.length === 0 && counts > 0 && (
+                <tr>
+                  <td colSpan={6} className="px-2 py-4 text-center text-sm text-muted-foreground">
+                    Nessun fondo o manager contiene «{cerca.trim()}».
+                  </td>
+                </tr>
+              )}
+              {!list.isLoading && list.data && list.data.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-2 py-4 text-center text-muted-foreground text-sm"
+                  >
+                    Nessun portafoglio. Avvia il seed dal terminale:&nbsp;
+                    <code>python -m app.scripts.seed_institutionals</code>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -362,13 +459,27 @@ export default function InstitutionalsPage() {
             </p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        {/* La porta d'ingresso a un fondo in cima (D-72): chi cerca
+            «Berkshire» non deve scorrere quattro schermate fino alla tabella.
+            Scrivendo, la tabella sale qui sotto. */}
+        <TableSearchInput
+          value={cerca}
+          onChange={setCerca}
+          placeholder="Cerca un fondo o un manager…"
+          ariaLabel="Cerca un fondo o un manager"
+          className="w-56"
+        />
         <SchedePagina
           voci={TIPI_FONDO}
           attiva={(typeFilter ?? "tutti") as (typeof TIPI_FONDO)[number]["id"]}
           onCambia={(id) => setTypeFilter(id === "tutti" ? undefined : id)}
           etichetta="Tipo di fondo"
         />
+        </div>
       </header>
+
+      {chiave && tabellaFondi}
 
       {/* One banner for the whole page's 13F data — both the aggregate strip and
           the funds table read from these two queries; on failure they'd
@@ -488,72 +599,7 @@ export default function InstitutionalsPage() {
         )}
       </div>
 
-      <Card>
-        <CardContent className="p-3">
-          <SectionTitle
-            icon={Building2}
-            label="Tutti i portafogli tracciati"
-            className="mb-2"
-            right={
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {counts}
-              </span>
-            }
-          />
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-[0.7647rem] uppercase tracking-wide text-muted-foreground border-b">
-                <tr>
-                  <th className="px-2 py-1.5 text-left">Portfolio</th>
-                  <th className="px-2 py-1.5 text-left">Manager</th>
-                  <th className="px-2 py-1.5 text-left">Tipo</th>
-                  <th className="px-2 py-1.5 text-right">
-                    <FundSortHeader
-                      label="N° pos."
-                      col="total_positions"
-                      sort={fundSort}
-                      onClick={toggleFundSort}
-                    />
-                  </th>
-                  <th className="px-2 py-1.5 text-right">
-                    <FundSortHeader
-                      label="Tot $"
-                      col="total_value_usd"
-                      sort={fundSort}
-                      onClick={toggleFundSort}
-                    />
-                  </th>
-                  <th className="px-2 py-1.5 text-left">
-                    <FundSortHeader
-                      label="Q-end"
-                      col="latest_period_end"
-                      sort={fundSort}
-                      onClick={toggleFundSort}
-                      align="left"
-                    />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedFunds.map((row) => (
-                  <InstitutionalRow key={row.id} row={row} />
-                ))}
-                {!list.isLoading && list.data && list.data.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-2 py-4 text-center text-muted-foreground text-sm"
-                    >
-                      Nessun portafoglio. Avvia il seed dal terminale:&nbsp;
-                      <code>python -m app.scripts.seed_institutionals</code>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {!chiave && tabellaFondi}
       </div>
       )}
     </div>
