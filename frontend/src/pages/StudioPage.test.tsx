@@ -38,26 +38,32 @@ describe("parametri dall'URL", () => {
 });
 
 describe("StudioPage", () => {
-  it("senza simbolo chiede di sceglierne uno", () => {
+  it("senza simbolo propone domande d'esempio (D-81)", () => {
     monta("/studio");
-    expect(screen.getByText("Scegli un simbolo per cominciare.")).toBeInTheDocument();
+    expect(screen.getByText(/Scegli un simbolo, oppure parti da una di queste domande/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /AAPL nelle 21 sedute dopo un calo del 10%/ })).toBeInTheDocument();
   });
 
   it("dopo un movimento: condizione contro base", async () => {
     risposte["/api/studio/dopo_movimento"] = {
       simbolo: "AAPL", condizione: misura(0.03), base: misura(0.01), differenza: 0.02,
+      intervallo_differenza: [-0.01, 0.05], verdetto: "non_concludente",
       parametri: { sedute: 5, soglia_pct: -10, orizzonte: 21 },
     };
     monta("/studio?simbolo=AAPL&modello=dopo_movimento&soglia=-10&sedute=5&orizzonte=21");
     expect(await screen.findByText("Dopo il movimento")).toBeInTheDocument();
     expect(screen.getByText("Base: tutte le finestre")).toBeInTheDocument();
     expect(screen.getByText("+2,00%")).toBeInTheDocument();
+    // D-84: il verdetto sta sopra i numeri, con l'intervallo della differenza.
+    expect(screen.getByText("Non concludente")).toBeInTheDocument();
+    expect(screen.getByText(/da −1,00% a \+5,00%, 95%/)).toBeInTheDocument();
   });
 
   it("attorno a un evento: il percorso e la misura", async () => {
     risposte["/api/studio/evento"] = {
       simbolo: "AAPL", tipo: "trimestrali", serie_macro: null, eventi: 0, percorso: [],
       a_orizzonte: misura(0, 0), base: misura(0.001), orizzonte: 5,
+      differenza: null, intervallo_differenza: null, verdetto: "non_concludente",
     };
     monta("/studio?simbolo=AAPL&modello=evento");
     expect(await screen.findByText(/Nessuna trimestrale passata nota/)).toBeInTheDocument();

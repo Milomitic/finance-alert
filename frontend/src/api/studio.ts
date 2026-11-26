@@ -11,11 +11,18 @@ export type Misura = {
   intervallo: [number, number] | null;
 };
 
-export type DopoMovimento = {
+export type Verdetto = "non_concludente" | "compatibile_con_zero" | "diversa_dalla_base";
+
+export type Confronto = {
+  differenza: number | null;
+  intervallo_differenza: [number, number] | null;
+  verdetto: Verdetto;
+};
+
+export type DopoMovimento = Confronto & {
   simbolo: string;
   condizione: Misura;
   base: Misura;
-  differenza: number | null;
   parametri: { sedute: number; soglia_pct: number; orizzonte: number };
 };
 
@@ -27,7 +34,7 @@ export type Stagionalita = {
   base_giorni: Misura;
 };
 
-export type Evento = {
+export type Evento = Confronto & {
   simbolo: string;
   tipo: string;
   serie_macro: string | null;

@@ -60,6 +60,36 @@ def _misura(valori: list[float], date_: list[date], orizzonte: int) -> dict:
     }
 
 
+MIN_FINESTRE = 20
+
+
+def confronto(cond: dict, base: dict) -> dict:
+    """La differenza dalla base col suo intervallo e un verdetto (D-84).
+
+    L'intervallo somma in quadratura le due semi-ampiezze: tratta i due
+    campioni come indipendenti, mentre la base contiene anche i casi della
+    condizione, quindi e' un'approssimazione (leggermente larga quando la
+    condizione e' rara, che e' il caso comune). Il verdetto ha tre stati e
+    mai «conviene»: lo Studio descrive.
+    """
+    m, b = cond.get("media"), base.get("media")
+    if m is None or b is None:
+        return {"differenza": None, "intervallo_differenza": None, "verdetto": "non_concludente"}
+    diff = m - b
+    ic, ib = cond.get("intervallo"), base.get("intervallo")
+    intervallo = None
+    if ic and ib:
+        semi = (((ic[1] - ic[0]) / 2) ** 2 + ((ib[1] - ib[0]) / 2) ** 2) ** 0.5
+        intervallo = [diff - semi, diff + semi]
+    if cond.get("finestre", 0) < MIN_FINESTRE or intervallo is None:
+        verdetto = "non_concludente"
+    elif intervallo[0] <= 0 <= intervallo[1]:
+        verdetto = "compatibile_con_zero"
+    else:
+        verdetto = "diversa_dalla_base"
+    return {"differenza": diff, "intervallo_differenza": intervallo, "verdetto": verdetto}
+
+
 def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) -> dict:
     """Le H sedute dopo ogni giorno in cui la variazione delle N sedute
     precedenti e' stata almeno `soglia_pct` (negativa = un calo almeno pari)."""
@@ -79,8 +109,7 @@ def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) 
     out = {"condizione": _misura(casi, date_casi, orizzonte),
            "base": _misura(base, date_base, orizzonte),
            "parametri": {"sedute": sedute, "soglia_pct": soglia_pct, "orizzonte": orizzonte}}
-    m, b = out["condizione"]["media"], out["base"]["media"]
-    out["differenza"] = m - b if m is not None and b is not None else None
+    out.update(confronto(out["condizione"], out["base"]))
     return out
 
 
@@ -150,8 +179,10 @@ def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
         {"seduta": k, "media": mean(p[k + PRIMA + 1] for p in percorsi)}
         for k in range(-PRIMA - 1, DOPO + 1)
     ] if percorsi else []
-    return {"percorso": percorso, "a_orizzonte": _misura(a_h, date_h, orizzonte),
-            "base": _misura(base, date_base, orizzonte), "orizzonte": orizzonte}
+    a_orizzonte = _misura(a_h, date_h, orizzonte)
+    base_m = _misura(base, date_base, orizzonte)
+    return {"percorso": percorso, "a_orizzonte": a_orizzonte, "base": base_m, "orizzonte": orizzonte,
+            **confronto(a_orizzonte, base_m)}
 
 
 def _primo_da(date_: list[date], g: date) -> int:

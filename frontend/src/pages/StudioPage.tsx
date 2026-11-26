@@ -3,14 +3,14 @@ import { FlaskConical } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { type DopoMovimento, type Evento, type Misura, type Stagionalita, studio } from "@/api/studio";
+import { type Confronto, type DopoMovimento, type Evento, type Misura, type Stagionalita, studio } from "@/api/studio";
 import { Card, CardContent } from "@/components/ui/card";
 import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { intervallo, MODELLI, type Modello, parametriDaUrl, pct } from "@/lib/studio";
 import { cn } from "@/lib/utils";
-import { GIU, SU } from "@/lib/coloriGrafico";
+import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
 import { Segmentato } from "@/components/ui/segmentato";
 import { Button } from "@/components/ui/button";
 
@@ -59,7 +59,81 @@ function TabellaMisure({ righe }: { righe: [string, Misura][] }) {
   );
 }
 
-function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
+/** Il verdetto sopra i numeri (D-84): tre stati, mai «conviene». */
+const TESTO_VERDETTO: Record<Confronto["verdetto"], { titolo: string; tono: string }> = {
+  non_concludente: { titolo: "Non concludente", tono: "border-amber-500/50 bg-amber-50 dark:bg-amber-950/30" },
+  compatibile_con_zero: { titolo: "Compatibile con zero", tono: "border-border bg-muted/40" },
+  diversa_dalla_base: { titolo: "Diversa dalla base", tono: "border-sky-500/50 bg-sky-50 dark:bg-sky-950/30" },
+};
+
+function RigaVerdetto({ c, finestre }: { c: Confronto; finestre: number }) {
+  const v = TESTO_VERDETTO[c.verdetto];
+  const iv = c.intervallo_differenza;
+  const perche =
+    c.verdetto === "non_concludente"
+      ? finestre < 20
+        ? `${finestre} finestre indipendenti: ne servono almeno 20 per dire qualcosa.`
+        : "l'intervallo non è stimabile."
+      : c.verdetto === "compatibile_con_zero"
+        ? "l'intervallo della differenza contiene lo zero: potrebbe essere caso."
+        : "l'intervallo della differenza esclude lo zero. Descrive il passato, non lo prevede.";
+  return (
+    <div className={cn("rounded-md border px-3 py-2 text-sm", v.tono)}>
+      <strong>{v.titolo}</strong> — {perche}
+      {c.differenza != null && (
+        <div className="mt-0.5 text-xs text-muted-foreground">
+          Differenza dalla base{" "}
+          <span className={cn("tabular-nums", c.verdetto === "diversa_dalla_base" && "font-semibold text-foreground")}>
+            {pct(c.differenza, 2)}
+          </span>
+          {iv && <span className="tabular-nums"> (da {pct(iv[0], 2)} a {pct(iv[1], 2)}, 95%)</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Domande d'esempio per chi apre la pagina vuota (D-81). */
+const ESEMPI: { testo: string; parametri: Record<string, string> }[] = [
+  { testo: "Cosa ha fatto AAPL nelle 21 sedute dopo un calo del 10% in 5 sedute?",
+    parametri: { simbolo: "AAPL", modello: "dopo_movimento", soglia: "-10", sedute: "5", orizzonte: "21" } },
+  { testo: "Quali mesi sono andati meglio per l'S&P 500?",
+    parametri: { simbolo: "^GSPC", modello: "stagionalita" } },
+  { testo: "Cosa fa NVDA nelle 5 sedute attorno alle trimestrali?",
+    parametri: { simbolo: "NVDA", modello: "evento", tipo: "trimestrali", orizzonte: "5" } },
+];
+
+function Esempi({ onScegli }: { onScegli: (p: Record<string, string>) => void }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-muted-foreground">Scegli un simbolo, oppure parti da una di queste domande:</p>
+      <div className="grid gap-2 md:grid-cols-3">
+        {ESEMPI.map((e) => (
+          <button
+            key={e.testo}
+            type="button"
+            onClick={() => onScegli(e.parametri)}
+            className="rounded-md border bg-muted/30 p-3 text-left text-sm hover:bg-accent"
+          >
+            {e.testo}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Il colore di una barra: il verso solo se l'intervallo esclude lo zero (D-85). */
+function coloreSeEsce(m: Misura): string {
+  const iv = m.intervallo;
+  if (!iv || (iv[0] <= 0 && iv[1] >= 0)) return NEUTRO;
+  return (m.media ?? 0) >= 0 ? SU : GIU;
+}
+
+function Risultato({ p, onEsempio }: {
+  p: ReturnType<typeof parametriDaUrl>;
+  onEsempio: (p: Record<string, string>) => void;
+}) {
   const orizzonteEvento = Math.min(p.orizzonte, DOPO_MAX);
   const q = useQuery<DopoMovimento | Stagionalita | Evento>({
     queryKey: ["studio", p.modello, p.simbolo, p.sedute, p.soglia, p.orizzonte, p.tipo, p.serie],
@@ -75,7 +149,7 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
     enabled: p.simbolo !== "" && (p.modello !== "evento" || p.tipo !== "macro" || p.serie !== ""),
     staleTime: 10 * 60_000,
   });
-  if (p.simbolo === "") return <p className="text-sm text-muted-foreground">Scegli un simbolo per cominciare.</p>;
+  if (p.simbolo === "") return <Esempi onScegli={onEsempio} />;
   if (q.isError) return <QueryError message="dello studio" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
   if (!q.data) return <div className="h-64 animate-pulse rounded-md bg-muted/40" aria-hidden />;
 
@@ -86,8 +160,8 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
         <p className="text-sm">
           {p.orizzonte} sedute dopo ogni giorno in cui {p.simbolo} si era mosso
           {p.soglia < 0 ? ` di ${p.soglia}% o peggio` : ` di +${p.soglia}% o più`} in {p.sedute} sedute.
-          {" "}Differenza dalla base: <strong>{pct(r.differenza, 2)}</strong>.
         </p>
+        <RigaVerdetto c={r} finestre={r.condizione.finestre} />
         <TabellaMisure righe={[["Dopo il movimento", r.condizione], ["Base: tutte le finestre", r.base]]} />
       </div>
     );
@@ -100,9 +174,15 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
           <GraficoSvg dati={r.mesi} x={(m) => m.mese} formatoY={(v) => pct(v, 1)}
             etichetta={`Rendimento medio per mese di ${p.simbolo}`}
             serie={[{ chiave: "media", nome: "Media", valore: (m) => m.media, colore: "hsl(var(--primary))", tipo: "barre",
-              coloreBarra: (m) => ((m.media ?? 0) >= 0 ? SU : GIU) }]} />
+              coloreBarra: coloreSeEsce }]} />
         </div>
+        <p className="text-xs text-muted-foreground">
+          Colorati solo i mesi il cui intervallo esclude lo zero. Sono 17 confronti (12 mesi e 5 giorni):
+          uno può uscire per caso.
+        </p>
+        <h2 className="text-sm font-semibold">Per mese</h2>
         <TabellaMisure righe={[...r.mesi.map((m) => [m.mese, m] as [string, Misura]), ["Tutti i mesi", r.base_mesi]]} />
+        <h2 className="text-sm font-semibold">Per giorno della settimana</h2>
         <TabellaMisure righe={[...r.giorni.map((g) => [g.giorno, g] as [string, Misura]), ["Tutte le sedute", r.base_giorni]]} />
       </div>
     );
@@ -122,6 +202,7 @@ function Risultato({ p }: { p: ReturnType<typeof parametriDaUrl> }) {
             serie={[{ chiave: "media", nome: "Media", valore: (s) => s.media, colore: "hsl(var(--primary))", spessore: 2, punti: true }]} />
         </div>
       )}
+      <RigaVerdetto c={r} finestre={r.a_orizzonte.finestre} />
       <TabellaMisure righe={[[`A ${r.orizzonte} sedute dall'evento`, r.a_orizzonte], ["Base: tutte le finestre", r.base]]} />
       {r.tipo === "trimestrali" && r.eventi === 0 && (
         <p className="text-xs text-muted-foreground">Nessuna trimestrale passata nota: lo studio vale per i titoli del catalogo.</p>
@@ -222,7 +303,14 @@ export default function StudioPage() {
       </Card>
       <Card>
         <CardContent className="p-4">
-          <Risultato p={p} />
+          <Risultato
+            p={p}
+            onEsempio={(q) => {
+              const n = new URLSearchParams(q);
+              setSp(n);
+              setBozza(parametriDaUrl(n));
+            }}
+          />
         </CardContent>
       </Card>
     </div>

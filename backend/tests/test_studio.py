@@ -88,3 +88,21 @@ def test_gli_endpoint(client, monkeypatch):
     assert r["eventi"] == 1
     assert client.get("/api/studio/evento", params={"simbolo": "STU", "tipo": "macro"}).status_code == 422
     assert client.get("/api/studio/stagionalita", params={"simbolo": "NESSUNO"}).status_code == 404
+
+
+def test_il_confronto_ha_intervallo_e_verdetto():
+    """D-84: la differenza in grassetto non aveva un intervallo suo."""
+    base = {"media": 0.02, "finestre": 120, "intervallo": [0.01, 0.03]}
+    poche = {"media": 0.05, "finestre": 9, "intervallo": [-0.03, 0.13]}
+    r = ss.confronto(poche, base)
+    assert r["differenza"] == pytest.approx(0.03)
+    assert r["verdetto"] == "non_concludente"           # 9 finestre su 20
+    lo, hi = r["intervallo_differenza"]
+    assert lo == pytest.approx(0.03 - (0.08**2 + 0.01**2) ** 0.5)
+    assert hi == pytest.approx(0.03 + (0.08**2 + 0.01**2) ** 0.5)
+
+    larga = {"media": 0.025, "finestre": 40, "intervallo": [0.0, 0.05]}
+    assert ss.confronto(larga, base)["verdetto"] == "compatibile_con_zero"
+    netta = {"media": 0.08, "finestre": 40, "intervallo": [0.06, 0.10]}
+    assert ss.confronto(netta, base)["verdetto"] == "diversa_dalla_base"
+    assert ss.confronto({"media": None}, base)["verdetto"] == "non_concludente"
