@@ -379,7 +379,10 @@ jobs:
           E2E_SESSION_COOKIE: ${{ steps.sess.outputs.cookie }}
         run: npx playwright test ${{ matrix.argomenti }}
 
-      - if: failure()
+      # Sempre anche per la parte scura: la sua linea di base nasce dalla
+      # candidata che questa parte scrive, e un file che resta sulla macchina
+      # di CI e' come non averlo scritto (FA-175).
+      - if: failure() || matrix.argomenti == '--project=dark'
         uses: actions/upload-artifact@v4
         with:
           # Un nome per parte: upload-artifact v4 rifiuta due artefatti con lo
