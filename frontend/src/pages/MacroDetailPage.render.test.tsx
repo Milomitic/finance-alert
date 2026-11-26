@@ -41,10 +41,10 @@ function monta() {
 describe("MacroDetailPage — le variazioni in evidenza", () => {
   it("nell'intestazione: sul periodo e sull'anno, ciascuna contro la sua stima", () => {
     monta();
-    const mese = screen.getAllByText((_, el) => el?.textContent === "+0.4%sul periodo")[0];
+    const mese = screen.getAllByText((_, el) => el?.textContent === "+0.4% sul periodo")[0];
     expect(mese.className).toContain("emerald");
     // +2,9% sull'anno e' positivo, ma sotto il +3,0% atteso: rosso.
-    const anno = screen.getAllByText((_, el) => el?.textContent === "+2.9%sull'anno")[0];
+    const anno = screen.getAllByText((_, el) => el?.textContent === "+2.9% sull'anno")[0];
     expect(anno.className).toContain("rose");
   });
 
@@ -56,10 +56,10 @@ describe("MacroDetailPage — le variazioni in evidenza", () => {
     const testo = (t: string) => celle.find((c) => c.textContent === t)!;
     expect(testo("+0.4%").className).toContain("emerald");
     expect(testo("+2.9%").className).toContain("rose");
-    // Prima l'attuale, poi il previsto, come nello storico del calendario.
+    // D-69: uscito e previsto in una colonna sola, visibile anche su telefono.
     const intestazioni = within(tabella).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(intestazioni.slice(-2)).toEqual(["Attuale", "Previsto"]);
-    expect(celle.slice(-2).map((c) => c.textContent)).toEqual(["+0.4%a/a +2.9%", "+0.3%a/a +3%"]);
+    expect(intestazioni.at(-1)).toBe("Uscito / Previsto");
+    expect(celle.at(-1)!.textContent).toBe("+0.4%prev. +0.3%a/a +2.9% (prev. +3%)");
     // Negativo ma sopra la stima: verde.
     const luglioMese = within(luglio).getAllByRole("cell").find((c) => c.textContent === "−0.1%")!;
     expect(luglioMese.className).toContain("emerald");
@@ -76,5 +76,12 @@ describe("MacroDetailPage — le variazioni in evidenza", () => {
   it("la scheda dei numeri c'e'", () => {
     monta();
     expect(screen.getByText("Numeri e correlazioni")).toBeInTheDocument();
+  });
+
+  it("con il consenso la striscia sta nella sua unita' e il livello va a parte (D-69)", () => {
+    monta();
+    expect(screen.getByText("Uscito")).toBeInTheDocument();
+    expect(screen.getByText(/Livello della serie/)).toBeInTheDocument();
+    expect(screen.queryByText("Attuale")).toBeNull();
   });
 });

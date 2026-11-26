@@ -172,6 +172,12 @@ export default function MacroDetailPage() {
   const latest = d.latest;
   const formato = d.formato_consenso ?? null;
 
+  const conConsenso = latest?.previsto_consenso != null || latest?.attuale_consenso != null;
+  // Il precedente nell'unita' del consenso e' il dato USCITO al rilascio prima:
+  // lo storico e' dal piu' recente, e la prima riga e' il rilascio di `latest`.
+  const precedenteConsenso =
+    d.history.find((r) => r.attuale_consenso != null && r.observation_period !== latest?.observation_period)
+      ?.attuale_consenso ?? null;
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header bar with back link + indicator title + flag.
@@ -242,7 +248,64 @@ export default function MacroDetailPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-6 sm:gap-8 [&>*]:min-w-0">
+          {/* ⚠️ D-69: la tripletta mescolava due unita' — «Attuale» e «Precedente»
+              erano LIVELLI della serie FRED (334,1 e 332,8), «Previsto» una
+              variazione del consenso (0,6%). Con il consenso disponibile la
+              striscia sta tutta nella sua unita', nell'ordine in cui si legge
+              un rilascio (previsto, uscito, precedente), e il livello scende in
+              una riga sua. Senza consenso resta la striscia dei livelli. */}
+          {conConsenso ? (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-8 [&>*]:min-w-0" title="Il consenso del rilascio di questo periodo, dall'archivio: Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati.">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Previsto</div>
+                  <div className="truncate text-2xl font-bold tabular-nums leading-tight">
+                    {formatConsenso(latest?.previsto_consenso, formato, unita === "%")}
+                  </div>
+                  {latest?.previsto_annuo_consenso != null && (
+                    <div className="text-xs tabular-nums text-muted-foreground">
+                      sull'anno {formatConsenso(latest.previsto_annuo_consenso, "%", true)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Uscito</div>
+                  <div className={cn("truncate text-3xl font-bold tabular-nums leading-tight", tonoControStima(latest?.attuale_consenso, latest?.previsto_consenso))}>
+                    {formatConsenso(latest?.attuale_consenso, formato, unita === "%")}
+                  </div>
+                  {latest?.attuale_annuo_consenso != null && (
+                    <div className={cn("text-xs font-bold tabular-nums", tonoControStima(latest.attuale_annuo_consenso, latest.previsto_annuo_consenso))}>
+                      sull'anno {formatConsenso(latest.attuale_annuo_consenso, "%", true)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">Precedente</div>
+                  <div className="truncate text-2xl font-bold tabular-nums leading-tight">
+                    {formatConsenso(precedenteConsenso, formato, unita === "%")}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t pt-2 text-sm tabular-nums text-muted-foreground">
+                <span>
+                  Livello della serie{" "}
+                  <strong className="text-foreground">{latest?.actual_value != null ? formatMacroValue(latest.actual_value, valueKind, sourceScale) : "—"}</strong>
+                  {latest?.previous_value != null && <> · precedente {formatMacroValue(latest.previous_value, valueKind, sourceScale)}</>}
+                </span>
+                {latest?.variazione != null && (
+                  <span className={cn("font-semibold", tonoEsito(latest.esito_periodo))}>
+                    {formatVariazioneMacro(latest.variazione, unita)} sul periodo
+                  </span>
+                )}
+                {latest?.variazione_annua != null && (
+                  <span className={cn("font-semibold", tonoEsito(latest.esito_anno))}>
+                    {formatVariazioneMacro(latest.variazione_annua, unita)} sull'anno
+                  </span>
+                )}
+              </div>
+            </>
+          ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-8 [&>*]:min-w-0">
             <div className="flex min-w-0 flex-col gap-1">
               <KpiCell
                 label="Attuale"
@@ -304,6 +367,7 @@ export default function MacroDetailPage() {
               size="lg"
             />
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -455,15 +519,14 @@ export default function MacroDetailPage() {
                   <HintLabel text="Il periodo che il dato misura. La data di pubblicazione non e' fornita dalla fonte per le osservazioni storiche.">Periodo osservato</HintLabel>
                 </th>
                 <th className="text-left font-semibold pb-2 hidden sm:table-cell">Periodo</th>
-                <th className="text-right font-semibold pb-2">Valore</th>
+                <th className="text-right font-semibold pb-2 hidden sm:table-cell">Valore</th>
                 <th className="text-right font-semibold pb-2">
                   <HintLabel text="Verde se il rilascio ha superato la stima della sua misura, rosso se è rimasto sotto, senza colore in linea o senza stima. Non è il segno della variazione: un'inflazione in crescita meno del previsto è rossa.">Sul periodo</HintLabel>
                 </th>
                 <th className="text-right font-semibold pb-2">Sull'anno</th>
-                <th className="text-right font-semibold pb-2 hidden sm:table-cell">
-                  <HintLabel text="Il dato uscito e il consenso del suo rilascio, nell'unità del consenso: l'attuale è verde sopra il previsto, rosso sotto. Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati; sotto, il dato e la stima sull'anno quando la fonte li porta.">Attuale</HintLabel>
+                <th className="text-right font-semibold pb-2">
+                  <HintLabel text="Il dato uscito e il consenso del suo rilascio, nell'unità del consenso: l'attuale è verde sopra il previsto, rosso sotto. Forexfactory per la settimana in corso, il calendario di Nasdaq per i rilasci passati; sotto, il dato e la stima sull'anno quando la fonte li porta.">Uscito / Previsto</HintLabel>
                 </th>
-                <th className="text-right font-semibold pb-2 hidden sm:table-cell">Previsto</th>
               </tr>
             </thead>
             <tbody>
@@ -478,7 +541,7 @@ export default function MacroDetailPage() {
                   <td className="py-2 text-left text-muted-foreground hidden sm:table-cell">
                     {r.period_label ?? "—"}
                   </td>
-                  <td className="py-2 text-right text-muted-foreground">
+                  <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
                     {r.actual_value != null
                       ? formatMacroValue(r.actual_value, valueKind, sourceScale)
                       : "—"}
@@ -489,20 +552,18 @@ export default function MacroDetailPage() {
                   <td className={cn("py-2 text-right font-semibold", tonoEsito(r.esito_anno))}>
                     {formatVariazioneMacro(r.variazione_annua, unita)}
                   </td>
-                  <td className="py-2 text-right font-bold hidden sm:table-cell">
-                    <span className={tonoControStima(r.attuale_consenso, r.previsto_consenso)}>
+                  <td className="py-2 text-right">
+                    <span className={cn("font-bold", tonoControStima(r.attuale_consenso, r.previsto_consenso))}>
                       {formatConsenso(r.attuale_consenso, formato, unita === "%")}
                     </span>
+                    <div className="text-[0.7059rem] text-muted-foreground">
+                      prev. {formatConsenso(r.previsto_consenso, formato, unita === "%")}
+                    </div>
                     {r.attuale_annuo_consenso != null && (
                       <div className={cn("text-[0.7059rem]", tonoControStima(r.attuale_annuo_consenso, r.previsto_annuo_consenso))}>
                         a/a {formatConsenso(r.attuale_annuo_consenso, "%", true)}
+                        {r.previsto_annuo_consenso != null && <span className="text-muted-foreground"> (prev. {formatConsenso(r.previsto_annuo_consenso, "%", true)})</span>}
                       </div>
-                    )}
-                  </td>
-                  <td className="py-2 text-right text-muted-foreground hidden sm:table-cell">
-                    {formatConsenso(r.previsto_consenso, formato, unita === "%")}
-                    {r.previsto_annuo_consenso != null && (
-                      <div className="text-[0.7059rem]">a/a {formatConsenso(r.previsto_annuo_consenso, "%", true)}</div>
                     )}
                   </td>
                 </tr>
