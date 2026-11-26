@@ -459,7 +459,10 @@ export default function InstitutionalsPage() {
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* ⚠️ min-w-0 e max-w-full a ogni livello: a 375px le schede per tipo
+            non entrano accanto alla ricerca e il contenitore sbordava di 192px
+            (gate mobile). Su telefono la ricerca prende la sua riga. */}
+        <div className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 sm:w-auto [&>*]:max-w-full">
         {/* La porta d'ingresso a un fondo in cima (D-72): chi cerca
             «Berkshire» non deve scorrere quattro schermate fino alla tabella.
             Scrivendo, la tabella sale qui sotto. */}
@@ -468,7 +471,7 @@ export default function InstitutionalsPage() {
           onChange={setCerca}
           placeholder="Cerca un fondo o un manager…"
           ariaLabel="Cerca un fondo o un manager"
-          className="w-56"
+          className="w-full sm:w-56"
         />
         <SchedePagina
           voci={TIPI_FONDO}
