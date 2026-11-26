@@ -49,7 +49,13 @@
   .dark {
     /* Spotify-inspired dark palette (2026-05): NEUTRAL greys (0 saturation,
        no blue/slate cast) — bg #121212, cards ~#1a1a1a, elevated ~#282828 —
-       paired with the Spotify green (#1ED760) as the accent and a calm red.
+       paired with a calm red.
+       ⚠️ L'accento NON e' piu' il verde Spotify (FA-175, B-67, A-47): era lo
+       stesso verde del rialzo, quindi in scuro la voce di menu attiva, il
+       filtro selezionato e il bottone principale si leggevano come un +2%. Ora
+       e' un blu (blue-400), lontano da emerald e rose come il navy del tema
+       chiaro: testo dell'accento su scheda ~7:1, testo scuro sull'accento
+       ~7,6:1.
        White-ish titles + ~64% grey for secondary text mirror Spotify's
        comfortable two-level text hierarchy. */
     --background: 0 0% 7%;
@@ -58,8 +64,8 @@
     --card-foreground: 0 0% 95%;
     --popover: 0 0% 10%;
     --popover-foreground: 0 0% 95%;
-    --primary: 141 76% 48%;
-    --primary-foreground: 0 0% 8%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 222 47% 11%;
     --secondary: 0 0% 16%;
     --secondary-foreground: 0 0% 95%;
     --muted: 0 0% 16%;
@@ -70,7 +76,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 18%;
     --input: 0 0% 42%;
-    --ring: 141 76% 48%;
+    --ring: 213 94% 68%;
     --chart-1: 141 76% 48%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;

@@ -43,12 +43,24 @@ const downTone = TESTO_GIU;
  *  Two lines: O/H/L/C on top, Vol + Δ% below (no date — it's on the time
  *  axis under the cursor). `pointer-events-none` so it never steals the
  *  crosshair. */
+/** Il valore di una media alla stessa barra della legenda (FA-175, A-53). */
+export interface ValoreMedia {
+  nome: string;
+  colore: string;
+  valore: number;
+}
+
 export function OhlcLegend({
   legend,
   inline = false,
   currency = null,
+  medie = [],
 }: {
   legend: LegendDatum | null;
+  /** Le medie accese, alla barra della legenda. Stavano come cartellini sulla
+   *  scala dei prezzi: con quattro medie e Bollinger erano sei-sette
+   *  etichette ammassate in 25 dollari, e non si leggeva quale fosse quale. */
+  medie?: ValoreMedia[];
   /** When true, drop the self-positioning so a parent can stack the legend
    *  with sibling overlays (e.g. the signal hover panel). Default keeps the
    *  standalone absolute top-left placement used by MarketChart. */
@@ -114,6 +126,16 @@ export function OhlcLegend({
           </span>
         )}
       </div>
+      {medie.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5 mt-0.5 sm:mt-1">
+          {medie.map((m) => (
+            <span key={m.nome} className="inline-flex items-center gap-1">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: m.colore }} aria-hidden />
+              <span className="text-muted-foreground">{m.nome}</span> {fmtPrice(m.valore)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import {
   type IChartApi, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp,
 } from "lightweight-charts";
 
-import { OhlcLegend, type LegendDatum } from "@/components/chart/ohlcLegend";
+import { OhlcLegend, type LegendDatum, type ValoreMedia } from "@/components/chart/ohlcLegend";
+import { valoreAlla } from "@/lib/valoreMedia";
 import { barToLegend } from "@/lib/ohlcLegend";
 import { SignalHoverPanel } from "@/components/chart/SignalHoverPanel";
 import type { IndicatorPoint, IndicatorSeries, OhlcvBar, PriceAlert } from "@/api/types";
@@ -15,7 +16,8 @@ import type { SignalHoverItem } from "@/lib/signalMarkers";
 import { EDGE_MARGIN_BARS, defaultVisibleRange } from "@/lib/chartClamp";
 import { deveAprireLaFinestra } from "@/lib/chartInitialView";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
-import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
+import { coloriAssi, conAlfa, GIU, SU, temaScuroOra } from "@/lib/coloriGrafico";
+import { useAssiDelTema } from "@/hooks/useAssiDelTema";
 
 interface Props {
   ohlcv: OhlcvBar[];
@@ -113,6 +115,7 @@ export function PriceChart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  useAssiDelTema(chartRef);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   // OHLCV cache for the tooltip — `subscribeCrosshairMove` gives us a
   // time, but to look up O/H/L/C/V we need a Map<time, bar>. Built
@@ -132,6 +135,9 @@ export function PriceChart({
   // The fixed top-left legend. `null` only before the first data load;
   // afterwards it shows the latest bar (idle) or the hovered bar.
   const [legend, setLegend] = useState<LegendDatum | null>(null);
+  // La barra sotto il mirino, o null per l'ultima: le medie della legenda la
+  // seguono come O/H/L/C.
+  const [tempoMirino, setTempoMirino] = useState<number | null>(null);
   // Signals fired on the hovered candle (null when the cursor is off a
   // marked bar). Drives the hover detail panel under the legend. Held in a
   // ref too so the mount-once crosshair handler reads the fresh map.
@@ -226,6 +232,7 @@ export function PriceChart({
         timeZone: exchangeTzRef.current,
       });
     };
+    const assi = coloriAssi(temaScuroOra());
     const chart = createChart(containerRef.current, {
       // Touch handling. `vertTouchDrag` defaults to TRUE in
       // lightweight-charts, which means a vertical finger drag STARTED on the
@@ -239,7 +246,7 @@ export function PriceChart({
       handleScroll: { vertTouchDrag: false },
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#374151",
+        textColor: assi.testo,
         // Slightly larger axis font: the price label is now a native
         // price-scale badge (integrated + anti-overlap-stacked with the
         // EMA/BB badges). lightweight-charts has no per-series label
@@ -248,12 +255,12 @@ export function PriceChart({
         fontSize: 13,
       },
       grid: {
-        vertLines: { color: "rgba(0,0,0,0.05)" },
-        horzLines: { color: "rgba(0,0,0,0.05)" },
+        vertLines: { color: assi.griglia },
+        horzLines: { color: assi.griglia },
       },
-      rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
+      rightPriceScale: { borderColor: assi.bordo },
       timeScale: {
-        borderColor: "rgba(0,0,0,0.1)",
+        borderColor: assi.bordo,
         // Resting margin to the right of the last bar so the latest candle is
         // never glued to the border. The pan/zoom clamp (below) keeps the
         // symmetric bound on both edges.
@@ -323,23 +330,25 @@ export function PriceChart({
     // on the right price-scale with the latest value — replaces the
     // previous on-chart `title` legend that overlapped the candles.
     // No `title` is set so the only label is the price-scale badge.
+    // ⚠️ Niente cartellino sulla scala per medie e bande (FA-175, A-53): sulla
+    // scala resta solo il prezzo, i valori stanno nella legenda.
     ema20Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: true,
+      priceLineVisible: false, lastValueVisible: false,
     });
     ema50Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: true,
+      priceLineVisible: false, lastValueVisible: false,
     });
     ema200Ref.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: true,
+      priceLineVisible: false, lastValueVisible: false,
     });
     bbUpperRef.current = chart.addLineSeries({
-      lineStyle: 2, priceLineVisible: false, lastValueVisible: true,
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: false,
     });
     bbLowerRef.current = chart.addLineSeries({
-      lineStyle: 2, priceLineVisible: false, lastValueVisible: true,
+      lineStyle: 2, priceLineVisible: false, lastValueVisible: false,
     });
     bbMiddleRef.current = chart.addLineSeries({
-      priceLineVisible: false, lastValueVisible: true,
+      priceLineVisible: false, lastValueVisible: false,
     });
     volumeRef.current = chart.addHistogramSeries({
       priceFormat: { type: "volume" },
@@ -409,6 +418,7 @@ export function PriceChart({
       // Off the plot (or on a gap) → revert the legend to the latest bar
       // instead of hiding it, so the corner always shows something. Signal
       // detail is hover-only, so it clears here.
+      setTempoMirino(param.time ? (param.time as number) : null);
       if (!param.time) {
         setLegend(latestLegendRef.current);
         setHoverSignals(null);
@@ -698,13 +708,27 @@ export function PriceChart({
     };
   }, [signalMarkers, earningsMarkers, ohlcv, chartType]);
 
+
+  // I valori delle medie accese, alla barra della legenda (A-53).
+  const medie: ValoreMedia[] = [];
+  const voce = (nome: string, stile: { visible: boolean; color: string }, punti: IndicatorPoint[] | undefined) => {
+    if (!stile.visible) return;
+    const v = valoreAlla(punti, tempoMirino, dateToTime);
+    if (v != null) medie.push({ nome, colore: stile.color, valore: v });
+  };
+  voce("EMA20", styles.ema20, indicators.ema20);
+  voce("EMA50", styles.ema50, indicators.ema50);
+  voce("EMA200", styles.ema200, indicators.ema200);
+  voce("BB+", styles.bb, indicators.bb_upper);
+  voce("BB−", styles.bb, indicators.bb_lower);
+
   return (
     <div ref={containerRef} className="w-full h-full relative">
       {/* Top-left overlay stack: OHLCV legend, then (only over a marked bar)
           the signal detail — a flex column so the panel always sits directly
           below the legend regardless of how many lines the legend wraps to. */}
       <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1 pointer-events-none">
-        <OhlcLegend legend={legend} inline currency={currency} />
+        <OhlcLegend legend={legend} inline currency={currency} medie={medie} />
         <SignalHoverPanel signals={hoverSignals} />
       </div>
     </div>

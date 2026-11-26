@@ -15,7 +15,8 @@ import type { RegisterChart } from "@/hooks/useChartSync";
 import type { MarketDetailBar, MarketIndicatorPoint, MarketIndicators } from "@/hooks/useMarketDetail";
 import { defaultVisibleBars, isIntraday } from "@/lib/timeframeZoom";
 import { barToLegend } from "@/lib/ohlcLegend";
-import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
+import { coloriAssi, conAlfa, GIU, SU, temaScuroOra } from "@/lib/coloriGrafico";
+import { useAssiDelTema } from "@/hooks/useAssiDelTema";
 
 interface Props {
   bars: MarketDetailBar[];
@@ -55,6 +56,7 @@ export function MarketChart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  useAssiDelTema(chartRef);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   // OHLC legend machinery — same pattern as PriceChart (shared renderer in
   // components/chart/ohlcLegend). Refs because the crosshair handler is
@@ -75,6 +77,7 @@ export function MarketChart({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const assi = coloriAssi(temaScuroOra());
     const chart = createChart(el, {
       // autoSize: width/height below are read ONCE at creation, so without
       // this the canvas kept its mount-time size forever — a rotation or any
@@ -89,17 +92,17 @@ export function MarketChart({
       handleScroll: { vertTouchDrag: false },
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "rgba(115, 115, 115, 1)",
+        textColor: assi.testo,
         fontSize: 12,
       },
       grid: {
-        vertLines: { color: "rgba(115, 115, 115, 0.08)" },
-        horzLines: { color: "rgba(115, 115, 115, 0.08)" },
+        vertLines: { color: assi.griglia },
+        horzLines: { color: assi.griglia },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: "rgba(115, 115, 115, 0.2)" },
+      rightPriceScale: { borderColor: assi.bordo },
       timeScale: {
-        borderColor: "rgba(115, 115, 115, 0.2)",
+        borderColor: assi.bordo,
         // ALL three intraday timeframes need the clock on the axis — "5m" was
         // missing here, so a 5m chart fell back to the date-only formatter and
         // every tick of the same session rendered the identical "28" / "29".

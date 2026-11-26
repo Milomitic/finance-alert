@@ -7,7 +7,8 @@ import {
 import type { IndicatorPoint } from "@/api/types";
 import type { RegisterChart } from "@/hooks/useChartSync";
 import { deveAprireLaFinestra } from "@/lib/chartInitialView";
-import { conAlfa, GIU, SU } from "@/lib/coloriGrafico";
+import { coloriAssi, conAlfa, GIU, SU, temaScuroOra } from "@/lib/coloriGrafico";
+import { useAssiDelTema } from "@/hooks/useAssiDelTema";
 
 interface Props {
   line: IndicatorPoint[];
@@ -54,6 +55,7 @@ export function MacdPanel({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  useAssiDelTema(chartRef);
   // La serie per cui la vista d'apertura e' gia' stata messa.
   const finestraPer = useRef<string | null>(null);
   const lineRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -64,14 +66,15 @@ export function MacdPanel({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const assi = coloriAssi(temaScuroOra());
     const chart = createChart(containerRef.current, {
       // Same as PriceChart: vertical finger drags must scroll the PAGE,
       // not this panel. See the note there.
       handleScroll: { vertTouchDrag: false },
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: "#374151" },
-      grid: { vertLines: { color: "rgba(0,0,0,0.05)" }, horzLines: { color: "rgba(0,0,0,0.05)" } },
-      rightPriceScale: { borderColor: "rgba(0,0,0,0.1)" },
-      timeScale: { borderColor: "rgba(0,0,0,0.1)", timeVisible: false },
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: assi.testo },
+      grid: { vertLines: { color: assi.griglia }, horzLines: { color: assi.griglia } },
+      rightPriceScale: { borderColor: assi.bordo },
+      timeScale: { borderColor: assi.bordo, timeVisible: false },
       // Free crosshair — Y-axis badge follows the cursor, no snap.
       crosshair: { mode: CrosshairMode.Normal },
       autoSize: true,

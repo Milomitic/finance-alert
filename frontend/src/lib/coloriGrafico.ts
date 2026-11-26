@@ -43,3 +43,35 @@ export const SERIE = {
   rsi: "#7c3aed",
   macd: "#d946ef",
 } as const;
+
+/** Assi, griglia e bordi dei grafici canvas, per tema (FA-175, B-12, A-51).
+ *  Erano scritti per il fondo chiaro: `#374151` su `#1a1a1a` vale 1,7:1, e la
+ *  griglia nera al 5% spariva. Testo dell'asse sopra 4,5:1 in entrambi i
+ *  temi: `#525252` su bianco ~7,8:1, `#a3a3a3` su `#1a1a1a` ~7,4:1. */
+export interface ColoriAssi {
+  testo: string;
+  griglia: string;
+  bordo: string;
+}
+
+export function coloriAssi(scuro: boolean): ColoriAssi {
+  return scuro
+    ? { testo: "#a3a3a3", griglia: "rgba(255,255,255,0.06)", bordo: "rgba(255,255,255,0.14)" }
+    : { testo: "#525252", griglia: "rgba(0,0,0,0.05)", bordo: "rgba(0,0,0,0.12)" };
+}
+
+/** Le stesse in forma di opzioni di lightweight-charts, per `applyOptions`. */
+export function opzioniAssi(scuro: boolean) {
+  const c = coloriAssi(scuro);
+  return {
+    layout: { textColor: c.testo },
+    grid: { vertLines: { color: c.griglia }, horzLines: { color: c.griglia } },
+    rightPriceScale: { borderColor: c.bordo },
+    timeScale: { borderColor: c.bordo },
+  };
+}
+
+/** Il tema in questo momento, letto dal DOM (la classe di `useTheme`). */
+export function temaScuroOra(): boolean {
+  return typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+}
