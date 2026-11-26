@@ -42,7 +42,7 @@ export function DetectorPerformancePanel() {
       <CardContent className="p-4">
         <SectionTitle
           icon={FlaskConical}
-          label="Esiti per detector — regime · tono · Forza"
+          label="Esiti per tipo di segnale — regime · tono · Forza"
           right={
             <Button
               size="sm"

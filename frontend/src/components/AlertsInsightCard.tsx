@@ -436,7 +436,7 @@ export function AlertsInsightCard({
                     <HorizonMix clusters={clusters} />
                   </div>
                   <div>
-                    <SubHeader>Detector più attivi</SubHeader>
+                    <SubHeader>Tipi di segnale più attivi</SubHeader>
                     <DetectorMix clusters={clusters} />
                   </div>
                 </div>

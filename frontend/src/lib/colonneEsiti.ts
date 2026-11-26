@@ -38,7 +38,7 @@ export interface ColonnaEsiti {
 export const COLONNE_ESITI: readonly ColonnaEsiti[] = [
   { id: "titolo", label: "Titolo", nascondibile: false, ordina: "ticker",
     tracce: ["minmax(0,1fr)", "minmax(0,1fr)", "minmax(0,1fr)", "minmax(0,1fr)"] },
-  { id: "condizione", label: "Condizione", nascondibile: true, ordina: "detector",
+  { id: "condizione", label: "Tipo", nascondibile: true, ordina: "detector",
     tracce: [null, null, null, "136px"] },
   { id: "esito", label: "Esito", nascondibile: true, ordina: "esito",
     tracce: ["auto", "116px", "116px", "116px"] },

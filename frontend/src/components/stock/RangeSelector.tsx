@@ -21,13 +21,17 @@ interface Props {
 // (00/04/08/12/16/20). Sequential 4-bar grouping produced candles
 // misaligned with what other charting tools show. Use 1h for
 // sub-daily granularity instead.
+/* C-43: «5m» erano cinque minuti e «1m» un mese, con la stessa lettera, e
+ * l'avviso della pagina diceva «1G», un'etichetta che qui non esisteva. Ora i
+ * minuti si scrivono «min», giorno, settimana e mese con le iniziali italiane.
+ * Le chiavi (URL, API) restano quelle. */
 const OPTIONS = [
-  { key: "5m",  label: "5m" },
-  { key: "30m", label: "30m" },
-  { key: "1h",  label: "1h" },
-  { key: "1d",  label: "1d" },
-  { key: "1w",  label: "1w" },
-  { key: "1m",  label: "1m" },
+  { key: "5m",  label: "5min", nome: "candele da 5 minuti" },
+  { key: "30m", label: "30min", nome: "candele da 30 minuti" },
+  { key: "1h",  label: "1h", nome: "candele da un'ora" },
+  { key: "1d",  label: "1G", nome: "candele giornaliere" },
+  { key: "1w",  label: "1S", nome: "candele settimanali" },
+  { key: "1m",  label: "1M", nome: "candele mensili" },
   // "All" removed: it duplicated "1m" (same monthly bars, differing
   // only in default zoom) and cluttered the selector. Legacy ?range=all
   // links still resolve server-side → monthly.
@@ -51,12 +55,14 @@ export function RangeSelector({ value, onChange }: Props) {
     // the pills land on exactly the same pixels as before. Height stays h-8
     // so the selector still matches ChartOptionsToolbar beside it, which is
     // built from the identical h-8 shell + h-7 pills.
-    <div className="inline-flex h-7 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 px-0.5">
+    <div role="group" aria-label="Durata della candela" className="inline-flex h-7 max-w-full overflow-x-auto items-center rounded-md border bg-muted/30 px-0.5">
       {OPTIONS.map((opt) => (
         <button
           key={opt.key}
           type="button"
           onClick={() => onChange(opt.key)}
+          aria-pressed={value === opt.key}
+          title={opt.nome}
           className={cn(
             "h-6 px-2 text-xs font-medium rounded transition-colors flex items-center",
             value === opt.key

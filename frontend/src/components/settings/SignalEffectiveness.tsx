@@ -86,7 +86,7 @@ export function SignalEffectivenessTable({ rows }: { rows: DetectorPerfRow[] }) 
       <table className="w-full text-sm tabular-nums">
         <thead className="border-b bg-muted/30 text-muted-foreground">
           <tr className="text-left">
-            <th className="px-3 py-2 font-semibold">Segnale</th>
+            <th className="px-3 py-2 font-semibold">Tipo di segnale</th>
             <th className="px-3 py-2 text-right font-semibold">
               <HintLabel text="Esiti maturati nel magazzino.">Righe</HintLabel>
             </th>

@@ -398,7 +398,7 @@ function Intestazione({ vis, ordine, onOrdina, onMenu }: {
     <li className={cn(COLONNE, "border-b bg-muted/20 px-3 py-1")} onContextMenu={onMenu}>
       <IntestazioneOrdinabile etichetta="Titolo" chiave="ticker" {...o} />
       {vis("condizione") && (
-        <IntestazioneOrdinabile etichetta="Condizione" chiave="detector" className="hidden xl:block" {...o} />
+        <IntestazioneOrdinabile etichetta="Tipo" chiave="detector" className="hidden xl:block" {...o} />
       )}
       {vis("esito") && <IntestazioneOrdinabile etichetta="Esito" chiave="esito" {...o} />}
       {vis("chiusa") && (

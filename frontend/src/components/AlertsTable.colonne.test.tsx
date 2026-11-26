@@ -163,11 +163,11 @@ describe("AlertsTable — la data", () => {
     const visti: string[] = [];
     const c = monta(false, [vivo], (col) => visti.push(col));
     const intestazioni = Array.from(c.querySelectorAll("th")).map((th) => th.textContent?.trim());
-    expect(intestazioni).toContain("Segnale");
+    expect(intestazioni).toContain("Comparso");
     expect(intestazioni).not.toContain("Rilevato");
     expect(intestazioni).not.toContain("Data segnale");
 
-    const testa = Array.from(c.querySelectorAll("th")).find((th) => th.textContent?.trim() === "Segnale")!;
+    const testa = Array.from(c.querySelectorAll("th")).find((th) => th.textContent?.trim() === "Comparso")!;
     fireEvent.click(testa.querySelector("button") ?? testa);
     expect(visti).toEqual(["emissione"]);
   });

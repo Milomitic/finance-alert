@@ -428,7 +428,7 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
               <CalendarRange className="h-3 w-3" />
               Segnale del
               <InfoHint
-                label="Segnale del"
+                label="Comparso il"
                 text={
                   "Il giorno in cui il segnale è comparso: è la barra su cui poggiano il prezzo "
                   + "d'ingresso, lo stop e i target. Se la regola aveva fatto match su una barra "

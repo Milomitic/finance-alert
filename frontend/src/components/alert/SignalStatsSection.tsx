@@ -53,7 +53,7 @@ export function SignalStatsSection() {
         className="inline-flex min-h-[36px] items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
       >
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", aperto && "rotate-180")} aria-hidden />
-        {aperto ? "Nascondi" : "Mostra"} il dettaglio: per detector, calibrazione, equity
+        {aperto ? "Nascondi" : "Mostra"} il dettaglio: per tipo di segnale, calibrazione, equity
       </button>
       {aperto && (
         <div className="space-y-4">

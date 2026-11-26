@@ -244,7 +244,7 @@ describe("StockAlertsHistoryCard — colonne", () => {
     expect(intestazioni).not.toContain("Tono");
     // Il pavimento: senza, l'asserzione sopra sarebbe vera anche di una
     // tabella che non rende nessuna intestazione.
-    expect(intestazioni).toContain("Regola");
+    expect(intestazioni).toContain("Tipo");
     expect(intestazioni).toContain("Forza");
   });
 });

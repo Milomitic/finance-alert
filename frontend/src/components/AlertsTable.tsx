@@ -65,8 +65,8 @@ const ALERTS_COLS = [
   // che mostrava `triggered_at`, cioe' l'ULTIMA REVISIONE — non c'e' piu':
   // erano due date accanto, nessuna delle quali era quella su cui poggia il
   // piano. Vedi `lib/alertDates.giornoDelSegnale`.
-  { id: "data_segnale", label: "Segnale" },
-  { id: "regola",      label: "Regola" },
+  { id: "data_segnale", label: "Comparso" },
+  { id: "regola",      label: "Tipo" },
   { id: "natura",      label: "Natura" },
   { id: "orizzonte",   label: "Orizzonte" },
   { id: "forza",       label: "Forza" },
@@ -373,7 +373,7 @@ export function AlertsTable({
             onSort ? (
               <SortableHeader
                 column="emissione"
-                label="Segnale"
+                label="Comparso"
                 hint={HINT_SEGNALE}
                 sortBy={sortBy}
                 sortDir={sortDir}
@@ -444,7 +444,7 @@ export function AlertsTable({
             )
           )}
           {showRegola && (
-            <TableHead className={TESTA}>Regola</TableHead>
+            <TableHead className={TESTA}>Tipo</TableHead>
           )}
           {showNatura && (
             <TableHead className={TESTA} hint="Natura del segnale: continuazione del trend o inversione">

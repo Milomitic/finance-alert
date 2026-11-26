@@ -359,7 +359,7 @@ export function AlertFilters({ value, onChange }: Props) {
         {/* Tipo segnale — maps to rule_kind. "tutti" sentinel clears the filter. */}
         <SelectField
           labelClassName={ETICHETTA}
-          label="Tipo segnale"
+          label="Tipo di segnale"
           value={value.rule_kind ?? "tutti"}
           placeholder="Tutti"
           onValueChange={(v) =>
@@ -612,7 +612,7 @@ export function AlertFilters({ value, onChange }: Props) {
               <FilterChip
                 label={
                   <>
-                    <span className="text-muted-foreground">Segnale:</span>{" "}
+                    <span className="text-muted-foreground">Tipo:</span>{" "}
                     {signalKindLabel}
                   </>
                 }
