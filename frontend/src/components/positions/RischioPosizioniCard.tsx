@@ -1,4 +1,5 @@
 import { ShieldAlert } from "lucide-react";
+import { useState } from "react";
 
 import type {
   EtoroPrimoPassaggio,
@@ -7,6 +8,8 @@ import type {
 } from "@/api/etoro";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { Button } from "@/components/ui/button";
+import { HintLabel } from "@/components/ui/info-hint";
 import { formatMoney, formatMoneySigned } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
@@ -126,6 +129,24 @@ function coppie(d: EtoroRischio): { a: string; b: string; r: number }[] {
   return out.sort((x, y) => Math.abs(y.r) - Math.abs(x.r)).slice(0, 5);
 }
 
+const PRIME_POSIZIONI = 4;
+
+function ElencoPosizioni({ posizioni }: { posizioni: EtoroRischioPosizione[] }) {
+  const [tutte, setTutte] = useState(false);
+  const visibili = tutte ? posizioni : posizioni.slice(0, PRIME_POSIZIONI);
+  return (
+    <div className="space-y-3">
+      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Per posizione</div>
+      {visibili.map((p) => <Posizione key={p.position_id} p={p} />)}
+      {posizioni.length > PRIME_POSIZIONI && (
+        <Button type="button" variant="link" size="testo" className="text-xs" aria-expanded={tutte} onClick={() => setTutte((t) => !t)}>
+          {tutte ? "Mostra meno" : `Mostra tutte le ${posizioni.length} posizioni`}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function RischioPosizioniCard({
   d, caricamento, errore,
 }: { d: EtoroRischio | undefined; caricamento: boolean; errore: boolean }) {
@@ -157,15 +178,12 @@ export function RischioPosizioniCard({
                 </span>
               )}
               {d.posizioni_effettive != null && (
-                <span title="Quante posizioni indipendenti valgono, data la correlazione dei rendimenti a 60 sedute: 1 vuol dire una scommessa sola.">
-                  <span className="text-muted-foreground">Posizioni indipendenti </span>
+                <span>
+                  {/* La spiegazione al tocco, non in title (D-39b). */}
+                  <HintLabel text="Quante posizioni indipendenti valgono, data la correlazione dei rendimenti a 60 sedute: 1 vuol dire una scommessa sola." className="text-muted-foreground">Posizioni indipendenti</HintLabel>{" "}
                   <span className="font-semibold">{num(d.posizioni_effettive)}</span>
                 </span>
               )}
-            </div>
-
-            <div className="space-y-3">
-              {d.posizioni.map((p) => <Posizione key={p.position_id} p={p} />)}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -192,7 +210,7 @@ export function RischioPosizioniCard({
                 <ul className="space-y-0.5 text-sm">
                   {d.scenario.map((s) => (
                     <li key={`${s.indice}${s.shock_pct}`} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate">{s.indice} {s.shock_pct.toFixed(0)}%</span>
+                      <span className="min-w-0 truncate">{s.indice} {s.shock_pct > 0 ? "+" : s.shock_pct < 0 ? "−" : ""}{Math.abs(s.shock_pct).toFixed(0)}%</span>
                       <span className={cn("tabular-nums",
                         s.pnl_usd < 0 ? TESTO_GIU : TESTO_SU)}>
                         {formatMoneySigned(s.pnl_usd, "USD")}
@@ -206,6 +224,11 @@ export function RischioPosizioniCard({
                 </p>
               </div>
             </div>
+
+            {/* ⚠️ Dopo gli aggregati (D-39): un blocco per posizione eToro
+                erano ~1.500px prima di esposizione e scenario, le uniche
+                letture d'insieme. Le prime quattro, le altre a richiesta. */}
+            <ElencoPosizioni posizioni={d.posizioni} />
 
             {coppie(d).length > 0 && (
               <div>

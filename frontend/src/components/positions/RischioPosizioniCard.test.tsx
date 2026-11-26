@@ -62,4 +62,18 @@ describe("la scheda del rischio", () => {
     const v = await axeViolations(container);
     expect(v, describeViolations(v)).toEqual([]);
   });
+
+  it("gli aggregati vengono prima delle posizioni, e le posizioni oltre la quarta si aprono (D-39)", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const sei = [1, 2, 3, 4, 5, 6].map((i) => pos({ position_id: i, ticker: `T${i}` }));
+    const { container } = render(<RischioPosizioniCard d={quadro(sei)} caricamento={false} errore={false} />);
+    const testo = container.textContent ?? "";
+    expect(testo.indexOf("Esposizione per sottostante")).toBeLessThan(testo.indexOf("Per posizione"));
+    expect(screen.queryByText("T5")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Mostra tutte le 6 posizioni" }));
+    expect(screen.getByText("T5")).toBeInTheDocument();
+    // Lo scenario col segno vero: «−5%», non «-5%».
+    expect(screen.getByText("S&P 500 −5%")).toBeInTheDocument();
+  });
 });
+

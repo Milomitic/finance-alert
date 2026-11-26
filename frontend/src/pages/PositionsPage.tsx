@@ -1,4 +1,4 @@
-import { Archive, Bell, Briefcase, Loader2, Trash2, XCircle } from "lucide-react";
+import { Archive, Bell, Briefcase, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -8,9 +8,9 @@ import { StockLogo } from "@/components/dashboard/StockLogo";
 import { PortfolioSummary } from "@/components/PortfolioSummary";
 import { PositionGeometry } from "@/components/positions/PositionGeometry";
 import { TrimestraleVicina } from "@/components/positions/TrimestraleVicina";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
+import { AzioniPosizione } from "@/components/positions/AzioniPosizione";
 import {
   Table,
   TableBody,
@@ -71,7 +71,8 @@ const EXIT_LABEL: Record<string, string> = {
 
 function fmtPct(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "—";
-  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+  // Virgola decimale e segno vero (D-37): «+1.23%» stava accanto a «+1,2%».
+  return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(2).replace(".", ",")}%`;
 }
 
 function fmtDate(iso: string | null): string {
@@ -211,20 +212,9 @@ export default function PositionsPage() {
   const open = all.filter((p) => p.closed_at == null);
   const closed = all.filter((p) => p.closed_at != null);
 
-  const onClose = (p: Position) => {
-    if (
-      confirm(
-        `Chiudere la posizione ${SIDE_LABEL[p.side]} su ${p.ticker} al prezzo corrente?`,
-      )
-    ) {
-      update.mutate({ id: p.id, body: { close: true } });
-    }
-  };
-  const onDelete = (p: Position) => {
-    if (confirm(`Eliminare definitivamente la posizione su ${p.ticker}?`)) {
-      remove.mutate(p.id);
-    }
-  };
+  // La conferma e' il secondo tocco su AzioniPosizione (D-34), non confirm().
+  const onClose = (p: Position) => update.mutate({ id: p.id, body: { close: true } });
+  const onDelete = (p: Position) => remove.mutate(p.id);
 
   return (
     <div className="space-y-4">
@@ -340,23 +330,7 @@ export default function PositionsPage() {
                             {fmtDate(p.opened_at)}
                           </TableCell>
                           <TableCell className="text-right whitespace-nowrap">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => onClose(p)}
-                              disabled={update.isPending}
-                              title="Chiudi manualmente al prezzo corrente"
-                            >
-                              <XCircle className="h-3.5 w-3.5 mr-1" />
-                              Chiudi
-                            </Button>
-                            <button
-                              onClick={() => onDelete(p)}
-                              title="Elimina" aria-label="Elimina la posizione"
-                              className="ml-1 p-1.5 hover:bg-destructive/10 hover:text-destructive rounded align-middle"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <AzioniPosizione p={p} onClose={onClose} onDelete={onDelete} inCorso={update.isPending} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -382,8 +356,8 @@ export default function PositionsPage() {
                       <TableRow>
                         <TableHead className={TITOLO_FISSO}>Titolo</TableHead>
                         <TableHead>Lato</TableHead>
-                        <TableHead className="text-right">Entry</TableHead>
-                        <TableHead className="text-right">Exit</TableHead>
+                        <TableHead className="text-right">Ingresso</TableHead>
+                        <TableHead className="text-right">Uscita</TableHead>
                         <TableHead>Esito</TableHead>
                         <TableHead className="text-right">P&amp;L realizzato</TableHead>
                         <TableHead className="text-right">Chiusa il</TableHead>
@@ -432,13 +406,7 @@ export default function PositionsPage() {
                             {fmtDate(p.closed_at)}
                           </TableCell>
                           <TableCell className="text-right">
-                            <button
-                              onClick={() => onDelete(p)}
-                              title="Elimina" aria-label="Elimina la posizione"
-                              className="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <AzioniPosizione p={p} onDelete={onDelete} />
                           </TableCell>
                         </TableRow>
                       ))}

@@ -82,7 +82,7 @@ export function PortfolioSummary({
       <CardContent className="space-y-3 p-4">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatTile
-            label="P&L totale · USD"
+            label="P/L delle posizioni tracciate · USD"
             value={nfMoney.format(totalPnl)}
             valueClass={pnlClass(totalPnl)}
             sub="non realizzato + realizzato"
@@ -106,7 +106,7 @@ export function PortfolioSummary({
           />
         </div>
         <p className="text-[0.7059rem] text-muted-foreground">
-          Somme convertite in USD ai cambi correnti.
+          Solo le posizioni inserite dal piano dei segnali, non il conto eToro. Somme convertite in USD ai cambi correnti.
           {notionalOnly > 0 &&
             ` ${notionalOnly} posizion${notionalOnly === 1 ? "e" : "i"} notional (senza size) escluse dai totali.`}
         </p>
