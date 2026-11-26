@@ -43,7 +43,7 @@ import StockDetailSource from "./StockDetailPage.tsx?raw";
  *  sorgente della pagina. Con gli oggetti si nomina il campo (`$name`). */
 const BACK_TARGET = [
   { name: "StockDetailPage", source: StockDetailSource, target: "/stocks" },
-  { name: "MarketDetailPage", source: MarketDetailSource, target: "/" },
+  { name: "MarketDetailPage", source: MarketDetailSource, target: "/markets" },
   { name: "MacroDetailPage", source: MacroDetailSource, target: "/calendar" },
   { name: "SectorDetailPage", source: SectorDetailSource, target: "/sectors" },
   {

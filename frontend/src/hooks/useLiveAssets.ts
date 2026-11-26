@@ -36,9 +36,12 @@ export interface LiveAssetsResponse {
   assets: LiveAsset[];
 }
 
-export function useLiveAssets() {
+export function useLiveAssets({ attivo = true }: { attivo?: boolean } = {}) {
   return useQuery({
     queryKey: ["live-assets"],
+    // La ricerca globale e' sempre montata: interroga solo mentre si cerca,
+    // e altrimenti legge la cache condivisa col paniere della home.
+    enabled: attivo,
     queryFn: ({ signal }) => api<LiveAssetsResponse>("/api/dashboard/live-assets", { signal }),
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,

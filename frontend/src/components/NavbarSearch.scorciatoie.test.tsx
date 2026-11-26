@@ -12,6 +12,11 @@ vi.mock("@/hooks/usePreferiti", () => ({
   usePreferiti: () => ({ data: [{ ticker: "ENI.MI" }, { ticker: "AAPL" }] }),
 }));
 vi.mock("@/hooks/useMediaQuery", () => ({ useIsPhone: () => false }));
+vi.mock("@/hooks/useLiveAssets", () => ({
+  useLiveAssets: () => ({
+    data: { assets: [{ symbol: "GC=F", name: "Oro", category: "commodity", flag: null, quote: null, history: null }] },
+  }),
+}));
 
 import { NavbarSearch } from "./NavbarSearch";
 import { aggiungiRecente } from "@/lib/titoliRecenti";
@@ -55,4 +60,11 @@ it("a casella vuota i preferiti stanno in cima, e i recenti non li ripetono", ()
   expect(opzioni.map((o) => o.match(/ENI\.MI|AAPL|NVDA/)?.[0])).toEqual(["ENI.MI", "AAPL", "NVDA"]);
   expect(screen.getByText("★ Preferiti (2)")).toBeTruthy();
   expect(screen.getByText("🕓 Visti di recente (1)")).toBeTruthy();
+});
+
+it("«oro» trova lo strumento di mercato, nella sua sezione (C-55)", () => {
+  monta();
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "oro" } });
+  expect(screen.getByText(/^Mercati \(1\)/)).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /Oro/ })).toBeInTheDocument();
 });

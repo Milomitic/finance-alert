@@ -9,6 +9,7 @@
  */
 import {
   Bell,
+  Globe2,
   Briefcase,
   Building2,
   CalendarDays,
@@ -74,6 +75,9 @@ export const NAV_GROUPS: NavGroup[] = [
       // /stocks route stays; the page is conceptually a screener (filters +
       // ranking) so that's the label. Filter icon to telegraph the function.
       { to: "/stocks", label: "Screener", icon: Filter, enabled: true },
+      // C-55: indici, materie prime e cripto, che avevano il dettaglio e non
+      // una porta.
+      { to: "/markets", label: "Mercati", icon: Globe2, enabled: true },
       { to: "/calendar", label: "Calendario", icon: CalendarDays, enabled: true },
       // FA-157: statistica storica di un simbolo, coi casi e il caso base.
       { to: "/studio", label: "Studio", icon: FlaskConical, enabled: true },

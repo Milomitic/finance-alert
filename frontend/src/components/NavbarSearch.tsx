@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useMarketSummary } from "@/hooks/useMarketSummary";
 import { usePreferiti } from "@/hooks/usePreferiti";
 import { useStockSearch } from "@/hooks/useStockSearch";
+import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { formatCompactMoney } from "@/lib/money";
 import { getFlagFromTicker, getStockFlagCode } from "@/lib/stockMeta";
@@ -26,9 +27,11 @@ import { Button } from "@/components/ui/button";
 // ── flat result row for unified keyboard nav ──────────────
 type RowKind = "index" | "stock" | "preferito" | "recent" | "mover";
 interface FlatRow {
-  kind: RowKind;
+  kind: RowKind | "mercato";
   // For index navigation
   indexCode?: string;
+  // Per uno strumento di mercato (C-55): il simbolo del dettaglio.
+  simbolo?: string;
   // For stock/recent/mover navigation
   ticker?: string;
 }
@@ -68,6 +71,16 @@ export function NavbarSearch() {
       ? (search.data?.items ?? []).map((it) => it.stock)
       : [], [q, search.data?.items]);
 
+  // Strumenti di mercato per nome o simbolo (C-55): «oro», «bitcoin», «S&P».
+  const mercati = useLiveAssets({ attivo: open && q.trim().length > 0 });
+  const mercatoMatches: LiveAsset[] = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (needle.length === 0) return [];
+    return (mercati.data?.assets ?? []).filter(
+      (a) => a.name.toLowerCase().includes(needle) || a.symbol.toLowerCase().includes(needle),
+    );
+  }, [mercati.data, q]);
+
   // Index matches: filter by code or name match (case-insensitive)
   const indexMatches: IndexBreadth[] = useMemo(() => {
     if (q.trim().length === 0) return [];
@@ -97,6 +110,7 @@ export function NavbarSearch() {
   const flatRows: FlatRow[] = useMemo(() => {
     const rows: FlatRow[] = [];
     if (q.trim().length > 0) {
+      for (const a of mercatoMatches) rows.push({ kind: "mercato", simbolo: a.quote_symbol ?? a.symbol });
       for (const i of indexMatches) rows.push({ kind: "index", indexCode: i.code });
       for (const s of stockItems) rows.push({ kind: "stock", ticker: s.ticker });
     } else {
@@ -105,7 +119,7 @@ export function NavbarSearch() {
       for (const m of topMovers) rows.push({ kind: "mover", ticker: m.ticker });
     }
     return rows;
-  }, [q, indexMatches, stockItems, preferiti, recentiVisibili, topMovers]);
+  }, [q, mercatoMatches, indexMatches, stockItems, preferiti, recentiVisibili, topMovers]);
 
   /* Riporta l'evidenziazione in cima quando i risultati cambiano.
    *
@@ -163,8 +177,15 @@ export function NavbarSearch() {
     navigate(`/stocks?index=${encodeURIComponent(code)}`);
   };
 
+  const goToMercato = (simbolo: string) => {
+    setOpen(false);
+    setQ("");
+    navigate(`/markets/${encodeURIComponent(simbolo)}`);
+  };
+
   const navigateRow = (row: FlatRow) => {
-    if (row.kind === "index" && row.indexCode) goToIndex(row.indexCode);
+    if (row.kind === "mercato" && row.simbolo) goToMercato(row.simbolo);
+    else if (row.kind === "index" && row.indexCode) goToIndex(row.indexCode);
     else if (row.ticker) goToTicker(row.ticker);
   };
 
@@ -351,7 +372,7 @@ export function NavbarSearch() {
   }
 
   // ── render ──────────────────────────────────────────────
-  const totalResults = stockItems.length + indexMatches.length;
+  const totalResults = stockItems.length + indexMatches.length + mercatoMatches.length;
   const totalEmpty = preferiti.length + recentiVisibili.length + topMovers.length;
 
   return (
@@ -421,11 +442,44 @@ export function NavbarSearch() {
                 </div>
               ) : (
                 <>
-                  {/* Indices section */}
+                  {/* Mercati (C-55): indici, materie prime, cripto con la loro pagina. */}
+                  {mercatoMatches.length > 0 && (
+                    <div>
+                      <div className="px-4 py-1.5 bg-muted/40 text-[0.6765rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
+                        Mercati ({mercatoMatches.length})
+                      </div>
+                      {mercatoMatches.map((a) => {
+                        const idx = cursor++;
+                        const simbolo = a.quote_symbol ?? a.symbol;
+                        return (
+                          <button
+                            key={a.symbol}
+                            type="button"
+                            id={`navbar-search-option-${idx}`}
+                            role="option"
+                            aria-selected={isHighlighted(idx)}
+                            onClick={() => goToMercato(simbolo)}
+                            onMouseEnter={() => setHighlight(idx)}
+                            className={cn(
+                              "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
+                              isHighlighted(idx) ? "bg-accent" : "hover:bg-accent/50",
+                            )}
+                          >
+                            <span className="min-w-0 flex-1 truncate text-sm font-semibold">{a.name}</span>
+                            <span className="shrink-0 text-xs text-muted-foreground">{a.symbol}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Indices section — le intestazioni senza emoji (C-69):
+                      il resto dell'app usa lucide, e gli assistivi le leggono
+                      per intero. */}
                   {indexMatches.length > 0 && (
                     <div>
                       <div className="px-4 py-1.5 bg-muted/40 text-[0.6765rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
-                        🏛️ Indici ({indexMatches.length})
+                        Indici dello screener ({indexMatches.length})
                       </div>
                       {indexMatches.map((i) => {
                         const idx = cursor++;
@@ -438,7 +492,7 @@ export function NavbarSearch() {
                   {stockItems.length > 0 && (
                     <div>
                       <div className="px-4 py-1.5 bg-muted/40 text-[0.6765rem] uppercase tracking-wider font-bold text-muted-foreground border-b">
-                        🔍 Stocks ({stockItems.length})
+                        Titoli ({stockItems.length})
                       </div>
                       {stockItems.map((s) => {
                         const idx = cursor++;

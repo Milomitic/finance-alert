@@ -46,15 +46,16 @@ describe("i gruppi della navigazione", () => {
     expect(new Set(dai_gruppi).size).toBe(dai_gruppi.length);
   });
 
-  it("le nove destinazioni di oggi ci sono tutte", () => {
+  it("le dieci destinazioni di oggi ci sono tutte", () => {
     // Erano nove fino al 2026-09-19: «In formazione» non e' piu' una
     // destinazione, e' la prima SCHEDA di /alerts insieme a Esiti. Il conteggio
     // resta fissato perche' una voce che sparisce in un raggruppamento non si
     // vede — la barra continua a sembrare piena. Nove dal 2026-11-15: Studio (FA-157).
-    expect(NAV).toHaveLength(9);
+    // Dieci dal 2026-11-26: Mercati (C-55).
+    expect(NAV).toHaveLength(10);
     expect(NAV.map((n) => n.to)).toEqual(
       expect.arrayContaining([
-        "/", "/sectors", "/stocks", "/calendar", "/studio", "/institutionals",
+        "/", "/sectors", "/stocks", "/markets", "/calendar", "/studio", "/institutionals",
         "/alerts", "/positions", "/diagnostics",
       ]),
     );

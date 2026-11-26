@@ -25,6 +25,7 @@ const DiagnosticsPage = lazy(() => import("@/pages/DiagnosticsPage"));
 const StockDetailPage = lazy(() => import("@/pages/StockDetailPage"));
 const StocksBrowserPage = lazy(() => import("@/pages/StocksBrowserPage"));
 const StudioPage = lazy(() => import("@/pages/StudioPage"));
+const MarketsPage = lazy(() => import("@/pages/MarketsPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
 /** `/setups` e' diventata una scheda di `/alerts` (2026-09-19) e reindirizza
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="/stocks" element={<StocksBrowserPage />} />
           <Route path="/studio" element={<StudioPage />} />
           <Route path="/stocks/:ticker" element={<StockDetailPage />} />
+          <Route path="/markets" element={<MarketsPage />} />
           <Route path="/markets/:symbol" element={<MarketDetailPage />} />
           <Route path="/sectors/:name" element={<SectorDetailPage />} />
           <Route path="/institutionals" element={<InstitutionalsPage />} />

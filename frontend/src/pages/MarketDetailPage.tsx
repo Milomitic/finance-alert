@@ -177,11 +177,11 @@ export default function MarketDetailPage() {
           funziona su un caricamento diretto, dove la storia del browser e
           vuota — cioe' esattamente quando si apre un link ricevuto. */}
       <Link
-        to="/"
+        to="/markets"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
       >
         <ArrowLeft className="h-4 w-4" />
-        Dashboard
+        Mercati
       </Link>
       {/* Header — full StockHeader-style hero with gradient sparkline +
           prev close + tone-tinted bg + left accent stripe. Same visual
