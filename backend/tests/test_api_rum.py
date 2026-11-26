@@ -73,3 +73,11 @@ def test_route_labels_have_finite_cardinality(path: str, expected: str) -> None:
     from app.core.rotte import rotta
 
     assert rotta(path) == expected
+
+
+def test_le_misure_della_home_sono_accettate(client) -> None:  # type: ignore[no-untyped-def]
+    """FA-179, fase D: il tempo ai dati freschi della home, al caricamento e al ritorno."""
+    for metrica in ("DATI_FRESCHI", "DATI_RITORNO"):
+        r = client.post("/api/rum/web-vitals", json={"metric": metrica, "value": 850, "route": "/", "device": "desktop"})
+        assert r.status_code == 202, r.text
+    assert client.post("/api/rum/web-vitals", json={"metric": "ALTRO", "value": 1, "route": "/", "device": "desktop"}).status_code == 422

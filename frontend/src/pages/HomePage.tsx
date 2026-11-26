@@ -39,6 +39,7 @@ import { contoAtteso, ricordaConto } from "@/lib/contoAtteso";
 import { Button } from "@/components/ui/button";
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { useNowTick } from "@/hooks/useNowTick";
+import { useMisuraFreschezza } from "@/hooks/useMisuraFreschezza";
 import { queryScadute } from "@/lib/freschezzaHome";
 
 /* ─── Per-row skeletons ─────────────────────────────────────────────────── */
@@ -521,6 +522,8 @@ function HomePageContent() {
  *  sole attive non le richiederebbe mai. */
 function CancelloFreschezza({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
+  // FA-179, fase D: quanto ci mette la home ad avere i dati freschi.
+  useMisuraFreschezza();
   // Si rivaluta col tempo e a ogni richiesta che parte o arriva.
   const ora = useNowTick(15_000);
   useIsFetching();

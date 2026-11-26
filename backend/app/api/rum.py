@@ -22,7 +22,8 @@ WEB_VITAL = Histogram(
 
 
 class WebVitalIn(BaseModel):
-    metric: str = Field(pattern=r"^(LCP|INP|CLS)$")
+    # DATI_FRESCHI e DATI_RITORNO: il tempo ai dati freschi della home (FA-179).
+    metric: str = Field(pattern=r"^(LCP|INP|CLS|DATI_FRESCHI|DATI_RITORNO)$")
     value: float = Field(ge=0, le=60_000)
     route: str = Field(default="/", min_length=1, max_length=120)
     device: str = Field(pattern=r"^(mobile|desktop)$")
