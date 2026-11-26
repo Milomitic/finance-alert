@@ -20,6 +20,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { DataSourceMetric, GapSuggestion } from "@/api/platformHealth";
+import { normHealth, rollup, type SaluteFonte } from "@/lib/rollupFonti";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -32,7 +33,7 @@ type Props = {
   onSelectSource?: (label: string, tokens: string[]) => void;
 };
 
-type Health = "healthy" | "degraded" | "failing" | "unavailable" | "idle" | "stale";
+type Health = SaluteFonte;
 
 /* ─── Fonti dati ──────────────────────────────────────────────────────
  *
@@ -51,9 +52,9 @@ const HEALTH_META: Record<
 > = {
   healthy: {
     label: "Operativa",
-    dot: "bg-emerald-500",
-    bar: "bg-emerald-500",
-    chip: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
+    dot: "bg-green-500",
+    bar: "bg-green-500",
+    chip: "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800/60",
     Icon: CheckCircle2,
   },
   degraded: {
@@ -65,9 +66,9 @@ const HEALTH_META: Record<
   },
   failing: {
     label: "In errore",
-    dot: "bg-rose-500",
-    bar: "bg-rose-500",
-    chip: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
+    dot: "bg-red-500",
+    bar: "bg-red-500",
+    chip: "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60",
     Icon: XCircle,
   },
   // Plan-gated (tutti i fallimenti HTTP 403: endpoint fuori dal piano free,
@@ -98,13 +99,6 @@ const HEALTH_META: Record<
     Icon: Circle,
   },
 };
-
-function normHealth(h: string): Health {
-  return h === "healthy" || h === "degraded" || h === "failing" ||
-    h === "unavailable" || h === "stale"
-    ? h
-    : "idle";
-}
 
 const ROLE_LABEL: Record<string, string> = {
   primary: "Primaria",
@@ -144,13 +138,13 @@ const CATEGORIES: {
     Icon: Gavel, tint: "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 border-violet-200 dark:border-violet-800/60",
     ops: ["upgrades", "recommendation", "analyst"] },
   { key: "earnings", label: "Earnings", desc: "EPS / revenue: stime e dati effettivi",
-    Icon: CalendarClock, tint: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
+    Icon: CalendarClock, tint: "bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-800/60",
     ops: ["earnings"] },
   { key: "macro", label: "Macro", desc: "Serie FRED · consensus calendario",
     Icon: Globe, tint: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
     ops: ["macro", "consensus"] },
   { key: "institutional", label: "Istituzionali", desc: "Filing 13F · portafogli superinvestor",
-    Icon: Building2, tint: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
+    Icon: Building2, tint: "bg-slate-100 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60",
     ops: ["filings", "holdings"] },
   { key: "premarket", label: "Pre-market", desc: "Volume di pre-apertura",
     Icon: Sunrise, tint: "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-300 border-orange-200 dark:border-orange-800/60",
@@ -181,24 +175,9 @@ function ago(ts: number | null): string {
   return `${Math.floor(s / 86400)}g fa`;
 }
 
-function rollup(sources: DataSourceMetric[]): Health {
-  if (sources.length === 0) return "idle";
-  if (sources.some((s) => normHealth(s.health) === "healthy")) return "healthy";
-  if (sources.every((s) => normHealth(s.health) === "failing")) return "failing";
-  if (sources.some((s) => normHealth(s.health) === "failing" || normHealth(s.health) === "degraded"))
-    return "degraded";
-  // Nessuna sana né in errore: una fonte stantia (successi fermi oltre la
-  // cadenza attesa) marca il cluster come stantio.
-  if (sources.some((s) => normHealth(s.health) === "stale")) return "stale";
-  // Solo unavailable/idle rimasti: se almeno una fonte è plan-gated, il
-  // cluster è "non disponibile" (slate), non un incidente.
-  if (sources.some((s) => normHealth(s.health) === "unavailable")) return "unavailable";
-  return "idle";
-}
-
 function RateLimitBar({ used, limit, unit }: { used: number; limit: number; unit: string }) {
   const pct = Math.min(100, (used / limit) * 100);
-  const tone = pct >= 90 ? "bg-rose-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+  const tone = pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-green-500";
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between text-[0.6765rem] text-muted-foreground">
@@ -269,11 +248,11 @@ function SourceRow({
       <div className="mt-0.5 pl-4 text-[0.7059rem] text-muted-foreground tabular-nums">
         {total > 0 ? (
           <>
-            <span className="text-emerald-800 dark:text-emerald-400 font-medium">{m.success}</span> ok
+            <span className="text-green-800 dark:text-green-400 font-medium">{m.success}</span> ok
             {m.failure > 0 && (
               <>
                 {" · "}
-                <span className="text-rose-700 dark:text-rose-400 font-medium">{m.failure}</span> ko
+                <span className="text-red-700 dark:text-red-400 font-medium">{m.failure}</span> ko
               </>
             )}
             {m.success_rate >= 0 && <> · {(m.success_rate * 100).toFixed(0)}%</>}
@@ -494,10 +473,10 @@ function BreakerChip({ breaker }: { breaker: Record<string, unknown> }) {
   // Tone: open → rose (blocked), half-open → amber (recovering/probing),
   // closed → emerald. Literal class strings so Tailwind's purger keeps them.
   const tone = isOpen
-    ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60"
+    ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/60"
     : isHalfOpen
     ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
-    : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60";
+    : "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800/60";
 
   let detail: React.ReactNode = null;
   if (isOpen && blockedUntil != null) {

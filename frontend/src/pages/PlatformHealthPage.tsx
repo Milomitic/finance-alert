@@ -18,10 +18,10 @@ import VerificationCard from "@/components/health/VerificationCard";
 import CatalogoFermiCard from "@/components/health/CatalogoFermiCard";
 import UsoPagineCard from "@/components/health/UsoPagineCard";
 import { useInfraHealth } from "@/hooks/useInfraHealth";
+import { peggiore, statoInfrastruttura } from "@/lib/statoInfrastruttura";
 import LogStream from "@/components/health/LogStream";
 import { usePlatformHealthStream } from "@/hooks/usePlatformHealthStream";
 import { APP_ORIGIN, useInfraLogs, useInfraLogSources } from "@/hooks/useInfraLogs";
-import { TESTO_SU } from "@/lib/toni";
 
 type OverallStatus = "operational" | "degraded" | "outage";
 
@@ -40,9 +40,9 @@ const STATUS_INFO: Record<
     label: "Tutti i sistemi operativi",
     desc: "Nessuna anomalia rilevata negli ultimi minuti.",
     Icon: CheckCircle2,
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    fg: TESTO_SU,
-    border: "border-emerald-200 dark:border-emerald-800/60",
+    bg: "bg-green-50 dark:bg-green-950/40",
+    fg: "text-green-700 dark:text-green-300",
+    border: "border-green-200 dark:border-green-800/60",
   },
   degraded: {
     label: "Servizi degradati",
@@ -58,7 +58,7 @@ const STATUS_INFO: Record<
     Icon: XCircle,
     bg: "bg-red-50 dark:bg-red-950/40",
     fg: "text-red-700 dark:text-red-300",
-    border: "border-rose-200 dark:border-rose-800/60",
+    border: "border-red-200 dark:border-red-800/60",
   },
 };
 
@@ -219,8 +219,13 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
     return "operational";
   }, [health]);
 
-  const status = STATUS_INFO[overall];
-  const reasons = health?.reasons ?? [];
+  // D-48: il banner prende il peggiore fra il riepilogo del server e
+  // l'infrastruttura, e ne elenca i motivi; se Prometheus non risponde lo
+  // dice invece di tacere.
+  const infraStato = statoInfrastruttura(infra.data);
+  const complessivo: OverallStatus = peggiore(overall, infraStato?.livello);
+  const status = STATUS_INFO[complessivo];
+  const reasons = [...(health?.reasons ?? []), ...(infraStato?.motivi ?? [])];
 
   return (
     <div className="mx-auto w-full max-w-[1800px] space-y-8 pb-12">
@@ -271,7 +276,7 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
             <div
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium ${
                 connected
-                  ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"
+                  ? "bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800/60"
                   : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60"
               }`}
               title={
@@ -310,10 +315,11 @@ export default function PlatformHealthPage({ embedded = false }: { embedded?: bo
             </p>
             {/* Motivi puntuali dal rollup server-side — il "perché" del
                 banner senza dover scavare nelle card sottostanti. */}
-            {overall !== "operational" && reasons.length > 0 && (
+            {reasons.length > 0 && (complessivo !== "operational" || infraStato?.motivi.length) && (
               <ul className="mt-2 space-y-0.5 text-sm text-muted-foreground list-disc list-inside">
+                {/* A capo, non troncati (D-51): su un telefono il title non si apre. */}
                 {reasons.map((r) => (
-                  <li key={r} className="truncate" title={r}>
+                  <li key={r} className="break-words">
                     {r}
                   </li>
                 ))}

@@ -4,7 +4,7 @@ import type { DataHealth, DeployHealth } from "@/api/platformHealth";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
-import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Metrica } from "@/components/health/Metrica";
 
 /* Freschezza dei dati + stato del deploy, dentro l'app.
  *
@@ -22,9 +22,9 @@ import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 const TONE: Record<Tone, string> = {
-  ok: TESTO_SU,
+  ok: "text-green-700 dark:text-green-300",
   warn: "text-amber-700 dark:text-amber-300",
-  bad: TESTO_GIU,
+  bad: "text-red-700 dark:text-red-300",
   muted: "text-muted-foreground",
 };
 
@@ -46,16 +46,7 @@ function Metric({
   tone?: Tone;
   hint?: string;
 }) {
-  return (
-    <div className="min-w-0" title={hint}>
-      <div className="truncate text-[0.6471rem] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className={cn("text-[0.8235rem] font-semibold tabular-nums", TONE[tone])}>
-        {value}
-      </div>
-    </div>
-  );
+  return <Metrica label={label} value={value} tono={TONE[tone]} hint={hint} />;
 }
 
 const AGE = (v: number | null | undefined) =>
@@ -242,14 +233,14 @@ export default function DataHealthCard({
               Chiavi API
             </span>
             {missing.length === 0 ? (
-              <span className="inline-flex items-center gap-1 text-[0.7059rem] text-emerald-800 dark:text-emerald-300">
+              <span className="inline-flex items-center gap-1 text-[0.7059rem] text-green-800 dark:text-green-300">
                 <CheckCircle2 className="h-3 w-3" /> tutte configurate
               </span>
             ) : (
               missing.map((k) => (
                 <span
                   key={k}
-                  className="inline-flex items-center gap-1 rounded border border-rose-300/60 bg-rose-50 px-1.5 py-0.5 text-[0.6765rem] text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-300"
+                  className="inline-flex items-center gap-1 rounded border border-red-300/60 bg-red-50 px-1.5 py-0.5 text-[0.6765rem] text-red-700 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300"
                   title={`La chiave ${k} non e' configurata: la funzione che la usa e' silenziosamente degradata.`}
                 >
                   <AlertTriangle className="h-3 w-3" /> {k}

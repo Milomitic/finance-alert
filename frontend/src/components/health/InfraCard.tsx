@@ -13,7 +13,7 @@ import type { InfraHealth } from "@/api/platformHealth";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionTitle } from "@/components/ui/section-title";
 import { cn } from "@/lib/utils";
-import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { Metrica } from "@/components/health/Metrica";
 
 /* Infrastruttura — quello che finora sapeva solo Grafana.
  *
@@ -32,9 +32,9 @@ import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 type Tone = "ok" | "warn" | "bad" | "muted";
 
 const TONE: Record<Tone, string> = {
-  ok: TESTO_SU,
+  ok: "text-green-700 dark:text-green-300",
   warn: "text-amber-700 dark:text-amber-300",
-  bad: TESTO_GIU,
+  bad: "text-red-700 dark:text-red-300",
   muted: "text-muted-foreground",
 };
 
@@ -49,16 +49,7 @@ function Metric({
   tone?: Tone;
   hint?: string;
 }) {
-  return (
-    <div className="min-w-0" title={hint}>
-      <div className="truncate text-[0.6471rem] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className={cn("text-[0.8235rem] font-semibold tabular-nums", TONE[tone])}>
-        {value}
-      </div>
-    </div>
-  );
+  return <Metrica label={label} value={value} tono={TONE[tone]} hint={hint} />;
 }
 
 /** Una riga di dettaglio: icona, titolo, e l'elenco di cosa non va. */
@@ -280,7 +271,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                 className={cn(
                   "rounded px-1.5 py-px text-[0.6765rem] font-semibold",
                   data.argocd.sync === "Synced"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
                 )}
               >
@@ -290,7 +281,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                 className={cn(
                   "rounded px-1.5 py-px text-[0.6765rem] font-semibold",
                   data.argocd.health === "Healthy"
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
                     : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
                 )}
               >
@@ -320,7 +311,7 @@ export default function InfraCard({ data }: { data?: InfraHealth | null }) {
                   "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[0.6765rem]",
                   c.up
                     ? "border-border/60 text-muted-foreground"
-                    : "border-rose-300/60 bg-rose-50 font-semibold text-rose-700 dark:border-rose-800/60 dark:bg-rose-950/40 dark:text-rose-300",
+                    : "border-red-300/60 bg-red-50 font-semibold text-red-700 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300",
                 )}
                 title={`${c.namespace}/${c.job} — ${c.up ? "raggiungibile" : "non risponde allo scrape"}`}
               >

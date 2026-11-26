@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play, Trash2, AlertTriangle, AlertCircle, Info, Bug, Check, Copy, Filter, X } from "lucide-react";
 import type { LogRecord } from "@/api/platformHealth";
 import type { StreamedLog } from "@/hooks/usePlatformHealthStream";
-import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { Button } from "@/components/ui/button";
 import { STATO_VUOTO } from "@/lib/stati";
 
@@ -40,9 +39,9 @@ type Props = {
 const LEVEL_TONE: Record<string, string> = {
   DEBUG: "text-slate-500 dark:text-slate-400",
   INFO: "text-sky-700 dark:text-sky-300",
-  SUCCESS: TESTO_SU,
+  SUCCESS: "text-green-700 dark:text-green-300",
   WARNING: "text-amber-700 dark:text-amber-300",
-  ERROR: TESTO_GIU,
+  ERROR: "text-red-700 dark:text-red-300",
   CRITICAL: "text-rose-800 dark:text-rose-300 font-bold",
 };
 
