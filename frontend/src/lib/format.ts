@@ -24,7 +24,8 @@ export function fmtNum(
   suffix = "",
 ): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return `${v.toFixed(digits)}${suffix}`;
+  // Virgola decimale e meno tipografico (FA-177).
+  return `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(digits).replace(".", ",")}${suffix}`;
 }
 
 /** Un importo in dollari, abbreviato. La scala e' completa — T/B/M/K — e la

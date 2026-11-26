@@ -13,6 +13,7 @@ import { formatMoney } from "@/lib/money";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { Segmentato } from "@/components/ui/segmentato";
 import { Button } from "@/components/ui/button";
+import { percentuale } from "@/lib/numeri";
 
 /* Genuine rating CHANGES only — the card used to be dominated by
  * "Maintain"/"Reiterate" rows (a firm reaffirming, no change) which are
@@ -136,7 +137,7 @@ function TargetUpsideChip({ a }: { a: AnalystAction }) {
       title={`Target ${up ? "sopra" : "sotto"} il prezzo attuale (${formatMoney(cur, a.currency, { decimals: 2 })}) del ${Math.abs(pct).toFixed(1)}%`}
     >
       {up ? "+" : ""}
-      {pct.toFixed(1)}%
+      {percentuale(pct, 1)}
     </span>
   );
 }

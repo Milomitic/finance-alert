@@ -7,6 +7,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { getSectorIcon, getSectorIconColor } from "@/lib/sectorMeta";
 import { cn } from "@/lib/utils";
 import { STATO_VUOTO } from "@/lib/stati";
+import { percentuale } from "@/lib/numeri";
 
 interface Props {
   sectors: SectorBreadth[];
@@ -26,7 +27,7 @@ export function SectorsHeatmapCard({ sectors }: Props) {
     <Card className="h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         <div className="shrink-0 px-3 py-2 border-b bg-muted/30">
-          <SectionTitle icon={LayoutGrid} label="Sectors (Avg Δ%)" />
+          <SectionTitle icon={LayoutGrid} label="Settori (Δ% medio)" />
         </div>
         {sectors.length === 0 ? (
           <div className={STATO_VUOTO}>Nessun settore</div>
@@ -65,7 +66,7 @@ export function SectorsHeatmapCard({ sectors }: Props) {
                       </Link>
                     </td>
                     <td className={`px-2 py-1.5 text-right font-semibold ${bgFor(s.avg_change_pct)}`}>
-                      {s.avg_change_pct >= 0 ? "+" : ""}{s.avg_change_pct.toFixed(2)}%
+                      {percentuale(s.avg_change_pct, 2)}
                     </td>
                   </tr>
                 );

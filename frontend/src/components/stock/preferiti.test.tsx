@@ -109,8 +109,8 @@ describe("la striscia della home", () => {
     for (const t of ["ENI.MI", "NVDA"]) aggiungiRecente(t);
     monta(<PreferitiStrip />);
     const eni = await screen.findByRole("link", { name: /ENI\.MI/ });
-    expect(eni.textContent).toContain("€15.2");
-    expect(eni.textContent).toContain("-1.25%");
+    expect(eni.textContent).toContain("€15,2");
+    expect(eni.textContent).toContain("−1,25%");
     expect(eni.getAttribute("href")).toBe("/stocks/ENI.MI");
     // ENI.MI e' fra i preferiti: fra i recenti non si ripete.
     expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual([

@@ -99,7 +99,7 @@ describe("senza due estremi non c'e una pista", () => {
     render(<PositionGeometry p={pos({ stop_price: null })} />);
 
     expect(screen.getByText("Nessuno stop")).toBeInTheDocument();
-    expect(screen.getByText(/830\.80/)).toBeInTheDocument();
+    expect(screen.getByText(/830,80/)).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 });
@@ -157,9 +157,9 @@ describe("chi non vede la barra deve avere la risposta, non il disegno", () => {
 
     const label = screen.getByRole("img").getAttribute("aria-label") ?? "";
 
-    expect(label).toContain("625.52"); // stop
-    expect(label).toContain("1036.08"); // target
-    expect(label).toContain("830.80"); // ingresso
+    expect(label).toContain("625,52"); // stop
+    expect(label).toContain("1036,08"); // target
+    expect(label).toContain("830,80"); // ingresso
     expect(label).toContain("58%"); // dove sta il prezzo sulla corsa
     // Il controllo negativo: se descrivesse il disegno invece della misura,
     // parlerebbe di barre e cursori.
@@ -183,9 +183,9 @@ describe("ogni numero porta la propria valuta", () => {
     // arrivare a schermo, su TUTTI e tre i numeri e non solo sul prezzo.
     render(<PositionGeometry p={pos()} />);
 
-    expect(screen.getByText(/€625\.52/)).toBeInTheDocument();
-    expect(screen.getByText(/€830\.80/)).toBeInTheDocument();
-    expect(screen.getByText(/€1036\.08/)).toBeInTheDocument();
+    expect(screen.getByText(/€625,52/)).toBeInTheDocument();
+    expect(screen.getByText(/€830,80/)).toBeInTheDocument();
+    expect(screen.getByText(/€1036,08/)).toBeInTheDocument();
   });
 
   it("una valuta assente non diventa un dollaro", () => {

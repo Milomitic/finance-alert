@@ -8,6 +8,7 @@ import { StockIdentity } from "@/components/dashboard/StockIdentity";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/money";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { volte } from "@/lib/numeri";
 
 /* ─── MarketEventsRail — the deliberately thin one ──────────────────────── *
  *
@@ -168,7 +169,7 @@ export function MarketEventsRail({ movers }: Props) {
                     key={m.ticker}
                     ticker={m.ticker}
                     name={m.name}
-                    value={`${m.vol_ratio.toFixed(1)}×`}
+                    value={volte(m.vol_ratio, 1)}
                     tone="warn"
                     title={`${m.name} — ${m.vol_ratio.toFixed(1)}× il volume medio a 20 giorni`}
                   />

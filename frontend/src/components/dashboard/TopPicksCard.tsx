@@ -9,6 +9,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { useTopPicks } from "@/hooks/useTopPicks";
 import { scoreColor, scoreLabel } from "@/lib/scoreMeta";
 import { cn } from "@/lib/utils";
+import { numero } from "@/lib/numeri";
 
 type ColumnKey = RiskTier;
 
@@ -17,9 +18,9 @@ type ColumnKey = RiskTier;
 // Three columns now share the available width, letting each one show the
 // full company name without the previous compact mode.
 const COLUMNS: { key: ColumnKey; label: string }[] = [
-  { key: "conservative", label: "Conservative" },
-  { key: "moderate", label: "Moderate" },
-  { key: "aggressive", label: "Aggressive" },
+  { key: "conservative", label: "Prudente" },
+  { key: "moderate", label: "Moderato" },
+  { key: "aggressive", label: "Aggressivo" },
 ];
 
 const ROW_LIMIT = 8;
@@ -69,7 +70,7 @@ function PickRow({ item }: { item: TopPickItem }) {
           )}
           title={scoreLabel(item.composite)}
         >
-          {item.composite.toFixed(1)}
+          {numero(item.composite, 1)}
         </span>
       </Link>
     </li>

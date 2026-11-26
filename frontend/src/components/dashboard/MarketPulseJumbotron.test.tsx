@@ -583,9 +583,9 @@ describe("l'agenda del giorno", () => {
     ];
     montaA(PREMARKET);
     const agenda = screen.getByRole("region", { name: "Agenda" });
-    const su = within(agenda).getByText(/▲ \+10\.0%/);
+    const su = within(agenda).getByText(/▲ \+10,0%/);
     expect(su.className).toContain("emerald");
-    const giu = within(agenda).getByText(/▼ -10\.0%/);
+    const giu = within(agenda).getByText(/▼ −10,0%/);
     expect(giu.className).toContain("rose");
   });
 

@@ -20,6 +20,7 @@ import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtVolume } from "@/lib/volumeFormat";
 import { formatMoney } from "@/lib/money";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale, volte } from "@/lib/numeri";
 
 interface Props {
   movers: MoversBlock;
@@ -226,7 +227,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
           className={cn("text-sm font-semibold tabular-nums text-right", color)}
           title={live ? "Variazione % giornaliera (live)" : "Variazione % nella finestra selezionata"}
         >
-          <FlashValue value={v} format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`} noTween />
+          <FlashValue value={v} format={(p) => percentuale(p, 2)} noTween />
         </span>
         {/* Col 4: volume (number only — multiplier moved to its own column so
             the columns stay aligned). Window-aware per volValue above. */}
@@ -260,7 +261,7 @@ function MoverRow({ m, field, window, live, computedAt, livePrice, livePulse, fl
               )}
             >
               {multiplierEstimated ? "~" : ""}
-              {multiplier.toFixed(1)}×
+              {volte(multiplier, 1)}
             </span>
           ) : null}
         </span>
@@ -284,7 +285,7 @@ function ColumnHeader({ side }: { side: Side }) {
           : "bg-rose-50/70 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300",
       )}
     >
-      {side === "gainers" ? "Gainers" : "Losers"}
+      {side === "gainers" ? "In rialzo" : "In ribasso"}
     </div>
   );
 }
@@ -527,7 +528,7 @@ export function TopMoversCard({ movers, computedAt, layout = "split" }: Props) {
         <div className="px-3 py-2 border-b bg-muted/30 shrink-0">
           <SectionTitle
             icon={Flame}
-            label="Top movers"
+            label="I più mossi"
             right={
               <div className="flex items-center gap-2">
                 {liveActive ? <MarketStateBadge phase={phase} /> : null}

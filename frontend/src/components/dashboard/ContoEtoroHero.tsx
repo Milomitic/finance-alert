@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { TESTO_GIU } from "@/lib/toni";
 import { Segmentato } from "@/components/ui/segmentato";
+import { numero } from "@/lib/numeri";
 
 /* ─── Il conto eToro in cima alla home (FA-127) ───────────────────────────
  *
@@ -127,7 +128,7 @@ function Saldo({ v }: { v: EtoroVivo }) {
         </Tessera>
         <Tessera
           etichetta="Esposizione"
-          sotto={v.leva_effettiva != null ? `leva effettiva ×${v.leva_effettiva.toFixed(1)}` : undefined}
+          sotto={v.leva_effettiva != null ? `leva effettiva ×${numero(v.leva_effettiva, 1)}` : undefined}
         >
           {formatMoney(v.esposizione, "USD")}
         </Tessera>

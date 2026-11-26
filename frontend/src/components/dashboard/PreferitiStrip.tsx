@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { SegnaliTitolo } from "@/components/alert/SegnaliTitolo";
 import { useSegnaliSuiMieiTitoli } from "@/hooks/useSegnaliSuiMieiTitoli";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale } from "@/lib/numeri";
 
 /* ─── Preferiti e recenti, in cima alla home (FA-112) ─────────────────────
  *
@@ -40,7 +41,7 @@ function Variazione({ pct }: { pct: number | null | undefined }) {
             : "text-muted-foreground",
       )}
     >
-      {pct > 0 ? "+" : ""}{pct.toFixed(2)}%
+      {percentuale(pct, 2)}
     </span>
   );
 }

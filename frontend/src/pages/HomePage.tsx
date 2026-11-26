@@ -115,7 +115,7 @@ function DashboardSkeleton() {
         <CardSkeleton label="OPERAZIONI DEI FONDI" rows={8} strongHeader className="lg:h-[420px]" />
       </div>
       {/* Footer (DataSources). */}
-      <CardSkeleton label="DATA SOURCES" rows={3} className="h-[120px]" />
+      <CardSkeleton label="FONTI DATI" rows={3} className="h-[120px]" />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { ACRONYM_HELP } from "@/lib/acronymHelp";
 import { getIndexMeta } from "@/lib/indexMeta";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale, segnato } from "@/lib/numeri";
 
 interface Props {
   data: IndexBreadth[];
@@ -41,7 +42,7 @@ interface SortState {
 
 function fmtPct(v: number | null): string {
   if (v === null) return "—";
-  return `${v.toFixed(0)}%`;
+  return percentuale(v, 0, { segno: false });
 }
 
 function fmtNum(v: number | null): string {
@@ -51,7 +52,7 @@ function fmtNum(v: number | null): string {
 
 function fmtChange(v: number | null): string {
   if (v === null) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+  return segnato(v, 2);
 }
 
 function rowHighlight(r: IndexBreadth): string {
@@ -167,7 +168,7 @@ export function BreadthMatrixTable({ data }: Props) {
     <Card className="h-full overflow-hidden flex flex-col">
       <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
         <div className="flex items-center px-4 py-2.5 bg-muted/40 border-b">
-          <span className="text-sm font-semibold uppercase tracking-wide">Breadth per indice</span>
+          <span className="text-sm font-semibold uppercase tracking-wide">Ampiezza per indice</span>
           <span className="text-sm text-muted-foreground ml-3">snapshot ultima chiusura · clicca header per ordinare</span>
         </div>
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
@@ -181,8 +182,8 @@ export function BreadthMatrixTable({ data }: Props) {
                 <SortableHeader column="rsi_overbought_count" label="RSI>70" help={ACRONYM_HELP.RSI_OVERBOUGHT} state={sort} onClick={handleSort} />
                 <SortableHeader column="avg_change_pct" label="Avg Δ%" help={ACRONYM_HELP.AVG_CHANGE} state={sort} onClick={handleSort} />
                 <SortableHeader column="ad_ratio" label="A/D" help={ACRONYM_HELP.AD_RATIO} state={sort} onClick={handleSort} />
-                <SortableHeader column="new_52w_highs" label="52wHi" help={ACRONYM_HELP.NEW_52W_HIGH} state={sort} onClick={handleSort} />
-                <SortableHeader column="new_52w_lows" label="52wLo" help={ACRONYM_HELP.NEW_52W_LOW} state={sort} onClick={handleSort} />
+                <SortableHeader column="new_52w_highs" label="Max 52s" help={ACRONYM_HELP.NEW_52W_HIGH} state={sort} onClick={handleSort} />
+                <SortableHeader column="new_52w_lows" label="Min 52s" help={ACRONYM_HELP.NEW_52W_LOW} state={sort} onClick={handleSort} />
                 <SortableHeader column="volume_spikes_count" label="Vol×" help={ACRONYM_HELP.VOL_SPIKE} state={sort} onClick={handleSort} />
               </tr>
             </thead>

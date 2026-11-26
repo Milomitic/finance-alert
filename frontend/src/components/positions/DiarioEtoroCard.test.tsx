@@ -54,17 +54,17 @@ describe("DiarioEtoroCard", () => {
   it("il riepilogo, col conteggio accanto al tasso", () => {
     monta();
     // Il realizzato totale, e lo stesso numero nella riga dell'anno.
-    expect(screen.getAllByText("+$110.00")).toHaveLength(2);
+    expect(screen.getAllByText("+$110,00")).toHaveLength(2);
     expect(screen.getByText("1 su 2")).toBeTruthy();
     expect(screen.getByText("+1.50 R")).toBeTruthy();
     expect(screen.getByText("piano +1.20 R · su 1")).toBeTruthy();
     // Su una sola operazione il tasso non si mostra.
-    expect(screen.getByText("1 · +$150.00")).toBeTruthy();
+    expect(screen.getByText("1 · +$150,00")).toBeTruthy();
   });
 
   it("l'anno in dollari e in euro", () => {
     monta();
-    expect(screen.getByText("≈ +€94.02")).toBeTruthy();
+    expect(screen.getByText("≈ +€94,02")).toBeTruthy();
   });
 
   it("senza cambio l'euro lo dice", () => {

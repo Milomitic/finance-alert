@@ -58,15 +58,15 @@ describe("RecentAlertsFeed — il target al posto del prezzo", () => {
     const atteso = primoTarget(pianoDelSegnale(a)!);
     const c = monta([a]);
     const testo = c.textContent ?? "";
-    expect(testo).toContain(`$${atteso.prezzo.toFixed(2)}`);
-    expect(testo).toContain(`+${atteso.variazionePct.toFixed(1)}%`);
+    expect(testo).toContain(`$${atteso.prezzo.toFixed(2).replace(".", ",")}`);
+    expect(testo).toContain(`+${atteso.variazionePct.toFixed(1).replace(".", ",")}%`);
     // Il prezzo di rilevazione non c'e' piu'.
-    expect(testo).not.toContain("340.74");
+    expect(testo).not.toContain("340,74");
   });
 
   it("uno short porta la variazione col segno meno tipografico", () => {
     const c = monta([alert({}, { tone: "bear", invalidation: { level: 340 } })]);
-    expect(c.textContent).toMatch(/−\d+\.\d%/);
+    expect(c.textContent).toMatch(/−\d+,\d%/);
   });
 
   it("senza livello di invalidazione il piano non esiste: due trattini, non un numero", () => {

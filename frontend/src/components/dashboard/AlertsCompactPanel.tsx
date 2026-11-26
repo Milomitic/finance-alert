@@ -31,7 +31,7 @@ const COLUMNS: { key: string; label: string; nota?: string }[] = [
      onesta di quel numero. */
   {
     key: "feed",
-    label: "Feed",
+    label: "Ultimi",
     nota:
       `Colonne: titolo, natura del segnale (${LEGENDA_NATURA}), regola che è scattata, ` +
       "Forza del pattern (0-100), Probabilità, 1° target del piano e quanto dista dal prezzo " +
@@ -41,7 +41,7 @@ const COLUMNS: { key: string; label: string; nota?: string }[] = [
   { key: "confluence", label: "Top confluenze" },
   {
     key: "top",
-    label: "Top stocks",
+    label: "Titoli più attivi",
     nota:
       "Titoli con più segnali negli ultimi 30 giorni: natura della regola più frequente " +
       `(${LEGENDA_NATURA}), la regola, e quanti segnali.`,

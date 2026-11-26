@@ -94,12 +94,12 @@ describe("EtfHoldingsCard — righe", () => {
   it("ogni componente e' UNA riga: ticker, nome, prezzo e variazione nello stesso link", () => {
     monta();
     const riga = screen.getByRole("link", { name: /^T0, / });
-    expect(riga.getAttribute("aria-label")).toBe("T0, Societa' numero 0, peso 1.0%, $95.50, +0.15%");
+    expect(riga.getAttribute("aria-label")).toBe("T0, Societa' numero 0, peso 1.0%, $95,50, +0.15%");
     // Nessun blocco a due livelli: ticker e nome stanno nello stesso contenitore.
     const ticker = within(riga).getByText("T0");
     const nome = within(riga).getByText("Societa' numero 0");
     expect(ticker.parentElement).toBe(nome.parentElement);
-    const prezzo = within(riga).getByText("$95.50");
+    const prezzo = within(riga).getByText("$95,50");
     expect(prezzo.parentElement).toBe(within(riga).getByText("+0.15%").parentElement);
   });
 

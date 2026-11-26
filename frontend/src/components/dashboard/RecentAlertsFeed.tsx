@@ -18,6 +18,7 @@ import { FORZA_TOOLTIP, PROBABILITA_TOOLTIP, snapshotForza, snapshotProbabilita 
 import { pianoDelSegnale, primoTarget } from "@/lib/tradePlaybook";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { numero } from "@/lib/numeri";
 
 interface Props {
   alerts: Alert[];
@@ -26,7 +27,7 @@ interface Props {
 /** «+8.4%» / «−3.1%», col segno tipografico: un trattino corto accanto a
  *  cifre tabulari si confonde con un separatore. */
 function variazione(pct: number): string {
-  const v = Math.abs(pct).toFixed(1);
+  const v = numero(Math.abs(pct), 1);
   return `${pct > 0 ? "+" : pct < 0 ? "\u2212" : ""}${v}%`;
 }
 

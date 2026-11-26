@@ -56,8 +56,8 @@ function monta(a: Alert) {
 describe("AlertDetailDialog — il livello di invalidazione", () => {
   it("mostra quello FISSATO alla prima emissione", () => {
     monta(alert({ first_invalidation: { level: 59.49, reason: "quello di allora" } }));
-    expect(screen.getByText(/59\.49/)).toBeInTheDocument();
-    expect(screen.queryByText(/149\.73/)).not.toBeInTheDocument();
+    expect(screen.getByText(/59,49/)).toBeInTheDocument();
+    expect(screen.queryByText(/149,73/)).not.toBeInTheDocument();
   });
 
   it("controllo negativo: senza il campo fissato mostra il corrente", () => {
@@ -65,6 +65,6 @@ describe("AlertDetailDialog — il livello di invalidazione", () => {
     // sarebbe vero anche di un riquadro che ha smesso di mostrare qualunque
     // livello.
     monta(alert({}));
-    expect(screen.getByText(/149\.73/)).toBeInTheDocument();
+    expect(screen.getByText(/149,73/)).toBeInTheDocument();
   });
 });

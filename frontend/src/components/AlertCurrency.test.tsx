@@ -7,7 +7,7 @@ import type { Playbook } from "@/lib/tradePlaybook";
 /* ─── Il prezzo di un segnale, nella valuta del titolo ────────────────────
  *
  * FA-045. Trovata dalla verifica a schermo: il dialogo di un segnale su
- * ARGX.BR — titolo belga che la pagina Posizioni mostra a `EUR 850.60` —
+ * ARGX.BR — titolo belga che la pagina Posizioni mostra a `EUR 850,60` —
  * rendeva sei cifre in dollari.
  *
  * ⚠️ Misurato in produzione: 2.669 segnali su 8.905, il **30,0%**, sono su
@@ -37,7 +37,7 @@ describe("PlaybookView", () => {
   it("usa il simbolo della valuta ricevuta, non il dollaro", () => {
     render(<PlaybookView playbook={playbook()} currency="EUR" />);
     const t = document.body.innerText ?? document.body.textContent ?? "";
-    expect(t).toContain("€850.60");
+    expect(t).toContain("€850,60");
     expect(t).not.toMatch(/\$850/);
   });
 
@@ -46,8 +46,8 @@ describe("PlaybookView", () => {
     // campo e vuoto e un'ipotesi presentata come un fatto.
     render(<PlaybookView playbook={playbook()} currency={null} />);
     const t = document.body.innerText ?? document.body.textContent ?? "";
-    expect(t).toContain("850.60");
-    expect(t).not.toContain("$850.60");
+    expect(t).toContain("850,60");
+    expect(t).not.toContain("$850,60");
   });
 
   it("vale per ogni cella della geometria, non solo per l'ingresso", () => {
@@ -55,7 +55,7 @@ describe("PlaybookView", () => {
     const t = document.body.innerText ?? document.body.textContent ?? "";
     // `GBp` e un'etichetta in pence su un valore gia in sterline: la
     // normalizzazione la fa `displayCurrency`, quindi qui si vede la sterlina.
-    for (const atteso of ["£850.60", "£780.20", "£920.50"]) {
+    for (const atteso of ["£850,60", "£780,20", "£920,50"]) {
       expect(t).toContain(atteso);
     }
   });

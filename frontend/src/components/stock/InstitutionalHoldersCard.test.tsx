@@ -45,7 +45,7 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     };
     monta();
     expect(screen.getByText("Fondi").nextSibling?.textContent).toBe("2");
-    expect(screen.getByText("Valore detenuto").nextSibling?.textContent).toBe("$4.68B");
+    expect(screen.getByText("Valore detenuto").nextSibling?.textContent).toBe("$4,68B");
     // Tutti i detentori, non la prima pagina: il totale sarebbe falso.
     expect(chiamate.at(-1)).toEqual(["AAPL", 200, true]);
   });
@@ -65,7 +65,7 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     // Un solo livello: i cinque campi sono figli diretti della stessa griglia.
     expect(prima.children).toHaveLength(5);
     expect(within(prima).getByRole("link", { name: "Dorsey Asset Management" })).toBeInTheDocument();
-    expect(within(prima).getByText("$132.16M")).toBeInTheDocument();
+    expect(within(prima).getByText("$132,16M")).toBeInTheDocument();
     expect(within(prima).getByText("8.5%")).toBeInTheDocument();
     expect(within(prima).getByText("+3.0%").className).toContain("emerald");
     expect(within(seconda).getByText("−0.1%").className).toContain("rose");

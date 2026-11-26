@@ -173,7 +173,7 @@ describe("il denaro porta la valuta del titolo", () => {
     renderWith([pos({ alert_id: null })]);
 
     await screen.findByText("argenx SE");
-    expect(screen.getByText(/€865\.20/)).toBeInTheDocument();
+    expect(screen.getByText(/€865,20/)).toBeInTheDocument();
     expect(screen.queryByText(/\$865/)).not.toBeInTheDocument();
   });
 });

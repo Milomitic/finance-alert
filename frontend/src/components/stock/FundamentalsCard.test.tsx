@@ -120,8 +120,8 @@ describe.each([
     expect(celle.length).toBeGreaterThanOrEqual(10);
     // Il fixture porta 0.2345, 0.4567, 0.3099: sotto l'unita' la precisione automatica
     // di formatMoney ne darebbe quattro, in entrambe le tabelle.
-    for (const c of celle) expect(c, c).not.toMatch(/\d\.\d{3,}/);
-    expect(celle.join(" ")).toMatch(/€\d+\.\d{2}\b/);
+    for (const c of celle) expect(c, c).not.toMatch(/\d[.,]\d{3,}\b/);
+    expect(celle.join(" ")).toMatch(/€\d+,\d{2}\b/);
   });
 });
 
@@ -143,7 +143,7 @@ describe("FundamentalsCard — la data della trimestrale", () => {
 describe("FundamentalsCard — la prossima trimestrale nell'intestazione", () => {
   it("l'EPS atteso porta la valuta dei rendiconti, non un dollaro scritto a mano", () => {
     const c = monta();
-    expect(c.textContent).toContain("est €0.31");
+    expect(c.textContent).toContain("est €0,31");
     expect(c.textContent).not.toMatch(/est \$/);
   });
 });
@@ -162,22 +162,22 @@ describe("FundamentalsCard — la valuta dei rendiconti", () => {
 
     // Trimestrale: [data, Rev, Est Rev, EPS GAAP, EPS adj., Est EPS, Surp].
     const [prossima, trimestre] = Array.from(tabella(c).querySelectorAll("tbody tr")).map(celle);
-    expect(prossima[2]).toBe("$4.10B");
-    expect(prossima[5]).toBe("$0.31");
-    expect(trimestre[1]).toBe("$4.00B");
-    expect(trimestre[2]).toBe("$3.90B");
-    expect(trimestre[4]).toBe("$0.23");
-    expect(trimestre[5]).toBe("$0.22");
+    expect(prossima[2]).toBe("$4,10B");
+    expect(prossima[5]).toBe("$0,31");
+    expect(trimestre[1]).toBe("$4,00B");
+    expect(trimestre[2]).toBe("$3,90B");
+    expect(trimestre[4]).toBe("$0,23");
+    expect(trimestre[5]).toBe("$0,22");
     // L'intestazione della scheda, idem.
-    expect(c.textContent).toContain("est $0.31");
+    expect(c.textContent).toContain("est $0,31");
 
     // Annuale: [FY, Rev, YoY, Net Inc, EPS GAAP, EPS adj., Est EPS, Surp].
     fireEvent.click(screen.getByRole("button", { name: "Annuale" }));
     const [stima, fy25] = Array.from(tabella(c).querySelectorAll("tbody tr")).map(celle);
-    expect(stima[1]).toBe("$16.00B");
-    expect(fy25[1]).toBe("$15.69B");
-    expect(fy25[3]).toBe("$1.48B");
-    expect(fy25[4]).toBe("$7.46");
+    expect(stima[1]).toBe("$16,00B");
+    expect(fy25[1]).toBe("$15,69B");
+    expect(fy25[3]).toBe("$1,48B");
+    expect(fy25[4]).toBe("$7,46");
   });
 
   it("valuta dei rendiconti ignota: le cifre di bilancio restano NUDE, mai dollari", () => {
@@ -187,11 +187,11 @@ describe("FundamentalsCard — la valuta dei rendiconti", () => {
     corrente = senza as Fundamentals;
     const c = monta();
     const trimestre = celle(tabella(c).querySelectorAll("tbody tr")[1]);
-    expect(trimestre[1]).toBe("4.00B");
+    expect(trimestre[1]).toBe("4,00B");
     fireEvent.click(screen.getByRole("button", { name: "Annuale" }));
     const fy25 = celle(tabella(c).querySelectorAll("tbody tr")[1]);
-    expect(fy25[1]).toBe("15.69B");
-    expect(fy25[3]).toBe("1.48B");
+    expect(fy25[1]).toBe("15,69B");
+    expect(fy25[3]).toBe("1,48B");
     // Il controllo che conta: da nessuna parte un dollaro preso in prestito.
     expect(tabella(c).textContent).not.toContain("$");
   });

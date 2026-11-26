@@ -38,7 +38,7 @@ describe("i penny di Londra sono un problema di etichetta, mai di valore", () =>
     // Il difetto speculare, e quello caro. Il valore e stato scalato una volta
     // sola all'ingest; rifarlo qui sarebbe il bug x100 che questo progetto ha
     // gia pagato una volta. Shell chiude a 35.04 STERLINE.
-    expect(formatMoney(35.04, "GBp")).toBe("£35.04");
+    expect(formatMoney(35.04, "GBp")).toBe("£35,04");
   });
 
   it("la mappa dello screener sbagliava proprio questo", () => {
@@ -51,8 +51,8 @@ describe("i penny di Londra sono un problema di etichetta, mai di valore", () =>
 describe("una valuta assente non diventa il dollaro", () => {
   it("rende il numero nudo quando non c'e valuta", () => {
     // Il caso market asset: un livello di indice non e denominato in niente.
-    expect(formatMoney(4521.3, null)).toBe("4521.30");
-    expect(formatMoney(4521.3, undefined)).toBe("4521.30");
+    expect(formatMoney(4521.3, null)).toBe("4521,30");
+    expect(formatMoney(4521.3, undefined)).toBe("4521,30");
   });
 
   it("rifiuta un codice che non ha la forma di una valuta", () => {
@@ -75,12 +75,12 @@ describe("una valuta assente non diventa il dollaro", () => {
 
 describe("valute diverse restano distinguibili", () => {
   it.each([
-    ["USD", "$35.04"],
-    ["EUR", "€35.04"],
-    ["GBP", "£35.04"],
-    ["HKD", "HK$35.04"],
-    ["AUD", "A$35.04"],
-    ["CAD", "C$35.04"],
+    ["USD", "$35,04"],
+    ["EUR", "€35,04"],
+    ["GBP", "£35,04"],
+    ["HKD", "HK$35,04"],
+    ["AUD", "A$35,04"],
+    ["CAD", "C$35,04"],
   ])("%s rende %s", (code, expected) => {
     expect(formatMoney(35.04, code)).toBe(expected);
   });
@@ -105,30 +105,30 @@ describe("valute diverse restano distinguibili", () => {
   });
 
   it("una valuta fuori mappa mostra il codice, non un simbolo prestato", () => {
-    expect(formatMoney(35.04, "XAU")).toBe("XAU 35.04");
+    expect(formatMoney(35.04, "XAU")).toBe("XAU 35,04");
   });
 });
 
 describe("i decimali seguono la grandezza", () => {
   it("sopra l'unita bastano due cifre", () => {
-    expect(formatMoney(35.041, "USD")).toBe("$35.04");
+    expect(formatMoney(35.041, "USD")).toBe("$35,04");
   });
 
   it("sotto l'unita ne servono quattro", () => {
     // A due cifre 0.0234 collassa in 0.02 e sparisce la parte che si muove.
-    expect(formatMoney(0.0234, "USD")).toBe("$0.0234");
+    expect(formatMoney(0.0234, "USD")).toBe("$0,0234");
   });
 
   it("un chiamante puo imporne un numero suo", () => {
-    expect(formatMoney(35.0412, "USD", { decimals: 3 })).toBe("$35.041");
+    expect(formatMoney(35.0412, "USD", { decimals: 3 })).toBe("$35,041");
   });
 });
 
 /* ─── La precisione concessa dalla grandezza si RITIRA quando non dice niente
  *
  * Un EPS trimestrale di 0.44 dollari cadeva nel ramo «sotto l'unita» e
- * rendeva `$0.4400`. Le due cifre in fondo non sono una misura piu' fine:
- * sono zeri, e in una colonna di EPS accanto a `$14.46B` di ricavi allungano
+ * rendeva `$0,4400`. Le due cifre in fondo non sono una misura piu' fine:
+ * sono zeri, e in una colonna di EPS accanto a `$14,46B` di ricavi allungano
  * il numero suggerendo una precisione al decimillesimo che il dato non ha.
  *
  * ⚠️ La correzione che viene in mente per prima — due decimali e basta — e'
@@ -139,54 +139,54 @@ describe("i decimali seguono la grandezza", () => {
  */
 describe("gli zeri in coda spariscono, le cifre che misurano no", () => {
   it("un EPS di 0.44 non indossa due zeri di troppo", () => {
-    expect(formatMoney(0.44, "USD")).toBe("$0.44");
-    expect(formatMoney(0.79, "USD")).toBe("$0.79");
+    expect(formatMoney(0.44, "USD")).toBe("$0,44");
+    expect(formatMoney(0.79, "USD")).toBe("$0,79");
   });
 
   it("⚠️ ma la quarta cifra resta dove MISURA qualcosa", () => {
     // Il controllo negativo del taglio: senza, «togli gli zeri» si
     // semplificherebbe in «due decimali» e il penny stock tornerebbe a 0.02.
-    expect(formatMoney(0.0234, "USD")).toBe("$0.0234");
-    expect(formatMoney(0.023, "USD")).toBe("$0.023");
+    expect(formatMoney(0.0234, "USD")).toBe("$0,0234");
+    expect(formatMoney(0.023, "USD")).toBe("$0,023");
   });
 
   it("il pavimento e' due: i centesimi sono la colonna che si legge", () => {
-    // `$0.5` si legge come un numero nudo, `$0.50` come denaro. Lo zero dei
+    // `$0,5` si legge come un numero nudo, `$0,50` come denaro. Lo zero dei
     // centesimi non e' in coda: e' parte della forma.
-    expect(formatMoney(0.5, "USD")).toBe("$0.50");
-    expect(formatMoney(0, "USD")).toBe("$0.00");
+    expect(formatMoney(0.5, "USD")).toBe("$0,50");
+    expect(formatMoney(0, "USD")).toBe("$0,00");
   });
 
   it("sopra l'unita non cambia NIENTE", () => {
     // Il ramo a due decimali non ha cifre oltre il pavimento, quindi il
-    // taglio non puo' toccarlo: `$35.00` non diventa `$35`.
-    expect(formatMoney(35, "USD")).toBe("$35.00");
-    expect(formatMoney(1, "USD")).toBe("$1.00");
-    expect(formatMoneySigned(-12.5, "EUR")).toBe("-€12.50");
+    // taglio non puo' toccarlo: `$35,00` non diventa `$35`.
+    expect(formatMoney(35, "USD")).toBe("$35,00");
+    expect(formatMoney(1, "USD")).toBe("$1,00");
+    expect(formatMoneySigned(-12.5, "EUR")).toBe("−€12,50");
   });
 
   it("⚠️ un numero di decimali CHIESTO dal chiamante si rispetta com'e'", () => {
     // La precisione automatica e' una scelta di questo modulo e questo modulo
     // puo' ritirarla; quella esplicita e' una decisione di chi chiama, e
     // limarla sarebbe ignorare cio' che ha chiesto.
-    expect(formatMoney(0.44, "USD", { decimals: 4 })).toBe("$0.4400");
+    expect(formatMoney(0.44, "USD", { decimals: 4 })).toBe("$0,4400");
     expect(formatMoney(35, "USD", { decimals: 0 })).toBe("$35");
   });
 });
 
 describe("il segno precede il simbolo", () => {
   it("un guadagno porta il piu", () => {
-    expect(formatMoneySigned(12.5, "EUR")).toBe("+€12.50");
+    expect(formatMoneySigned(12.5, "EUR")).toBe("+€12,50");
   });
 
   it("una perdita porta un solo meno, davanti al simbolo", () => {
-    // "-€12.50", non "€-12.50" e soprattutto non "--€12.50": una colonna di
+    // "−€12,50", non "€-12.50" e soprattutto non "-−€12,50": una colonna di
     // segni si legge scorrendo la prima colonna, e solo se il segno e li.
-    expect(formatMoneySigned(-12.5, "EUR")).toBe("-€12.50");
+    expect(formatMoneySigned(-12.5, "EUR")).toBe("−€12,50");
   });
 
   it("lo zero non e un guadagno", () => {
-    expect(formatMoneySigned(0, "EUR")).toBe("€0.00");
+    expect(formatMoneySigned(0, "EUR")).toBe("€0,00");
   });
 });
 
@@ -196,7 +196,7 @@ describe("assenza e zero non condividono un simbolo", () => {
   });
 
   it("lo zero e un prezzo, non un'assenza", () => {
-    expect(formatMoney(0, "USD")).toBe("$0.00");
+    expect(formatMoney(0, "USD")).toBe("$0,00");
   });
 });
 
@@ -214,9 +214,9 @@ describe("assenza e zero non condividono un simbolo", () => {
  */
 describe("formatCompactMoney", () => {
   it("usa il simbolo della valuta, non il dollaro", () => {
-    expect(formatCompactMoney(2_860_000_000_000, "HKD")).toBe("HK$2.86T");
-    expect(formatCompactMoney(196_000_000_000, "GBP")).toBe("£196.0B");
-    expect(formatCompactMoney(3_000_000_000_000, "USD")).toBe("$3.00T");
+    expect(formatCompactMoney(2_860_000_000_000, "HKD")).toBe("HK$2,86T");
+    expect(formatCompactMoney(196_000_000_000, "GBP")).toBe("£196,0B");
+    expect(formatCompactMoney(3_000_000_000_000, "USD")).toBe("$3,00T");
   });
 
   it("⚠️ i quattro dollari restano distinti", () => {
@@ -228,12 +228,12 @@ describe("formatCompactMoney", () => {
   });
 
   it("le pence portano la sterlina, non un'etichetta in pence", () => {
-    expect(formatCompactMoney(196_000_000_000, "GBp")).toBe("£196.0B");
+    expect(formatCompactMoney(196_000_000_000, "GBp")).toBe("£196,0B");
   });
 
   it("le soglie: mille miliardi, miliardi, milioni", () => {
-    expect(formatCompactMoney(1.5e12, "USD")).toBe("$1.50T");
-    expect(formatCompactMoney(2.4e9, "USD")).toBe("$2.4B");
+    expect(formatCompactMoney(1.5e12, "USD")).toBe("$1,50T");
+    expect(formatCompactMoney(2.4e9, "USD")).toBe("$2,4B");
     expect(formatCompactMoney(7.6e6, "USD")).toBe("$8M");
   });
 
@@ -241,9 +241,9 @@ describe("formatCompactMoney", () => {
     // La regola che `fx_service` dichiara nel proprio docstring e che
     // `formatMoney` gia applica: assumere USD perche il campo e vuoto e
     // un'ipotesi presentata come un fatto.
-    expect(formatCompactMoney(2.4e9, null)).toBe("2.4B");
-    expect(formatCompactMoney(2.4e9, "")).toBe("2.4B");
-    expect(formatCompactMoney(2.4e9, "12")).toBe("2.4B");
+    expect(formatCompactMoney(2.4e9, null)).toBe("2,4B");
+    expect(formatCompactMoney(2.4e9, "")).toBe("2,4B");
+    expect(formatCompactMoney(2.4e9, "12")).toBe("2,4B");
   });
 
   it("un codice valido senza simbolo stampa il CODICE, non un numero nudo", () => {
@@ -251,7 +251,7 @@ describe("formatCompactMoney", () => {
     // "? 18.40" sia un numero nudo». Un codice di tre lettere e etichettabile
     // anche quando non e convertibile — e per questo `market_cap_usd` puo
     // essere null mentre la cifra a schermo resta etichettata.
-    expect(formatCompactMoney(2.4e9, "ZZZ")).toBe("ZZZ 2.4B");
+    expect(formatCompactMoney(2.4e9, "ZZZ")).toBe("ZZZ 2,4B");
   });
 
   it("assente e un trattino, non zero", () => {
@@ -321,21 +321,21 @@ describe("formatBigMoney", () => {
   });
 
   it("porta il simbolo della valuta, o il codice quando un simbolo non c'e'", () => {
-    expect(formatBigMoney(2_263_891_300_000, "TWD")).toBe("TWD 2.26T");
-    expect(formatBigMoney(381_314_000_000, "GBP")).toBe("£381.31B");
-    expect(formatBigMoney(176_954_000_000, "DKK")).toBe("DKr176.95B");
+    expect(formatBigMoney(2_263_891_300_000, "TWD")).toBe("TWD 2,26T");
+    expect(formatBigMoney(381_314_000_000, "GBP")).toBe("£381,31B");
+    expect(formatBigMoney(176_954_000_000, "DKK")).toBe("DKr176,95B");
     // Pence: l'etichetta si normalizza, il valore no.
-    expect(formatBigMoney(2_100_000_000, "GBp")).toBe("£2.10B");
+    expect(formatBigMoney(2_100_000_000, "GBp")).toBe("£2,10B");
   });
 
   it("il segno sta fuori dal simbolo", () => {
-    expect(formatBigMoney(-1_500_000, "EUR")).toBe("-€1.50M");
+    expect(formatBigMoney(-1_500_000, "EUR")).toBe("−€1,50M");
   });
 
   it("valuta ignota: il numero NUDO, mai dollari", () => {
-    expect(formatBigMoney(15_689_000_000, null)).toBe("15.69B");
-    expect(formatBigMoney(15_689_000_000, undefined)).toBe("15.69B");
-    expect(formatBigMoney(15_689_000_000, "US Dollar")).toBe("15.69B");
+    expect(formatBigMoney(15_689_000_000, null)).toBe("15,69B");
+    expect(formatBigMoney(15_689_000_000, undefined)).toBe("15,69B");
+    expect(formatBigMoney(15_689_000_000, "US Dollar")).toBe("15,69B");
   });
 
   it("assenza resta assenza", () => {
@@ -346,21 +346,21 @@ describe("formatBigMoney", () => {
 
 describe("formatMoneyGrouped (FA-127)", () => {
   it("raggruppa le migliaia con due decimali", () => {
-    expect(formatMoneyGrouped(8255.93, "USD")).toBe("$8,255.93");
-    expect(formatMoneyGrouped(17809.8, "USD")).toBe("$17,809.80");
-    expect(formatMoneyGrouped(-457.96, "USD")).toBe("-$457.96");
+    expect(formatMoneyGrouped(8255.93, "USD")).toBe("$8.255,93");
+    expect(formatMoneyGrouped(17809.8, "USD")).toBe("$17.809,80");
+    expect(formatMoneyGrouped(-457.96, "USD")).toBe("−$457,96");
   });
 
-  it("niente «-$0.00» e niente valuta inventata", () => {
-    expect(formatMoneyGrouped(-0.001, "USD")).toBe("$0.00");
-    expect(formatMoneyGrouped(12, null)).toBe("12.00");
+  it("niente «−$0,00» e niente valuta inventata", () => {
+    expect(formatMoneyGrouped(-0.001, "USD")).toBe("$0,00");
+    expect(formatMoneyGrouped(12, null)).toBe("12,00");
     expect(formatMoneyGrouped(null, "USD")).toBe("—");
   });
 
   it("col segno", () => {
-    expect(formatMoneyGroupedSigned(1234.5, "USD")).toBe("+$1,234.50");
-    expect(formatMoneyGroupedSigned(-1234.5, "USD")).toBe("-$1,234.50");
-    expect(formatMoneyGroupedSigned(0, "USD")).toBe("$0.00");
+    expect(formatMoneyGroupedSigned(1234.5, "USD")).toBe("+$1.234,50");
+    expect(formatMoneyGroupedSigned(-1234.5, "USD")).toBe("−$1.234,50");
+    expect(formatMoneyGroupedSigned(0, "USD")).toBe("$0,00");
     expect(formatMoneyGroupedSigned(undefined, "USD")).toBe("—");
   });
 });

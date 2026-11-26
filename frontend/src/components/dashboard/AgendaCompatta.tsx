@@ -8,6 +8,7 @@ import { earningsBeatTone, formatEps } from "@/lib/calendarMeta";
 import { etichettaGiorno } from "@/lib/settimana";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale } from "@/lib/numeri";
 
 /* ─── L'agenda nel jumbotron: quattro giorni lavorativi in due righe ───────
  *
@@ -63,7 +64,7 @@ function VoceTrimestrale({ e, segno }: { e: EarningsEvent; segno?: ReactNode }) 
           <span className={cn("font-semibold", colore)}>{formatEps(e.eps_reported)}</span>
           <span className="truncate text-muted-foreground">vs {formatEps(e.eps_estimate)}</span>
           <span className={cn("shrink-0 font-bold", colore)} title={battuta ? "Ha battuto le stime" : "Sotto le stime"}>
-            {battuta ? "▲" : "▼"} {(e.surprise_pct ?? 0) >= 0 ? "+" : ""}{(e.surprise_pct ?? 0).toFixed(1)}%
+            {battuta ? "▲" : "▼"} {percentuale(e.surprise_pct ?? 0, 1)}
           </span>
         </span>
       ) : (

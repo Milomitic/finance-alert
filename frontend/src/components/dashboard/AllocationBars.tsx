@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fmtBig } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale } from "@/lib/numeri";
 
 /**
  * Shared institutional-allocation infographic — compact horizontal
@@ -57,7 +58,7 @@ export interface AllocItem {
 
 
 function fmtPct(v: number | null | undefined): string {
-  return v == null ? "—" : `${v.toFixed(1)}%`;
+  return percentuale(v, 1, { segno: false });
 }
 
 /** Quarter-on-quarter move in the fund's weight, in percentage points.

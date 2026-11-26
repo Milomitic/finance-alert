@@ -204,7 +204,7 @@ describe("AlertsTable — la scheda del titolo (embedded)", () => {
     expect(intestazioni).not.toContain("Direzione");
     // Le celle stanno sotto le loro intestazioni: stesso numero di colonne.
     expect(c.querySelectorAll("tbody tr:first-child td")).toHaveLength(intestazioni.length);
-    expect(screen.getByText("$340.00")).toBeInTheDocument();
+    expect(screen.getByText("$340,00")).toBeInTheDocument();
     expect(screen.getByText("+10.0%").className).toContain("emerald");
   });
 

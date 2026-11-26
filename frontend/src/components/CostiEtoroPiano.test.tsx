@@ -47,10 +47,10 @@ beforeEach(() => {
 describe("CostiEtoroPiano", () => {
   it("apertura, notti della tenuta, totale in % del margine e in R", () => {
     render(<CostiEtoroPiano ticker="SOXL" playbook={PIANO} />);
-    expect(screen.getByText("$4.52")).toBeTruthy();
-    expect(screen.getByText("$0.71/notte")).toBeTruthy();
+    expect(screen.getByText("$4,52")).toBeTruthy();
+    expect(screen.getByText("$0,71/notte")).toBeTruthy();
     expect(screen.getByText("×28 notti")).toBeTruthy();
-    expect(screen.getByText("$24.40")).toBeTruthy();
+    expect(screen.getByText("$24,40")).toBeTruthy();
     expect(screen.getByText("+4.9% del margine · 0.16 R")).toBeTruthy();
     expect(screen.getByText("-30.0%")).toBeTruthy();
   });

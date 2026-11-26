@@ -71,10 +71,10 @@ describe("ContoEtoroHero", () => {
     monta();
     const s = screen.getByRole("region", { name: "Il tuo conto eToro" });
     // Il numero grande e, nella curva, il minimo della scala.
-    expect(within(s).getAllByText("$8,255.93")[0].className).toContain("text-[2.35rem]");
-    expect(within(s).getByText("-$457.96")).toBeTruthy();
+    expect(within(s).getAllByText("$8.255,93")[0].className).toContain("text-[2.35rem]");
+    expect(within(s).getByText("−$457,96")).toBeTruthy();
     expect(within(s).getByText("(-5.25%)")).toBeTruthy();
-    expect(within(s).getByText("leva effettiva ×4.6")).toBeTruthy();
+    expect(within(s).getByText("leva effettiva ×4,6")).toBeTruthy();
     // Tolti su richiesta il 2026-10-06: il numero di posizioni sotto il margine
     // e la riga della chiusura di ieri sotto il risultato del giorno.
     expect(within(s).queryByText("19 posizioni")).toBeNull();
@@ -97,8 +97,8 @@ describe("ContoEtoroHero", () => {
   it("sotto la curva il P/L generato, non la variazione del valore", () => {
     monta();
     expect(screen.getByRole("button", { name: "1M" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("+$300.00 (+3.8%)")).toBeTruthy();
-    expect(screen.getByText("+$55.93")).toBeTruthy();
+    expect(screen.getByText("+$300,00 (+3.8%)")).toBeTruthy();
+    expect(screen.getByText("+$55,93")).toBeTruthy();
     expect(screen.getByRole("img", { name: /Valore del conto, intervallo 1M/ })).toBeTruthy();
   });
 

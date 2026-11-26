@@ -17,6 +17,7 @@ import { deriveMarketPhase } from "@/lib/marketPhase";
 import { fmtDollar, fmtVolume } from "@/lib/volumeFormat";
 import { formatMoney } from "@/lib/money";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
+import { percentuale, volte } from "@/lib/numeri";
 
 type VolMode = "dollar" | "shares";
 
@@ -256,7 +257,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                     >
                       <FlashValue
                         value={displayChange}
-                        format={(p) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`}
+                        format={(p) => percentuale(p, 2)}
                         noTween
                       />
                     </span>
@@ -311,7 +312,7 @@ export function LiveVolumeMoversCard({ movers, computedAt }: Props) {
                       }
                     >
                       {volRatio != null
-                        ? `${isProjected ? "~" : ""}${volRatio.toFixed(1)}×`
+                        ? `${isProjected ? "~" : ""}${volte(volRatio, 1)}`
                         : "—"}
                     </div>
 

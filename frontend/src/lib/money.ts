@@ -68,6 +68,16 @@ export function displayCurrency(currency: string | null | undefined): string | n
  *
  *  Null when the currency is unknown — the caller then renders the number
  *  bare rather than borrowing someone else's unit. */
+/** Il separatore decimale italiano su un numero gia' scritto da `toFixed`
+ *  (FA-177, A-16): in home «$2,029.84» stava accanto a «7.559», col punto
+ *  che voleva dire due cose opposte a pochi centimetri. */
+export function virgola(testo: string): string {
+  return testo.replace(".", ",");
+}
+
+/** Il meno tipografico, non il trattino. */
+export const MENO = "−";
+
 export function currencySymbol(currency: string | null | undefined): string | null {
   const code = displayCurrency(currency);
   if (!code) return null;
@@ -131,7 +141,7 @@ export function formatMoney(
   const asked = opts.decimals;
   const text = value.toFixed(asked ?? decimalsFor(value));
   const shown = asked == null ? trimTrailingZeros(text, MIN_DECIMALS) : text;
-  return `${currencySymbol(currency) ?? ""}${shown}`;
+  return `${currencySymbol(currency) ?? ""}${virgola(shown)}`;
 }
 
 /** Signed variant, for a change or a P&L where the direction is the point.
@@ -143,7 +153,7 @@ export function formatMoneySigned(
   opts: { decimals?: number } = {},
 ): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  const sign = value > 0 ? "+" : value < 0 ? MENO : "";
   return `${sign}${formatMoney(Math.abs(value), currency, opts)}`;
 }
 
@@ -166,10 +176,10 @@ export function formatBigMoney(
   if (value == null || !Number.isFinite(value)) return "—";
   const sym = currencySymbol(currency) ?? "";
   const abs = Math.abs(value);
-  const sign = value < 0 ? "-" : "";
-  if (abs >= 1e12) return `${sign}${sym}${(abs / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sign}${sym}${(abs / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${sign}${sym}${(abs / 1e6).toFixed(2)}M`;
+  const sign = value < 0 ? MENO : "";
+  if (abs >= 1e12) return `${sign}${sym}${virgola((abs / 1e12).toFixed(2))}T`;
+  if (abs >= 1e9) return `${sign}${sym}${virgola((abs / 1e9).toFixed(2))}B`;
+  if (abs >= 1e6) return `${sign}${sym}${virgola((abs / 1e6).toFixed(2))}M`;
   if (abs >= 1e3) return `${sign}${sym}${(abs / 1e3).toFixed(0)}K`;
   return `${sign}${sym}${abs.toFixed(0)}`;
 }
@@ -202,10 +212,11 @@ export function formatCompactMoney(
   if (value == null || !Number.isFinite(value)) return "—";
   const sym = currencySymbol(currency) ?? "";
   const abs = Math.abs(value);
-  if (abs >= 1e12) return `${sym}${(value / 1e12).toFixed(2)}T`;
-  if (abs >= 1e9) return `${sym}${(value / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sym}${(value / 1e6).toFixed(0)}M`;
-  return `${sym}${value.toLocaleString()}`;
+  const sign = value < 0 ? MENO : "";
+  if (abs >= 1e12) return `${sign}${sym}${virgola((abs / 1e12).toFixed(2))}T`;
+  if (abs >= 1e9) return `${sign}${sym}${virgola((abs / 1e9).toFixed(1))}B`;
+  if (abs >= 1e6) return `${sign}${sym}${(abs / 1e6).toFixed(0)}M`;
+  return `${sign}${sym}${abs.toLocaleString("it-IT")}`;
 }
 
 /** Come `formatMoney`, ma con le migliaia raggruppate e sempre due decimali:
@@ -214,8 +225,8 @@ export function formatCompactMoney(
  *  segno sta davanti al simbolo, come in `formatMoneySigned`. */
 export function formatMoneyGrouped(value: number | null | undefined, currency: string | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  const cifre = Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const segno = value < 0 && cifre !== "0.00" ? "-" : "";
+  const cifre = Math.abs(value).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: "always" } as Intl.NumberFormatOptions);
+  const segno = value < 0 && cifre !== "0,00" ? MENO : "";
   return `${segno}${currencySymbol(currency) ?? ""}${cifre}`;
 }
 
@@ -223,5 +234,5 @@ export function formatMoneyGrouped(value: number | null | undefined, currency: s
 export function formatMoneyGroupedSigned(value: number | null | undefined, currency: string | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   const testo = formatMoneyGrouped(value, currency);
-  return value > 0 && !testo.startsWith("-") && Math.abs(value) >= 0.005 ? `+${testo}` : testo;
+  return value > 0 && !testo.startsWith(MENO) && Math.abs(value) >= 0.005 ? `+${testo}` : testo;
 }
