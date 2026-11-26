@@ -129,8 +129,14 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
   // so it must not sit under a LIVE chip, and it must not silently look like
   // a normal market close either.
   const isStale = liveOk && live.data!.market_state === "STALE";
-  const displayPrice = liveOk ? live.data!.price! : kpis.last_close;
-  const change = liveOk ? (live.data!.change_pct ?? null) : kpis.change_pct;
+  // FA-180: finche' la prima quotazione non e' arrivata, l'ultima chiusura NON
+  // si presenta come prezzo: in pre-market sarebbe un numero di ieri sotto
+  // l'etichetta di oggi, sostituito qualche secondo dopo. Al suo posto uno
+  // spazio riservato della stessa altezza. Su un errore si torna alla
+  // chiusura, che e' meglio di niente e lo dice.
+  const inAttesa = live.isLoading && !live.data;
+  const displayPrice = liveOk ? live.data!.price! : inAttesa ? null : kpis.last_close;
+  const change = liveOk ? (live.data!.change_pct ?? null) : inAttesa ? null : kpis.change_pct;
   const changeAbs = liveOk ? live.data!.change_abs : null;
   const liveAge = liveOk ? now / 1000 - live.data!.fetched_at : null;
 
@@ -199,6 +205,13 @@ export function StockHeader({ stock, kpis, ohlcv, sotto, suEtoro }: Props) {
               vertically centered via the row's items-center. Extra left margin
               gives a bit more breathing room between the name and the price. */}
           <div className="text-left tabular-nums flex flex-col gap-1 items-start sm:col-start-2 sm:row-span-2 sm:row-start-1">
+            {inAttesa && (
+              <div role="status" aria-label="Quotazione in arrivo" className="flex flex-col gap-1 items-start">
+                <span className="text-sm uppercase tracking-wide text-muted-foreground font-semibold">Quotazione…</span>
+                <span aria-hidden className="block h-[1.875rem] w-32 sm:h-12 sm:w-52 rounded-md bg-muted animate-pulse" />
+                <span aria-hidden className="block h-7 w-24 sm:h-8 sm:w-32 mt-1 rounded-md bg-muted animate-pulse" />
+              </div>
+            )}
             {displayPrice != null && (
               <>
                 <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">

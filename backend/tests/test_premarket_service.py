@@ -413,3 +413,32 @@ def test_il_prezzo_del_job_di_un_altra_seduta_non_vale(monkeypatch) -> None:
     monkeypatch.setattr("yfinance.download", lambda *a, **k: None)
     assert p.premarket_quote("AAPL", oggi_et=LUN) is None
     p._JOB_CACHE.clear()
+
+
+def test_il_rinfresco_dietro_scarica_e_libera_il_titolo(monkeypatch) -> None:
+    """Il thread del rinfresco, eseguito sul posto: scarica il titolo una
+    volta, e poi lo libera per il rinfresco successivo anche se lo
+    scaricamento fallisce."""
+    import threading
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(threading.Thread, "start", lambda self: self.run())
+    chiamate: list[str] = []
+
+    def scarica(ticker, oggi):
+        chiamate.append(ticker)
+        raise RuntimeError("rete giu'")
+
+    monkeypatch.setattr(p, "_scarica_singolo", scarica)
+    with pytest.raises(RuntimeError):
+        p._rinfresca_dietro("AAA", date(2026, 11, 27))
+    assert chiamate == ["AAA"]
+    assert "AAA" not in p._IN_RINFRESCO
+
+    # Un titolo gia' in rinfresco non ne avvia un secondo.
+    p._IN_RINFRESCO.add("BBB")
+    try:
+        p._rinfresca_dietro("BBB", date(2026, 11, 27))
+    finally:
+        p._IN_RINFRESCO.discard("BBB")
+    assert chiamate == ["AAA"]
