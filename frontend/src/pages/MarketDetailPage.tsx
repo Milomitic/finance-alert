@@ -139,6 +139,8 @@ export default function MarketDetailPage() {
   const changePct = d.quote?.change_pct ?? d.change_pct;
   const isLive =
     d.quote?.market_state === "OPEN" && d.quote?.error == null;
+  // FA-180: a cash chiuso prezzo e variazione sono del future, come in home.
+  const sulFuture = d.using_futures === true && d.quote?.price != null;
   const symbolIcon = SYMBOL_ICON[d.symbol];
   const FallbackIcon = CATEGORY_FALLBACK_ICON[d.category] ?? Globe;
   // Crypto/commodity have no meaningful volume from yfinance for
@@ -244,6 +246,13 @@ export default function MarketDetailPage() {
                   </span>
                   LIVE
                 </span>
+              ) : sulFuture ? (
+                <span
+                  className="inline-flex items-center gap-1 text-sky-800 dark:text-sky-300 font-semibold"
+                  title={`Borsa chiusa: prezzo e variazione del future ${d.quote_symbol ?? ""}, che tratta anche fuori orario, sul suo regolamento precedente. Lo stesso numero della home. Il grafico resta l'indice.`}
+                >
+                  Future {d.quote_symbol}
+                </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-muted-foreground font-semibold">
                   Ultima chiusura
@@ -270,7 +279,7 @@ export default function MarketDetailPage() {
               </div>
             )}
             {/* Prev close caption when live — same UX as stock detail. */}
-            {isLive && d.quote?.prev_close != null && (
+            {(isLive || sulFuture) && d.quote?.prev_close != null && (
               <div
                 className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
                 title="Chiusura della sessione precedente"

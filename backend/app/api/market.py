@@ -218,6 +218,21 @@ def _quote_is_live(category: str, using_futures: bool, cash_q, now: datetime) ->
     return bool(cash_q and cash_q.market_state == "OPEN" and cash_q.error is None)
 
 
+def quotazione_da_mostrare(cash_q, futures_q):
+    """(quotazione, e' il future?) — l'unica regola fra cash e future, per la
+    home E per la pagina dell'indice. A cash chiuso, se il future accoppiato
+    ha un prezzo, si mostra il future: tratta anche fuori orario, quindi porta
+    il pre-market. Due regole in due posti mostravano il Nasdaq positivo in
+    home e all'ultima chiusura negativa aprendone la pagina (FA-180)."""
+    if (
+        futures_q is not None and cash_q is not None
+        and cash_q.market_state != "OPEN"
+        and futures_q.price is not None and futures_q.error is None
+    ):
+        return futures_q, True
+    return cash_q, False
+
+
 @router.get("/live-assets", response_model=LiveAssetsOut)
 def get_live_assets(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
     """Il paniere, servito dalla cache (FA-179, fase B): a freddo andava a
@@ -266,13 +281,9 @@ def calcola_paniere() -> LiveAssetsOut:
         #   row that we don't have a futures pair for) → use cash.
         # - If cash market is CLOSED AND futures quote has a price →
         #   swap to futures, set using_futures.
-        use_futures = False
-        effective_q = cash_q
-        if futures_symbol and cash_q and cash_q.market_state != "OPEN":
-            futures_q = quotes.get(futures_symbol)
-            if futures_q and futures_q.price is not None and futures_q.error is None:
-                effective_q = futures_q
-                use_futures = True
+        effective_q, use_futures = quotazione_da_mostrare(
+            cash_q, quotes.get(futures_symbol) if futures_symbol else None,
+        )
 
         quote_symbol = futures_symbol if (use_futures and futures_symbol) else symbol
         is_live = (

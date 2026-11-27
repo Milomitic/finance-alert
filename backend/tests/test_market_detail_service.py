@@ -163,3 +163,44 @@ def test_l_endpoint_taglia_solo_se_non_si_chiede_la_storia_completa(client):
     assert len(recente["indicators"]["rsi14"]) == len(recente["bars"])
     # Il taglio vale per le barre giornaliere; la chiave la decide il servizio.
     assert len(settimanale["bars"]) < 530
+
+
+# ─── FA-180: a cash chiuso la pagina mostra il future, come la home ────────
+
+def _quotazioni(stato_cash: str):
+    from app.services.live_quote_service import LiveQuote
+
+    tabella = {
+        "^IXIC": LiveQuote(ticker="^IXIC", price=23585.8, prev_close=23700.0, change_pct=-0.48,
+                           market_state=stato_cash),
+        "NQ=F": LiveQuote(ticker="NQ=F", price=26658.25, prev_close=25962.25, change_pct=2.68,
+                          market_state="CLOSED"),
+    }
+    return lambda t, **k: tabella[t]
+
+
+def test_a_cash_chiuso_la_pagina_dell_indice_mostra_il_future(client):
+    with patch.object(svc, "get_detail", return_value=_lungo()), \
+         patch("app.services.live_quote_service.get_quote", side_effect=_quotazioni("CLOSED")):
+        d = client.get("/api/markets/%5EIXIC/detail?range=1d").json()
+    assert d["using_futures"] is True
+    assert d["quote_symbol"] == "NQ=F"
+    assert d["quote"]["change_pct"] == 2.68
+
+
+def test_a_cash_aperto_resta_il_cash(client):
+    with patch.object(svc, "get_detail", return_value=_lungo()), \
+         patch("app.services.live_quote_service.get_quote", side_effect=_quotazioni("OPEN")):
+        d = client.get("/api/markets/%5EIXIC/detail?range=1d").json()
+    assert d["using_futures"] is False
+    assert d["quote_symbol"] == "^IXIC"
+    assert d["quote"]["change_pct"] == -0.48
+
+
+def test_la_home_e_la_pagina_scelgono_con_la_stessa_regola():
+    """Un proprietario solo: il paniere della home passa dalla stessa funzione."""
+    import inspect
+
+    from app.api import market
+
+    assert "quotazione_da_mostrare(" in inspect.getsource(market.calcola_paniere)

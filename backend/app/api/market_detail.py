@@ -21,7 +21,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
-from app.api.market import LIVE_ASSET_DEFINITIONS
+from app.api.market import LIVE_ASSET_DEFINITIONS, quotazione_da_mostrare
 from app.models import User
 from app.services import live_quote_service, market_detail_service
 
@@ -46,6 +46,10 @@ _LIVE_META: dict[str, tuple[str, str, str | None]] = {
 for _sym, _name, _cat, _flag, _fut in LIVE_ASSET_DEFINITIONS:
     if _fut and _fut not in _LIVE_META:
         _LIVE_META[_fut] = (f"{_name} (futures)", _cat, _flag)
+
+#: L'indice cash -> il suo future, per mostrare in pagina la STESSA quotazione
+#: della home a cash chiuso (FA-180).
+_FUTURE_DI: dict[str, str] = {s: f for (s, _n, _c, _fl, f) in LIVE_ASSET_DEFINITIONS if f}
 
 
 class OhlcvBarOut(BaseModel):
@@ -113,6 +117,10 @@ class MarketDetailOut(BaseModel):
     bars: list[OhlcvBarOut]
     indicators: IndicatorBundleOut
     quote: LiveQuoteOut | None
+    # FA-180: a cash chiuso la quotazione e' quella del future accoppiato,
+    # come nella home; `quote_symbol` dice quale. Il grafico resta il cash.
+    using_futures: bool = False
+    quote_symbol: str | None = None
 
 
 @router.get("/{symbol}/detail", response_model=MarketDetailOut)
@@ -155,8 +163,15 @@ def get_market_detail(
         detail = market_detail_service.taglia_agli_ultimi_anni(detail)
 
     quote_out: LiveQuoteOut | None = None
+    using_futures = False
+    quote_symbol: str | None = symbol
     try:
         q = live_quote_service.get_quote(symbol)
+        future = _FUTURE_DI.get(symbol)
+        if future and q is not None and q.market_state != "OPEN":
+            q, using_futures = quotazione_da_mostrare(q, live_quote_service.get_quote(future))
+            if using_futures:
+                quote_symbol = future
         if q is not None:
             quote_out = LiveQuoteOut(
                 price=q.price,
@@ -221,4 +236,6 @@ def get_market_detail(
             for b in detail.bars
         ],
         quote=quote_out,
+        using_futures=using_futures,
+        quote_symbol=quote_symbol,
     )

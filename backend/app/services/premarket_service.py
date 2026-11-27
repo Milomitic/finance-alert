@@ -316,8 +316,47 @@ def _scarica_singolo(ticker: str, oggi: date) -> tuple[float, float] | None:
     except Exception as exc:  # noqa: BLE001 — best-effort enrichment
         logger.debug(f"[premarket] single quote {ticker} failed: {exc}")
         result = None
+    if result is None:
+        result = _dal_riepilogo(ticker, oggi)
     _SINGLE_CACHE[ticker] = (now, result)
     return result
+
+
+def _dal_riepilogo(ticker: str, oggi: date) -> tuple[float, float] | None:
+    """Il pre-market dal riepilogo di Yahoo, quando il grafico non ce l'ha.
+
+    ⚠️ Il grafico a 5 minuti conta i giorni dall'ULTIMA SEDUTA REGOLARE: il
+    giorno dopo una festivita' (27/11/2026, dopo il Ringraziamento) le sue
+    barre si fermavano a due giorni prima anche chiedendo «1 giorno», mentre
+    il riepilogo diceva `marketState: PRE` col prezzo di quel mattino. Vale
+    solo se l'orario del pre-market cade nella seduta di oggi; il riferimento
+    e' l'ultima chiusura regolare, lo stesso denominatore di Yahoo."""
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(ticker).info or {}
+        return lettura_riepilogo(info, oggi)
+    except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+        logger.debug(f"[premarket] riepilogo {ticker} failed: {exc}")
+        return None
+
+
+def lettura_riepilogo(info: dict, oggi: date) -> tuple[float, float] | None:
+    """(prezzo pre-market, chiusura di riferimento) da un riepilogo di Yahoo,
+    o None se non e' un pre-market di `oggi`."""
+    prezzo = info.get("preMarketPrice")
+    riferimento = info.get("regularMarketPrice")
+    quando = info.get("preMarketTime")
+    if not prezzo or not riferimento or not quando:
+        return None
+    try:
+        giorno = datetime.fromtimestamp(float(quando), _ET).date()
+        prezzo, riferimento = float(prezzo), float(riferimento)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+    if giorno != oggi or prezzo <= 0 or riferimento <= 0:
+        return None
+    return prezzo, riferimento
 
 
 _NASDAQ_INFO_URL = (

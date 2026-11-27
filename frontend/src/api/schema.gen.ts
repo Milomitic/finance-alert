@@ -1233,6 +1233,8 @@ export interface MarketDetailOut {
   bars: app__api__market_detail__OhlcvBarOut[];
   indicators: IndicatorBundleOut;
   quote: app__api__market_detail__LiveQuoteOut | null;
+  using_futures?: boolean;
+  quote_symbol?: string | null;
 }
 
 export interface MarketGlobalOut {

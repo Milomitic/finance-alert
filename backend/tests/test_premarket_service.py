@@ -442,3 +442,63 @@ def test_il_rinfresco_dietro_scarica_e_libera_il_titolo(monkeypatch) -> None:
     finally:
         p._IN_RINFRESCO.discard("BBB")
     assert chiamate == ["AAA"]
+
+
+# ── Il riepilogo di Yahoo, quando il grafico e' fermo (FA-180) ─────────────
+
+VEN_DOPO_FESTA = date(2026, 11, 27)
+
+
+def _epoch(giorno: date, hh: int, mm: int) -> float:
+    return _ts(giorno, hh, mm).timestamp()
+
+
+def test_il_riepilogo_di_oggi_vale() -> None:
+    info = {"preMarketPrice": 35.91, "regularMarketPrice": 32.02,
+            "preMarketTime": _epoch(VEN_DOPO_FESTA, 9, 12), "marketState": "PRE"}
+    assert p.lettura_riepilogo(info, VEN_DOPO_FESTA) == (35.91, 32.02)
+
+
+def test_il_riepilogo_di_un_altra_seduta_non_vale() -> None:
+    info = {"preMarketPrice": 35.91, "regularMarketPrice": 32.02,
+            "preMarketTime": _epoch(date(2026, 11, 25), 9, 12)}
+    assert p.lettura_riepilogo(info, VEN_DOPO_FESTA) is None
+
+
+@pytest.mark.parametrize("info", [
+    {},
+    {"preMarketPrice": None, "regularMarketPrice": 32.02, "preMarketTime": 1},
+    {"preMarketPrice": 35.0, "regularMarketPrice": 0, "preMarketTime": 1},
+    {"preMarketPrice": "x", "regularMarketPrice": 32.02, "preMarketTime": "y"},
+])
+def test_un_riepilogo_incompleto_non_vale(info) -> None:
+    assert p.lettura_riepilogo(info, VEN_DOPO_FESTA) is None
+
+
+def test_col_grafico_fermo_a_due_giorni_prima_si_legge_il_riepilogo(monkeypatch) -> None:
+    """Il caso del 27/11/2026: le barre del grafico si fermano al 25, il
+    riepilogo ha il pre-market di oggi."""
+    import yfinance
+
+    mer = date(2026, 11, 25)
+    fermo = _frame(_seduta(date(2026, 11, 24), 32.6) + _premarket(mer, [30.0]) + _seduta(mer, 32.02))
+    monkeypatch.setattr("yfinance.download", lambda *a, **k: fermo)
+
+    class Titolo:
+        def __init__(self, t):
+            self.info = {"preMarketPrice": 35.91, "regularMarketPrice": 32.02,
+                         "preMarketTime": _epoch(VEN_DOPO_FESTA, 9, 12)}
+
+    monkeypatch.setattr(yfinance, "Ticker", Titolo)
+    monkeypatch.setattr(p, "_SINGLE_CACHE", {})
+    assert p._scarica_singolo("SOXL", VEN_DOPO_FESTA) == (35.91, 32.02)
+
+
+def test_un_riepilogo_che_solleva_non_rompe_niente(monkeypatch) -> None:
+    import yfinance
+
+    def guasto(t):
+        raise RuntimeError("yahoo giu'")
+
+    monkeypatch.setattr(yfinance, "Ticker", guasto)
+    assert p._dal_riepilogo("SOXL", VEN_DOPO_FESTA) is None

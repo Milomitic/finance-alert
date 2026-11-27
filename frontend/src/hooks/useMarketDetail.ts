@@ -55,6 +55,10 @@ export interface MarketDetail {
   bars: MarketDetailBar[];
   indicators: MarketIndicators;
   quote: MarketDetailQuote | null;
+  /** FA-180: a cash chiuso la quotazione e' del future accoppiato, come in
+   *  home; `quote_symbol` dice quale. Il grafico resta il cash. */
+  using_futures?: boolean;
+  quote_symbol?: string | null;
 }
 
 /** Fetch detail for a non-stock instrument (index / commodity /
