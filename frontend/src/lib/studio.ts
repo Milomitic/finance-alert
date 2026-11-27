@@ -52,3 +52,30 @@ export function intervallo(m: Misura): string {
   if (!m.intervallo) return m.finestre < 2 ? "meno di due finestre indipendenti: non stimabile" : "—";
   return `da ${pct(m.intervallo[0])} a ${pct(m.intervallo[1])}`;
 }
+
+/** FA-192: dove cade `v` sull'asse dell'istogramma, da 0 (bordo sinistro
+ *  della prima fascia) a 1 (bordo destro dell'ultima), interpolando dentro la
+ *  fascia che lo contiene. Fuori dall'asse: null — una linea dello zero non si
+ *  disegna se lo zero non c'e'. */
+export function posizioneSulleFasce(
+  v: number | null | undefined,
+  fasce: readonly { da: number; a: number }[],
+): number | null {
+  if (v == null || !Number.isFinite(v) || fasce.length === 0) return null;
+  const n = fasce.length;
+  for (let i = 0; i < n; i++) {
+    const f = fasce[i];
+    const ultima = i === n - 1;
+    if (v >= f.da && (v < f.a || (ultima && v <= f.a))) {
+      const dentro = f.a > f.da ? (v - f.da) / (f.a - f.da) : 0.5;
+      return (i + dentro) / n;
+    }
+  }
+  return null;
+}
+
+/** La soglia di un movimento nella frase: «−10%» e «+5%», col meno tipografico. */
+export function sogliaInFrase(soglia: number): string {
+  const corpo = Math.abs(soglia).toLocaleString("it-IT", { maximumFractionDigits: 2 });
+  return `${soglia < 0 ? "−" : "+"}${corpo}%`;
+}

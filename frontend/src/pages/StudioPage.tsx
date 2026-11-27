@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { intervallo, MODELLI, type Modello, parametriDaUrl, pct } from "@/lib/studio";
+import { intervallo, MODELLI, type Modello, parametriDaUrl, pct, posizioneSulleFasce, sogliaInFrase } from "@/lib/studio";
 import { cn } from "@/lib/utils";
 import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
 import { Segmentato } from "@/components/ui/segmentato";
@@ -183,24 +183,7 @@ function Distribuzione({ cond, base, fasce }: { cond: Misura; base: Misura; fasc
           </div>
         ))}
       </dl>
-      {fasce && fasce.length > 0 && (
-        <figure>
-          <svg viewBox={`0 0 ${fasce.length * 20} 64`} className="h-16 w-full" preserveAspectRatio="none" role="img"
-            aria-label="Quota dei casi per fascia di rendimento: dopo la condizione e in tutte le finestre">
-            {fasce.map((f, i) => (
-              <g key={i}>
-                <rect x={i * 20 + 2} y={64 - (f.base / max) * 60} width={7} height={(f.base / max) * 60} fill={NEUTRO} opacity={0.5} />
-                <rect x={i * 20 + 10} y={64 - (f.condizione / max) * 60} width={7} height={(f.condizione / max) * 60} fill="hsl(var(--primary))" />
-              </g>
-            ))}
-          </svg>
-          <figcaption className="mt-1 flex justify-between text-xs text-muted-foreground tabular-nums">
-            <span>{pct(fasce[0].da, 1)}</span>
-            <span><span className="text-primary">■</span> dopo la condizione · <span style={{ color: NEUTRO }}>■</span> base</span>
-            <span>{pct(fasce[fasce.length - 1].a, 1)}</span>
-          </figcaption>
-        </figure>
-      )}
+      {fasce && fasce.length > 0 && <Istogramma fasce={fasce} max={max} cond={cond} base={base} />}
       <p className="sr-only">
         Peggiore {pct(cond.peggiore ?? null, 1)}, mediana {pct(cond.mediana ?? null, 1)}, migliore {pct(cond.migliore ?? null, 1)};
         nella base la mediana è {pct(base.mediana ?? null, 1)}.
@@ -209,6 +192,51 @@ function Distribuzione({ cond, base, fasce }: { cond: Misura; base: Misura; fasc
   );
 }
 
+/** FA-192: l'istogramma con la linea dello zero, le due mediane segnate e
+ *  l'asse in percentuale. Prima c'erano solo i due estremi, e la mediana —
+ *  il numero che l'ondata 1 ha messo accanto alla media — non si vedeva. */
+function Istogramma({ fasce, max, cond, base }: { fasce: Fascia[]; max: number; cond: Misura; base: Misura }) {
+  const L = fasce.length * 20;
+  const zero = posizioneSulleFasce(0, fasce);
+  const medCond = posizioneSulleFasce(cond.mediana, fasce);
+  const medBase = posizioneSulleFasce(base.mediana, fasce);
+  return (
+    <figure>
+      <svg viewBox={`0 0 ${L} 72`} className="h-20 w-full" preserveAspectRatio="none" role="img"
+        aria-label="Quota dei casi per fascia di rendimento: dopo la condizione e in tutte le finestre">
+        {fasce.map((f, i) => (
+          <g key={i}>
+            <rect x={i * 20 + 2} y={68 - (f.base / max) * 60} width={7} height={(f.base / max) * 60} fill={NEUTRO} opacity={0.5} />
+            <rect x={i * 20 + 10} y={68 - (f.condizione / max) * 60} width={7} height={(f.condizione / max) * 60} fill="hsl(var(--primary))" />
+          </g>
+        ))}
+        <line x1={0} x2={L} y1={68.5} y2={68.5} stroke="currentColor" className="text-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {zero != null && (
+          <line x1={zero * L} x2={zero * L} y1={0} y2={68} stroke="currentColor" className="text-muted-foreground"
+            strokeWidth={1} strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+        )}
+        {medBase != null && (
+          <line x1={medBase * L} x2={medBase * L} y1={4} y2={68} stroke={NEUTRO} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        )}
+        {medCond != null && (
+          <line x1={medCond * L} x2={medCond * L} y1={4} y2={68} stroke="hsl(var(--primary))" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        )}
+      </svg>
+      <div className="relative mt-1 h-4 text-xs text-muted-foreground tabular-nums">
+        <span className="absolute left-0">{pct(fasce[0].da, 1)}</span>
+        {zero != null && zero > 0.12 && zero < 0.88 && (
+          <span className="absolute -translate-x-1/2" style={{ left: `${zero * 100}%` }}>0</span>
+        )}
+        <span className="absolute right-0">{pct(fasce[fasce.length - 1].a, 1)}</span>
+      </div>
+      <figcaption className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+        <span><span className="text-primary">■</span> dopo la condizione (linea: mediana {pct(cond.mediana ?? null, 1)})</span>
+        <span><span style={{ color: NEUTRO }}>■</span> base (mediana {pct(base.mediana ?? null, 1)})</span>
+        {zero != null && <span>tratteggio: zero</span>}
+      </figcaption>
+    </figure>
+  );
+}
 
 function Risultato({ p, onEsempio }: {
   p: ReturnType<typeof parametriDaUrl>;
@@ -242,8 +270,8 @@ function Risultato({ p, onEsempio }: {
     return (
       <div className="space-y-2">
         <p className="text-sm">
-          {p.orizzonte} sedute dopo ogni giorno in cui {p.simbolo} si era mosso
-          {p.soglia < 0 ? ` di ${p.soglia}% o peggio` : ` di +${p.soglia}% o più`} in {p.sedute} sedute.
+          {p.orizzonte} sedute dopo ogni giorno in cui {p.simbolo} si era mosso di {sogliaInFrase(p.soglia)}
+          {p.soglia < 0 ? " o peggio" : " o più"} in {p.sedute} sedute.
         </p>
         <RigaVerdetto c={r} finestre={r.condizione.finestre} />
         <TabellaMisure righe={[["Dopo il movimento", r.condizione], ["Base: tutte le finestre", r.base]]} />
@@ -273,6 +301,17 @@ function Risultato({ p, onEsempio }: {
     );
   }
   const r = q.data as Evento;
+  if (r.eventi === 0 || r.a_orizzonte.casi === 0) {
+    // FA-192: un messaggio solo. Prima un verdetto «0 finestre indipendenti»
+    // e una tabella di trattini ripetevano tre volte la stessa assenza.
+    return (
+      <p className="text-sm text-muted-foreground">
+        {r.tipo === "macro"
+          ? `Nessun rilascio di ${p.serie} nella storia di ${p.simbolo}.`
+          : `Nessuna trimestrale nota per ${p.simbolo}: lo studio sulle trimestrali vale per i titoli del catalogo con i fondamentali in cache.`}
+      </p>
+    );
+  }
   return (
     <div className="space-y-3">
       <p className="text-sm">
@@ -290,17 +329,28 @@ function Risultato({ p, onEsempio }: {
       <RigaVerdetto c={r} finestre={r.a_orizzonte.finestre} />
       <TabellaMisure righe={[[`A ${r.orizzonte} sedute dall'evento`, r.a_orizzonte], ["Base: tutte le finestre", r.base]]} />
       <Distribuzione cond={r.a_orizzonte} base={r.base} fasce={r.istogramma} />
-      {r.tipo === "trimestrali" && r.eventi === 0 && (
-        <p className="text-xs text-muted-foreground">Nessuna trimestrale passata nota: lo studio vale per i titoli del catalogo.</p>
-      )}
     </div>
   );
+}
+
+/** La domanda in una riga, per il modulo chiuso su telefono. */
+function riassunto(p: ReturnType<typeof parametriDaUrl>): string {
+  if (p.modello === "stagionalita") return `${p.simbolo} · stagionalità`;
+  if (p.modello === "evento") {
+    return `${p.simbolo} · ${p.tipo === "macro" ? `rilasci ${p.serie}` : "trimestrali"} · ${Math.min(p.orizzonte, DOPO_MAX)} sedute`;
+  }
+  return `${p.simbolo} · ${sogliaInFrase(p.soglia)} in ${p.sedute} · ${p.orizzonte} sedute`;
 }
 
 export default function StudioPage() {
   const [sp, setSp] = useSearchParams();
   const p = parametriDaUrl(sp);
   const [bozza, setBozza] = useState(p);
+  const isPhone = useIsPhone();
+  // FA-192: su telefono, a studio calcolato, il modulo si chiude in una riga
+  // e il risultato sale nel primo schermo (D-87). Si riapre con «Modifica».
+  const [moduloAperto, setModuloAperto] = useState(false);
+  const chiuso = isPhone && p.simbolo !== "" && !moduloAperto;
   // D-82: il modulo segue l'URL. «Indietro» del browser cambiava il risultato
   // e lasciava il modulo sulla domanda di prima. Aggiornato in render, non in
   // un effetto (la regola dei hook gatta set-state-in-effect).
@@ -327,7 +377,16 @@ export default function StudioPage() {
       if (bozza.tipo === "macro") n.set("serie", bozza.serie.trim().toUpperCase());
     }
     setSp(n);
+    setModuloAperto(false);
   };
+
+  const scegliModello = (id: Modello) => setBozza({
+    ...bozza,
+    modello: id,
+    // D-82: gli eventi arrivano a 10 sedute; il campo restava a 21
+    // e il browser bloccava l'invio con una bolla nativa.
+    orizzonte: id === "evento" ? Math.min(bozza.orizzonte, DOPO_MAX) : bozza.orizzonte,
+  });
 
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-3 sm:p-6">
@@ -340,21 +399,31 @@ export default function StudioPage() {
             Statistica storica: che cosa è successo, non che cosa succederà. Ogni numero ha accanto il caso base e
             le finestre indipendenti.
           </p>
+          {chiuso ? (
+            <div className="flex items-center justify-between gap-2 text-sm">
+              <span className="min-w-0 truncate font-medium">{riassunto(p)}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setModuloAperto(true)}>Modifica</Button>
+            </div>
+          ) : (
           <form onSubmit={imposta} className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               Simbolo
               <input className={cn(CAMPO, "w-28 uppercase")} value={bozza.simbolo}
                 onChange={(e) => setBozza({ ...bozza, simbolo: e.target.value })} placeholder="AAPL, ^GSPC" />
             </label>
-            <Segmentato etichetta="Modello" taglia="media" valore={bozza.modello}
-              onCambia={(id) => setBozza({
-                ...bozza,
-                modello: id as Modello,
-                // D-82: gli eventi arrivano a 10 sedute; il campo restava a 21
-                // e il browser bloccava l'invio con una bolla nativa.
-                orizzonte: id === "evento" ? Math.min(bozza.orizzonte, DOPO_MAX) : bozza.orizzonte,
-              })}
-              voci={MODELLI.map((m) => ({ id: m.id as Modello, label: m.label }))} />
+            {isPhone ? (
+              // FA-192: i tre modelli uscivano dal bordo a 375 px («Attorno a un ev…»).
+              <label className="flex w-full flex-col gap-1 text-xs text-muted-foreground">
+                Domanda
+                <select className={CAMPO} value={bozza.modello} onChange={(e) => scegliModello(e.target.value as Modello)}>
+                  {MODELLI.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+              </label>
+            ) : (
+              <Segmentato etichetta="Modello" taglia="media" valore={bozza.modello}
+                onCambia={(id) => scegliModello(id as Modello)}
+                voci={MODELLI.map((m) => ({ id: m.id as Modello, label: m.label }))} />
+            )}
             {bozza.modello === "dopo_movimento" && (
               <>
                 <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -403,6 +472,7 @@ export default function StudioPage() {
               Calcola
             </Button>
           </form>
+          )}
         </CardContent>
       </Card>
       <Card>

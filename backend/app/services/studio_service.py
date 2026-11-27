@@ -229,8 +229,12 @@ def stagionalita(s: Serie) -> dict:
 
     def gruppo(valori: list[float]) -> dict:
         iv = mean_interval(valori, effective_n=len(valori)) if valori else None
+        # FA-192: la mediana mancava e la tabella stampava «—» su tutte le
+        # diciassette righe, proprio la misura che l'ondata 1 ha messo accanto
+        # alla media perche' la media da sola inganna.
         return {"casi": len(valori), "finestre": len(valori),
                 "media": mean(valori) if valori else None,
+                "mediana": median(valori) if valori else None,
                 "quota_positivi": sum(1 for v in valori if v > 0) / len(valori) if valori else None,
                 "intervallo": list(iv) if iv else None}
 

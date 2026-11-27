@@ -66,7 +66,10 @@ describe("StudioPage", () => {
       differenza: null, intervallo_differenza: null, verdetto: "non_concludente",
     };
     monta("/studio?simbolo=AAPL&modello=evento");
-    expect(await screen.findByText(/Nessuna trimestrale passata nota/)).toBeInTheDocument();
+    // FA-192: un messaggio solo, senza verdetto «0 finestre» ne' tabella di trattini.
+    expect(await screen.findByText(/Nessuna trimestrale nota per AAPL/)).toBeInTheDocument();
+    expect(screen.queryByText("Non concludente")).toBeNull();
+    expect(screen.queryByText("Base: tutte le finestre")).toBeNull();
   });
 
   it("un effetto che cambia segno fra le due meta' non e' «diverso», e la distribuzione si vede (ondata 1)", async () => {
@@ -85,6 +88,35 @@ describe("StudioPage", () => {
     expect(screen.getByText("−20,0%")).toBeInTheDocument();
     // D-87: il risultato ripete la domanda.
     expect(screen.getByRole("heading", { name: /AAPL · Dopo un movimento/ })).toBeInTheDocument();
+    // FA-192: la frase col meno tipografico, e l'istogramma dice le mediane e lo zero.
+    expect(screen.getByText(/si era mosso di −10% o peggio in 5 sedute/)).toBeInTheDocument();
+    expect(screen.getByText(/linea: mediana −1,0%/)).toBeInTheDocument();
+    expect(screen.getByText("tratteggio: zero")).toBeInTheDocument();
+  });
+
+  it("su telefono, a studio calcolato, il modulo e' una riga che si riapre (FA-192)", async () => {
+    const mm = window.matchMedia;
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes("max-width"), media: q, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia;
+    try {
+      risposte["/api/studio/dopo_movimento"] = {
+        simbolo: "AAPL", condizione: misura(0.03), base: misura(0.01), differenza: 0.02,
+        intervallo_differenza: [-0.01, 0.05], verdetto: "non_concludente",
+        parametri: { sedute: 5, soglia_pct: -10, orizzonte: 21 },
+      };
+      monta("/studio?simbolo=AAPL&modello=dopo_movimento&soglia=-10&sedute=5&orizzonte=21");
+      expect(await screen.findByText("AAPL · −10% in 5 · 21 sedute")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Calcola" })).toBeNull();
+      screen.getByRole("button", { name: "Modifica" }).click();
+      expect(await screen.findByRole("button", { name: "Calcola" })).toBeInTheDocument();
+      // I tre modelli in un menu: a 375 px il gruppo usciva dal bordo.
+      expect(screen.getByRole("combobox", { name: "Domanda" })).toBeInTheDocument();
+    } finally {
+      window.matchMedia = mm;
+    }
   });
 });
 

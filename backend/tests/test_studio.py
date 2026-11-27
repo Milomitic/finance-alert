@@ -43,6 +43,15 @@ def test_la_stagionalita_conta_mesi_e_giorni():
     assert out["base_mesi"]["casi"] == sum(m["casi"] for m in out["mesi"])
 
 
+def test_la_stagionalita_ha_la_mediana_di_ogni_gruppo():
+    """FA-192: la colonna Mediana era vuota su tutte le diciassette righe."""
+    c = [100.0 * (1.001 ** i) * (1.02 if i % 7 == 0 else 1) for i in range(800)]
+    out = ss.stagionalita(_serie(c))
+    for g in [*out["mesi"], *out["giorni"], out["base_mesi"], out["base_giorni"]]:
+        if g["casi"]:
+            assert g["mediana"] is not None
+
+
 def test_il_percorso_attorno_all_evento():
     c = [100.0] * 60 + [110.0] * 60
     evento = D0 + timedelta(days=60)
