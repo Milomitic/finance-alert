@@ -151,6 +151,13 @@ export interface AndamentoSettoreOut {
   aggiornato_al?: string | null;
 }
 
+export interface AnnoCalendarioOut {
+  anno: number;
+  mesi: (number | null)[];
+  anno_totale: number | null;
+  parziale: boolean;
+}
+
 export interface ArretratoOut {
   conteggio: number;
   totale?: number | null;
@@ -188,6 +195,14 @@ export interface CalendarOut {
   events: (EarningsEventOut | MacroEventOut)[];
 }
 
+export interface CalendarioOut {
+  anni: AnnoCalendarioOut[];
+  media_mesi: (number | null)[];
+  positivi_mesi: (number | null)[];
+  casi_mesi: number[];
+  ultimo_mese: string | null;
+}
+
 export interface CalibrationBucketOut {
   label: string;
   count: number;
@@ -204,6 +219,19 @@ export interface CalibrationOut {
   by_nature: CalibrationBucketOut[];
   by_horizon: CalibrationBucketOut[];
   backtest_seed?: Record<string, unknown> | null;
+}
+
+export interface CaloCorrenteOut {
+  profondita: number;
+  picco: string;
+  sedute_dal_picco: number;
+}
+
+export interface CaloOut {
+  profondita: number;
+  picco?: string | null;
+  minimo?: string | null;
+  recupero?: string | null;
 }
 
 export interface CandidatoOut {
@@ -469,6 +497,13 @@ export interface EquityPointOut {
   date: string;
   equity: number;
   equity_mkt_neutral: number;
+}
+
+export interface EstremoOut {
+  valore: number;
+  data: string;
+  distanza: number;
+  sedute_da: number;
 }
 
 export interface EtfHoldingOut {
@@ -1453,6 +1488,11 @@ export interface PaginaIn {
   vista?: string | null;
 }
 
+export interface PanoramicaOut {
+  alla_chiusura_del: string | null;
+  strumenti: RigaPanoramicaOut[];
+}
+
 export interface PariOut {
   base: string;
   gruppo?: string | null;
@@ -1801,6 +1841,23 @@ export interface RestartDetailOut {
   reason?: string | null;
 }
 
+export interface RigaPanoramicaOut {
+  symbol: string;
+  name: string;
+  category: string;
+  flag: string | null;
+  ultima_chiusura: number;
+  data_chiusura: string;
+  rendimenti: Record<string, number | null>;
+  massimo_52s: EstremoOut | null;
+  minimo_52s: EstremoOut | null;
+  posizione_52s: number | null;
+  dal_massimo_storico: EstremoOut | null;
+  vol_20g: number | null;
+  vol_1a: number | null;
+  distanza_ema200: number | null;
+}
+
 export interface RsiDistributionOut {
   all: number[];
   by_index: Record<string, number[]>;
@@ -2099,6 +2156,23 @@ export interface SpotlightCardOut {
 
 export interface SpotlightOut {
   cards: SpotlightCardOut[];
+}
+
+export interface StatisticheOut {
+  symbol: string;
+  data_chiusura: string;
+  dal: string;
+  rendimenti: Record<string, number | null>;
+  vol_20g: number | null;
+  vol_1a: number | null;
+  massimo_52s: EstremoOut | null;
+  minimo_52s: EstremoOut | null;
+  dal_massimo_storico: EstremoOut | null;
+  calo_corrente: CaloCorrenteOut | null;
+  calo_massimo_1a: CaloOut | null;
+  calo_massimo_5a: CaloOut | null;
+  calo_massimo_storico: CaloOut | null;
+  calendario: CalendarioOut;
 }
 
 export interface StockDetailOut {

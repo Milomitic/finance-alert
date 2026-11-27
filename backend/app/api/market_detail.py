@@ -25,7 +25,7 @@ from app.api.deps import get_current_user
 from app.api.indicatori_compatti import Formato, serie_compatte
 from app.api.market import LIVE_ASSET_DEFINITIONS, quotazione_da_mostrare
 from app.models import User
-from app.services import live_quote_service, market_detail_service
+from app.services import live_quote_service, market_detail_service, mercati_service
 
 router = APIRouter(prefix="/api/markets", tags=["markets"])
 
@@ -123,6 +123,105 @@ class MarketDetailOut(BaseModel):
     # come nella home; `quote_symbol` dice quale. Il grafico resta il cash.
     using_futures: bool = False
     quote_symbol: str | None = None
+
+
+# ─── FA-184 / FA-185: rendimenti, statistiche e calendario ─────────────────
+
+
+class EstremoOut(BaseModel):
+    valore: float
+    data: str
+    distanza: float
+    sedute_da: int
+
+
+class RigaPanoramicaOut(BaseModel):
+    symbol: str
+    name: str
+    category: str
+    flag: str | None
+    ultima_chiusura: float
+    data_chiusura: str
+    #: chiavi 1s, 1m, 3m, 6m, ytd, 1a, 3a, 5a, 3a_ann, 5a_ann; None = la
+    #: storia non copre il periodo.
+    rendimenti: dict[str, float | None]
+    massimo_52s: EstremoOut | None
+    minimo_52s: EstremoOut | None
+    posizione_52s: float | None
+    dal_massimo_storico: EstremoOut | None
+    vol_20g: float | None
+    vol_1a: float | None
+    distanza_ema200: float | None
+
+
+class PanoramicaOut(BaseModel):
+    alla_chiusura_del: str | None
+    strumenti: list[RigaPanoramicaOut]
+
+
+class CaloOut(BaseModel):
+    profondita: float
+    picco: str | None = None
+    minimo: str | None = None
+    recupero: str | None = None
+
+
+class CaloCorrenteOut(BaseModel):
+    profondita: float
+    picco: str
+    sedute_dal_picco: int
+
+
+class AnnoCalendarioOut(BaseModel):
+    anno: int
+    mesi: list[float | None]
+    anno_totale: float | None
+    parziale: bool
+
+
+class CalendarioOut(BaseModel):
+    anni: list[AnnoCalendarioOut]
+    media_mesi: list[float | None]
+    positivi_mesi: list[float | None]
+    casi_mesi: list[int]
+    ultimo_mese: str | None
+
+
+class StatisticheOut(BaseModel):
+    symbol: str
+    data_chiusura: str
+    dal: str
+    rendimenti: dict[str, float | None]
+    vol_20g: float | None
+    vol_1a: float | None
+    massimo_52s: EstremoOut | None
+    minimo_52s: EstremoOut | None
+    dal_massimo_storico: EstremoOut | None
+    calo_corrente: CaloCorrenteOut | None
+    calo_massimo_1a: CaloOut | None
+    calo_massimo_5a: CaloOut | None
+    calo_massimo_storico: CaloOut | None
+    calendario: CalendarioOut
+
+
+@router.get("/panoramica", response_model=PanoramicaOut)
+def get_panoramica(_user: User = Depends(get_current_user)) -> PanoramicaOut:
+    """I rendimenti per periodo del paniere, alla chiusura giornaliera
+    (FA-184). Dalla cache: il job dei dettagli la tiene calda."""
+    return PanoramicaOut(**mercati_service.CACHE_PANORAMICA.leggi())
+
+
+@router.get("/{symbol}/statistiche", response_model=StatisticheOut)
+def get_statistiche(symbol: str, _user: User = Depends(get_current_user)) -> StatisticheOut:
+    """Rendimenti, volatilita', distanza dai massimi, cali e calendario
+    mensile di uno strumento (FA-185)."""
+    meta = _LIVE_META.get(symbol)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="Unknown market symbol")
+    s = mercati_service.statistiche(symbol, meta[1])
+    if s is None:
+        raise HTTPException(status_code=404, detail="No market data available")
+    return StatisticheOut(**s)
 
 
 @router.get("/{symbol}/detail", response_model=MarketDetailOut)

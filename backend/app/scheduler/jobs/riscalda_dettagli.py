@@ -46,3 +46,11 @@ def run_riscalda_dettagli() -> None:
             market_detail_service.get_detail(simbolo, "1d")
         except Exception as e:  # noqa: BLE001
             logger.warning(f"[riscalda_dettagli] {simbolo}: {e}")
+    # FA-184: la panoramica dei rendimenti si calcola sulle serie appena
+    # scaldate, quindi dopo di loro.
+    try:
+        from app.services.mercati_service import CACHE_PANORAMICA  # noqa: PLC0415
+
+        CACHE_PANORAMICA.rinfresca()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[riscalda_dettagli] panoramica: {e}")

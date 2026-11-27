@@ -30,6 +30,9 @@ import {
 import { DEFAULT_INDICATOR_STATE } from "@/lib/indicatorState";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
+import { useStatisticheMercato } from "@/hooks/useMercati";
+import { StatisticheMercato } from "@/components/markets/StatisticheMercato";
+import { CalendarioRendimenti } from "@/components/stats/CalendarioRendimenti";
 import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
@@ -99,6 +102,7 @@ export default function MarketDetailPage() {
   const range = searchParams.get("range") ?? "1d";
   const decoded = decodeURIComponent(symbol);
   const q = useMarketDetail(decoded, range);
+  const statistiche = useStatisticheMercato(decoded);
   useTitoloScheda(q.data?.name ?? decoded);
 
   // Same convention as StockDetailPage: indicator visibility/style is
@@ -370,33 +374,33 @@ export default function MarketDetailPage() {
           StockDetailPage) instead of the deprecated -3..+3 strip. */}
       <div className="space-y-3">
         <TechnicalKpiCard ticker={d.symbol} kind="market" />
+        {/* FA-185: le statistiche al posto dei «KPI di prezzo» (massimi e
+            minimi senza la distanza) e del riquadro «Meta». Altezza riservata:
+            arrivano dopo il dettaglio, e il gate CLS misura lo spostamento. */}
         <Card>
-          <CardContent className="p-4">
-            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
-              KPI di prezzo
-            </div>
-            <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-              <KpiCell
-                label="Massimo a 52 settimane"
-                value={d.high_52w != null ? prezzoMercato(d.high_52w, d.category) : "—"}
-              />
-              <KpiCell
-                label="Minimo a 52 settimane"
-                value={d.low_52w != null ? prezzoMercato(d.low_52w, d.category) : "—"}
-              />
-              <KpiCell
-                label="Massimo del grafico"
-                value={d.high_window != null ? prezzoMercato(d.high_window, d.category) : "—"}
-              />
-              <KpiCell
-                label="Minimo del grafico"
-                value={d.low_window != null ? prezzoMercato(d.low_window, d.category) : "—"}
-              />
-            </div>
+          <CardContent className="p-4 min-h-[268px]">
+            {statistiche.data ? (
+              <StatisticheMercato s={statistiche.data} />
+            ) : statistiche.isError ? (
+              <p className="text-sm text-muted-foreground">Statistiche non disponibili.</p>
+            ) : (
+              <div className="h-[236px] animate-pulse rounded bg-muted/40" aria-hidden />
+            )}
           </CardContent>
         </Card>
       </div>
       </div>
+
+      {/* FA-185: il calendario dei rendimenti, anni per mesi. */}
+      {statistiche.isLoading ? (
+        <div className="h-[420px] animate-pulse rounded-lg bg-muted/30" aria-hidden />
+      ) : statistiche.data && statistiche.data.calendario.anni.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <CalendarioRendimenti calendario={statistiche.data.calendario} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* News: per crypto e materie prime il prezzo segue un bene, e le
           notizie su quel bene sono il contesto che il grafico non da'.
@@ -410,18 +414,6 @@ export default function MarketDetailPage() {
   );
 }
 
-function KpiCell({ label, value }: { label: string; value: string }) {
-  return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        <div className="text-lg font-bold tabular-nums">{value}</div>
-      </CardContent>
-    </Card>
-  );
-}
 
 /** Format a market price by category. Indices and commodities at 2dp;
  *  crypto at variable precision (BTC at 0dp, low-cap cryptos at 4dp). */

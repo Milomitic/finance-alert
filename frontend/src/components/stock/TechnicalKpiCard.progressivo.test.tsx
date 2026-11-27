@@ -60,14 +60,14 @@ it("i giornalieri arrivati bastano: la colonna 1h aspetta al suo posto", () => {
   monta();
   expect(intestazioni()).toEqual(["1h", "1d", "1w", "1m"]);
   expect(screen.getAllByText("…").length).toBeGreaterThanOrEqual(4);
-  expect(screen.getByText("55.0")).toBeTruthy();
+  expect(screen.getByText("55,0")).toBeTruthy();
 });
 
 it("quando l'1h arriva, niente piu' attese", () => {
   stato.intra = { data: { ticker: "AAPL", items: [kpi("1h", 42)] }, isLoading: false, isError: false };
   monta();
   expect(screen.queryByText("…")).toBeNull();
-  expect(screen.getByText("42.0")).toBeTruthy();
+  expect(screen.getByText("42,0")).toBeTruthy();
 });
 
 it("se Yahoo fallisce la colonna dice «—», le altre restano", () => {
@@ -75,7 +75,7 @@ it("se Yahoo fallisce la colonna dice «—», le altre restano", () => {
   monta();
   expect(intestazioni()).toEqual(["1h", "1d", "1w", "1m"]);
   expect(screen.queryByText("…")).toBeNull();
-  expect(screen.getByText("55.0")).toBeTruthy();
+  expect(screen.getByText("55,0")).toBeTruthy();
 });
 
 it("senza nessun dato lo dice", () => {

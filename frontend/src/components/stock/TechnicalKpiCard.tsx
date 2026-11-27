@@ -1,4 +1,5 @@
 import { Activity } from "lucide-react";
+import { numero, percentuale } from "@/lib/numeri";
 
 import type { IndicatorSeries, StockKpis } from "@/api/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -72,15 +73,15 @@ const SCALE_BG: Record<ScaleScore, string> = {
   5: "bg-emerald-600/30 text-emerald-900 dark:text-emerald-300",
 };
 
+// FA-183: all'italiano, col meno tipografico (era «+1.4%», «-2.4%»).
 function fmtNum(v: number | null, digits = 1, suffix = ""): string {
   if (v === null || !Number.isFinite(v)) return "—";
-  return `${v.toFixed(digits)}${suffix}`;
+  return `${numero(v, digits)}${suffix}`;
 }
 
 function fmtPct(v: number | null, digits = 1): string {
   if (v === null || !Number.isFinite(v)) return "—";
-  const sign = v >= 0 ? "+" : "";
-  return `${sign}${v.toFixed(digits)}%`;
+  return v === 0 ? `${numero(0, digits)}%` : percentuale(v, digits);
 }
 
 function rsiScore(v: number | null): ScaleScore {

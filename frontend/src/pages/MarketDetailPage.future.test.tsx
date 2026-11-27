@@ -13,6 +13,7 @@ vi.mock("@/components/stock/RsiPanel", () => ({ RsiPanel: () => null }));
 vi.mock("@/components/stock/NewsCard", () => ({ NewsCard: () => null }));
 vi.mock("@/components/stock/TechnicalKpiCard", () => ({ TechnicalKpiCard: () => null }));
 vi.mock("@/hooks/useTitoloScheda", () => ({ useTitoloScheda: () => undefined }));
+vi.mock("@/hooks/useMercati", () => ({ useStatisticheMercato: () => ({ data: undefined, isLoading: false, isError: false }) }));
 
 const { default: Componente } = await import("./MarketDetailPage");
 
