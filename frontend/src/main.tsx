@@ -9,7 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import App from "./App";
 import { queryClient } from "@/lib/query-client";
 import { installaRicaricaDopoRilascio } from "@/lib/ricaricaDopoRilascio";
-import { persistiHome, precaricaHome, ripristinaHome } from "@/lib/avvioHome";
+import { persistiHome, precaricaHome, precaricaTitolo, ripristinaHome } from "@/lib/avvioHome";
 import "./index.css";
 
 // Prima del montaggio: la pagina d'ingresso e' gia' un import dinamico, e dopo
@@ -23,6 +23,7 @@ installaRicaricaDopoRilascio();
 ripristinaHome(queryClient);
 persistiHome(queryClient);
 precaricaHome(queryClient);
+precaricaTitolo(queryClient);
 
 // `delayDuration={150}` matches the snappy feel users expect from custom
 // tooltips while still avoiding flicker on accidental hover. `skipDelayDuration`

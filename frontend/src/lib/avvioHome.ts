@@ -4,6 +4,8 @@ import { api } from "@/api/client";
 import { dashboard } from "@/api/dashboard";
 import { fetchEtoroVivo } from "@/api/etoro";
 import { market } from "@/api/market";
+import { stocks } from "@/api/stocks";
+import { resolveRange } from "@/lib/chartPrefs";
 import { QUERY_CRITICHE_HOME } from "@/lib/freschezzaHome";
 
 /* ─── Il primo caricamento della home parte prima (FA-179, fase C) ─────────
@@ -80,4 +82,29 @@ export function precaricaHome(qc: QueryClient, percorso: string = window.locatio
     const carica = CARICA[nome(c.chiave)];
     if (carica) void qc.prefetchQuery({ queryKey: c.chiave, queryFn: ({ signal }) => carica(signal) });
   }
+}
+
+/** FA-181: aprendo direttamente la pagina di un titolo, dettaglio e quotazione
+ *  partono in parallelo al download del codice della pagina, con le STESSE
+ *  chiavi e lo stesso timeframe che la pagina leggera'. Misurato il 27/11: il
+ *  codice della pagina teneva ferme le richieste per ~1,6 s. */
+export function precaricaTitolo(
+  qc: QueryClient,
+  percorso: string = window.location.pathname,
+  ricerca: string = window.location.search,
+): void {
+  const m = /^\/stocks\/([^/]+)\/?$/.exec(percorso);
+  if (!m) return;
+  const ticker = decodeURIComponent(m[1]);
+  const range = resolveRange(new URLSearchParams(ricerca).get("range"));
+  void qc.prefetchQuery({
+    queryKey: ["stock-detail", ticker, range],
+    queryFn: ({ signal }) => stocks.detail(ticker, range, signal),
+    staleTime: 30_000,
+  });
+  void qc.prefetchQuery({
+    queryKey: ["live-quote", ticker],
+    queryFn: ({ signal }) => api(`/api/stocks/${encodeURIComponent(ticker)}/quote`, { signal }),
+    staleTime: 5_000,
+  });
 }

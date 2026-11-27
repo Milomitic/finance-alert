@@ -5,8 +5,9 @@ vi.mock("@/api/dashboard", () => ({ dashboard: { summary: vi.fn(async () => ({ r
 vi.mock("@/api/market", () => ({ market: { summary: vi.fn(async () => ({ mercato: true })) } }));
 vi.mock("@/api/etoro", () => ({ fetchEtoroVivo: vi.fn(async () => ({ conto: true })) }));
 vi.mock("@/api/client", () => ({ api: vi.fn(async () => ({ paniere: true })) }));
+vi.mock("@/api/stocks", () => ({ stocks: { detail: vi.fn(async () => ({ dettaglio: true })) } }));
 
-const { persistiHome, precaricaHome, ripristinaHome } = await import("./avvioHome");
+const { persistiHome, precaricaHome, precaricaTitolo, ripristinaHome } = await import("./avvioHome");
 
 /* FA-179, fase C: l'ultima risposta buona torna subito, ma solo se e'
  * fresca e della stessa versione dell'app; e le richieste partono prima. */
@@ -59,6 +60,31 @@ describe("le richieste della home partono prima del montaggio", () => {
   it("su un'altra pagina no", () => {
     const qc = new QueryClient();
     precaricaHome(qc, "/alerts");
+    expect(qc.getQueryCache().getAll()).toHaveLength(0);
+  });
+});
+
+describe("la pagina di un titolo parte prima del montaggio (FA-181)", () => {
+  it("precarica dettaglio e quotazione con le chiavi della pagina", async () => {
+    const qc = new QueryClient();
+    precaricaTitolo(qc, "/stocks/AMD", "?range=1w");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(qc.getQueryState(["stock-detail", "AMD", "1w"])).toBeDefined();
+    expect(qc.getQueryState(["live-quote", "AMD"])).toBeDefined();
+  });
+
+  it("senza timeframe nell'indirizzo usa quello che la pagina risolverebbe", () => {
+    const qc = new QueryClient();
+    precaricaTitolo(qc, "/stocks/AMD", "");
+    const chiavi = qc.getQueryCache().getAll().map((q) => q.queryKey);
+    expect(chiavi).toContainEqual(["stock-detail", "AMD", "1d"]);
+  });
+
+  it("non tocca le altre pagine, ne' le sottopagine", () => {
+    const qc = new QueryClient();
+    precaricaTitolo(qc, "/stocks", "");
+    precaricaTitolo(qc, "/alerts", "");
+    precaricaTitolo(qc, "/stocks/AMD/altro", "");
     expect(qc.getQueryCache().getAll()).toHaveLength(0);
   });
 });
