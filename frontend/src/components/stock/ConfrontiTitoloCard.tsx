@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import type { PariRiga, Reazione } from "@/api/titoloConfronti";
 import { Card, CardContent } from "@/components/ui/card";
+import { DomandePronte } from "@/components/studio/DomandePronte";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { usePari, useReazioni } from "@/hooks/useTitoloConfronti";
@@ -141,10 +142,8 @@ export function ConfrontiTitoloCard({ ticker }: { ticker: string }) {
         <div className="space-y-2">
           <SectionTitle icon={CalendarClock} label="Reazioni alle trimestrali" />
           <Reazioni ticker={ticker} />
-          <Link to={`/studio?simbolo=${encodeURIComponent(ticker)}&modello=evento`}
-            className="inline-block text-xs font-semibold underline-offset-2 hover:underline">
-            Studia il percorso attorno alle trimestrali
-          </Link>
+          {/* FA-199: tre domande pronte, invece di un link solo. */}
+          <DomandePronte simbolo={ticker} tipo="titolo" />
         </div>
       </CardContent>
     </Card>

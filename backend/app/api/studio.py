@@ -69,3 +69,24 @@ def evento(
         date_ = ss.date_trimestrali(simbolo)
     return {"simbolo": simbolo.upper(), "tipo": tipo, "serie_macro": serie_macro,
             "eventi": len(date_), **ss.evento(_serie(db, simbolo), date_, orizzonte=orizzonte)}
+
+
+@router.get("/serie_macro")
+def serie_macro(
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> list[dict[str, Any]]:
+    """FA-199 (D-83): le serie macro con almeno un rilascio, per nome. Prima il
+    modulo chiedeva l'ID FRED a memoria («CPIAUCSL»)."""
+    from sqlalchemy import func, select  # noqa: PLC0415
+
+    from app.models import MacroReleaseDate, MacroSeries  # noqa: PLC0415
+
+    righe = db.execute(
+        select(MacroSeries.fred_series_id, MacroSeries.label, func.count(MacroReleaseDate.id))
+        .join(MacroReleaseDate, MacroReleaseDate.series_id == MacroSeries.id)
+        .group_by(MacroSeries.fred_series_id, MacroSeries.label)
+        .order_by(MacroSeries.label)
+    ).all()
+    return [{"id": i, "nome": n, "rilasci": c} for i, n, c in righe]
+

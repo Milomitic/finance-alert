@@ -79,3 +79,17 @@ export function sogliaInFrase(soglia: number): string {
   const corpo = Math.abs(soglia).toLocaleString("it-IT", { maximumFractionDigits: 2 });
   return `${soglia < 0 ? "−" : "+"}${corpo}%`;
 }
+
+/** FA-199 (F15): tre domande pronte su un simbolo, con l'URL dello Studio. */
+export function domandePronte(simbolo: string, tipo: "titolo" | "mercato"): { testo: string; url: string }[] {
+  const url = (p: Record<string, string>) => `/studio?${new URLSearchParams({ simbolo, ...p }).toString()}`;
+  return [
+    { testo: "Dopo un calo del 5% in 5 sedute, cosa è successo nel mese dopo?",
+      url: url({ modello: "dopo_movimento", soglia: "-5", sedute: "5", orizzonte: "21" }) },
+    { testo: "In quali mesi è andato meglio, e con quale regolarità?", url: url({ modello: "stagionalita" }) },
+    tipo === "titolo"
+      ? { testo: "Cosa fa attorno alle trimestrali?", url: url({ modello: "evento", tipo: "trimestrali", orizzonte: "5" }) }
+      : { testo: "Cosa fa attorno ai dati sull'inflazione USA?",
+          url: url({ modello: "evento", tipo: "macro", serie: "CPIAUCSL", orizzonte: "5" }) },
+  ];
+}

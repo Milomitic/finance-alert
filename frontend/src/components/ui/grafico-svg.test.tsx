@@ -59,4 +59,30 @@ describe("GraficoSvg", () => {
     fireEvent.mouseLeave(svg);
     expect(screen.queryByText("Ricavi: 10")).toBeNull();
   });
+
+  it("punti senza linea e baffi d'intervallo, con il colore di ogni categoria (FA-195)", () => {
+    const righe = [{ x: "gen", m: 0.01, lo: -0.01, hi: 0.03 }, { x: "feb", m: 0.02, lo: 0.01, hi: 0.03 }];
+    const { container } = render(
+      <GraficoSvg dati={righe} x={(r) => r.x} altezza={200} etichetta="forest"
+        baffi={[{ chiave: "iv", da: (r) => r.lo, a: (r) => r.hi, colore: (_r, i) => (i === 1 ? "green" : "gray") }]}
+        serie={[{ chiave: "m", valore: (r) => r.m, colore: "gray", tipo: "punti", colorePunto: (_r, i) => (i === 1 ? "green" : "gray") }]} />,
+    );
+    expect(container.querySelectorAll("path")).toHaveLength(0);           // niente linea fra i punti
+    const punti = container.querySelectorAll("circle");
+    expect(punti).toHaveLength(2);
+    expect(punti[1].getAttribute("fill")).toBe("green");
+    expect(container.querySelectorAll('g[stroke="green"] line')).toHaveLength(3);  // asta e due cappelli
+  });
+
+  it("una banda e' un poligono fra i due valori, e la linea verticale cade sull'indice (FA-194)", () => {
+    const righe = [{ x: "0", lo: -1, hi: 1 }, { x: "1", lo: -2, hi: 2 }, { x: "2", lo: -3, hi: 3 }];
+    const { container } = render(
+      <GraficoSvg dati={righe} x={(r) => r.x} altezza={200} etichetta="banda" verticali={[1]}
+        bande={[{ chiave: "b", da: (r) => r.lo, a: (r) => r.hi, colore: "blue" }]}
+        serie={[{ chiave: "m", valore: () => 0, colore: "black" }]} />,
+    );
+    const poli = container.querySelector("polygon")!;
+    expect(poli.getAttribute("points")!.split(" ")).toHaveLength(6);
+    expect(container.querySelectorAll('line[stroke-dasharray="4 3"]')).toHaveLength(1);
+  });
 });

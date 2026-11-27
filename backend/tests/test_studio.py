@@ -255,3 +255,32 @@ def test_l_evento_rende_i_percorsi_singoli_e_quanti_eventi_per_seduta():
     assert all(r["n"] == 2 for r in out["percorso"])
     assert {"mediana", "p10", "p90"} <= set(out["percorso"][0])
     assert len(out["elenco_casi"]) == 2
+
+
+# ── FA-195 ──────────────────────────────────────────────────────────────────
+
+def test_la_stagionalita_legge_i_mesi_dal_calendario_condiviso():
+    c = [100.0 * (1.001 ** i) for i in range(800)]
+    s = _serie(c)
+    out = ss.stagionalita(s)
+    from app.stats.calendario import rendimenti_mensili
+
+    mensili = rendimenti_mensili(s.date, s.chiusure)
+    assert out["base_mesi"]["casi"] == len(mensili)
+    assert out["calendario"]["anni"] and len(out["calendario"]["media_mesi"]) == 12
+
+
+def test_un_mese_senza_sedute_non_entra_nella_stagionalita():
+    d = [date(2024, 1, 31), date(2024, 3, 29), date(2024, 4, 30)]   # febbraio assente
+    out = ss.stagionalita(ss.Serie(d, [100.0, 120.0, 132.0]))
+    mar = next(m for m in out["mesi"] if m["mese"] == "mar")
+    apr = next(m for m in out["mesi"] if m["mese"] == "apr")
+    assert mar["casi"] == 0 and apr["casi"] == 1
+
+
+def test_le_serie_macro_per_nome_solo_con_rilasci(client, db):
+    """FA-199 (D-83): il modulo sceglie la serie per nome, non per ID FRED."""
+    vuota = MacroSeries(fred_series_id="VUOTA", label="Senza rilasci", region="US", importance="low")
+    db.add(vuota)
+    db.commit()
+    assert client.get("/api/studio/serie_macro").json() == [{"id": "CPIX", "nome": "CPI", "rilasci": 1}]

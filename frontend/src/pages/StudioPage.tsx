@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { FlaskConical } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { type Confronto, type DopoMovimento, type Evento, type Fascia, type Misura, type Stagionalita, studio } from "@/api/studio";
@@ -10,13 +10,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { intervallo, MODELLI, type Modello, parametriDaUrl, pct, posizioneSulleFasce, sogliaInFrase } from "@/lib/studio";
+import { intervallo, MODELLI, parametriDaUrl, pct, posizioneSulleFasce, sogliaInFrase } from "@/lib/studio";
 import { cn } from "@/lib/utils";
 import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
-import { Segmentato } from "@/components/ui/segmentato";
 import { Button } from "@/components/ui/button";
 import { ElencoCasi } from "@/components/studio/ElencoCasi";
+import { ModuloStudio } from "@/components/studio/ModuloStudio";
 import { FraseEscursioni, GraficoPercorso, LegendaPercorso } from "@/components/studio/GraficoPercorso";
+import { CalendarioRendimenti } from "@/components/stats/CalendarioRendimenti";
 
 /* ─── Studio: statistica storica di un simbolo (FA-157) ───────────────────
  *
@@ -26,7 +27,6 @@ import { FraseEscursioni, GraficoPercorso, LegendaPercorso } from "@/components/
  * ha fatto +2,5%. Lo stato vive nell'URL: un link riapre lo stesso studio. */
 
 const DOPO_MAX = 10;
-const CAMPO = "h-9 rounded-md border border-input bg-background px-2 text-sm";
 
 function RigaMisura({ nome, m }: { nome: string; m: Misura }) {
   return (
@@ -137,13 +137,19 @@ const ESEMPI: { testo: string; parametri: Record<string, string> }[] = [
     parametri: { simbolo: "^GSPC", modello: "stagionalita" } },
   { testo: "Cosa fa NVDA nelle 5 sedute attorno alle trimestrali?",
     parametri: { simbolo: "NVDA", modello: "evento", tipo: "trimestrali", orizzonte: "5" } },
+  { testo: "Cosa ha fatto l'S&P 500 nel mese dopo un calo del 5% in una settimana?",
+    parametri: { simbolo: "^GSPC", modello: "dopo_movimento", soglia: "-5", sedute: "5", orizzonte: "21" } },
+  { testo: "Cosa fa l'S&P 500 attorno ai dati sull'inflazione?",
+    parametri: { simbolo: "^GSPC", modello: "evento", tipo: "macro", serie: "CPIAUCSL", orizzonte: "5" } },
+  { testo: "Dopo un rialzo del 20% in un mese, il Bitcoin ha continuato?",
+    parametri: { simbolo: "BTC-USD", modello: "dopo_movimento", soglia: "20", sedute: "21", orizzonte: "21" } },
 ];
 
 function Esempi({ onScegli }: { onScegli: (p: Record<string, string>) => void }) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">Scegli un simbolo, oppure parti da una di queste domande:</p>
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {ESEMPI.map((e) => (
           <button
             key={e.testo}
@@ -298,20 +304,38 @@ function Risultato({ p, onEsempio }: {
     const r = q.data as Stagionalita;
     return (
       <div className="space-y-4">
+        {/* FA-195: un forest plot. Le barre dicevano «aprile +1,36%» senza dire
+            «da +0,1 a +2,6»: ogni mese ha ora il suo intervallo a schermo. */}
         <div className="h-[220px]">
           <GraficoSvg dati={r.mesi} x={(m) => m.mese} formatoY={(v) => pct(v, 1)}
-            etichetta={`Rendimento medio per mese di ${p.simbolo}`}
-            serie={[{ chiave: "media", nome: "Media", valore: (m) => m.media, colore: "hsl(var(--primary))", tipo: "barre",
-              coloreBarra: coloreSeEsce }]} />
+            etichetta={`Rendimento medio per mese di ${p.simbolo}, con l'intervallo al 95%`}
+            riferimenti={[{ y: 0, tratteggio: "2 2" }]}
+            baffi={[{ chiave: "iv", da: (m) => m.intervallo?.[0], a: (m) => m.intervallo?.[1], colore: (m) => coloreSeEsce(m) }]}
+            serie={[{ chiave: "media", nome: "Media", valore: (m) => m.media, colore: NEUTRO, tipo: "punti",
+              colorePunto: (m) => coloreSeEsce(m) }]} />
         </div>
         <p className="text-xs text-muted-foreground">
-          Colorati solo i mesi che reggono alla correzione per {r.confronti ?? 17} confronti (12 mesi e 5 giorni,
-          Benjamini-Hochberg): {r.sopravvissuti ?? 0} su {r.confronti ?? 17}. Senza correzione uno ogni venti uscirebbe per caso.
+          Punto: media del mese; barra: intervallo al 95%. Colorati solo i mesi che reggono alla correzione per{" "}
+          {r.confronti ?? 17} confronti (12 mesi e 5 giorni, Benjamini-Hochberg): {r.sopravvissuti ?? 0} su{" "}
+          {r.confronti ?? 17}. Senza correzione uno ogni venti uscirebbe per caso.
         </p>
         <h2 className="text-sm font-semibold">Per mese</h2>
         <TabellaMisure righe={[...r.mesi.map((m) => [m.mese, m] as [string, Misura]), ["Tutti i mesi", r.base_mesi]]} />
         <h2 className="text-sm font-semibold">Per giorno della settimana</h2>
+        <div className="h-[160px]">
+          <GraficoSvg dati={r.giorni} x={(g) => g.giorno} formatoY={(v) => pct(v, 2)}
+            etichetta={`Rendimento medio per giorno della settimana di ${p.simbolo}, con l'intervallo al 95%`}
+            riferimenti={[{ y: 0, tratteggio: "2 2" }]}
+            baffi={[{ chiave: "iv", da: (g) => g.intervallo?.[0], a: (g) => g.intervallo?.[1], colore: (g) => coloreSeEsce(g) }]}
+            serie={[{ chiave: "media", nome: "Media", valore: (g) => g.media, colore: NEUTRO, tipo: "punti",
+              colorePunto: (g) => coloreSeEsce(g) }]} />
+        </div>
         <TabellaMisure righe={[...r.giorni.map((g) => [g.giorno, g] as [string, Misura]), ["Tutte le sedute", r.base_giorni]]} />
+        {/* FA-195: anni per mesi. Un mese «forte» per tre anni eccezionali si
+            riconosce qui, non nella media. */}
+        {r.calendario && r.calendario.anni.length > 0 && (
+          <CalendarioRendimenti calendario={r.calendario} titolo="Anno per anno" />
+        )}
       </div>
     );
   }
@@ -384,8 +408,7 @@ export default function StudioPage() {
     setBozza(parametriDaUrl(sp));
   }
 
-  const imposta = (e: FormEvent) => {
-    e.preventDefault();
+  const calcola = () => {
     const n = new URLSearchParams();
     n.set("simbolo", bozza.simbolo.trim().toUpperCase());
     n.set("modello", bozza.modello);
@@ -403,18 +426,12 @@ export default function StudioPage() {
     setModuloAperto(false);
   };
 
-  const scegliModello = (id: Modello) => setBozza({
-    ...bozza,
-    modello: id,
-    // D-82: gli eventi arrivano a 10 sedute; il campo restava a 21
-    // e il browser bloccava l'invio con una bolla nativa.
-    orizzonte: id === "evento" ? Math.min(bozza.orizzonte, DOPO_MAX) : bozza.orizzonte,
-  });
-
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-3 sm:p-6">
+    // FA-199: da lg due colonne, la domanda ferma a sinistra e il risultato a
+    // destra; sotto, una colonna sola come prima.
+    <div className="mx-auto max-w-7xl space-y-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-4 lg:space-y-0">
       <h1 className="sr-only">Studio</h1>
-      <Card>
+      <Card className="lg:sticky lg:top-4">
         <CardContent className="space-y-3 p-4">
           <SectionTitle icon={FlaskConical} label="Studio" />
           {/* Su telefono la descrizione lascia spazio ai dati (richiesta del 2026-11-22). */}
@@ -428,73 +445,7 @@ export default function StudioPage() {
               <Button type="button" variant="outline" size="sm" onClick={() => setModuloAperto(true)}>Modifica</Button>
             </div>
           ) : (
-          <form onSubmit={imposta} className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Simbolo
-              <input className={cn(CAMPO, "w-28 uppercase")} value={bozza.simbolo}
-                onChange={(e) => setBozza({ ...bozza, simbolo: e.target.value })} placeholder="AAPL, ^GSPC" />
-            </label>
-            {isPhone ? (
-              // FA-192: i tre modelli uscivano dal bordo a 375 px («Attorno a un ev…»).
-              <label className="flex w-full flex-col gap-1 text-xs text-muted-foreground">
-                Domanda
-                <select className={CAMPO} value={bozza.modello} onChange={(e) => scegliModello(e.target.value as Modello)}>
-                  {MODELLI.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              </label>
-            ) : (
-              <Segmentato etichetta="Modello" taglia="media" valore={bozza.modello}
-                onCambia={(id) => scegliModello(id as Modello)}
-                voci={MODELLI.map((m) => ({ id: m.id as Modello, label: m.label }))} />
-            )}
-            {bozza.modello === "dopo_movimento" && (
-              <>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Variazione %
-                  <input type="number" min={-90} max={500} className={cn(CAMPO, "w-20")} value={bozza.soglia}
-                    onChange={(e) => setBozza({ ...bozza, soglia: Number(e.target.value) })} />
-                  <span className="text-[0.6765rem]">−90…+500, negativa = calo</span>
-                </label>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  in sedute
-                  <input type="number" min={1} max={63} className={cn(CAMPO, "w-16")} value={bozza.sedute}
-                    onChange={(e) => setBozza({ ...bozza, sedute: Number(e.target.value) })} />
-                  <span className="text-[0.6765rem]">1–63</span>
-                </label>
-              </>
-            )}
-            {bozza.modello === "evento" && (
-              <>
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Evento
-                  <select className={CAMPO} value={bozza.tipo}
-                    onChange={(e) => setBozza({ ...bozza, tipo: e.target.value as "trimestrali" | "macro" })}>
-                    <option value="trimestrali">Trimestrali del titolo</option>
-                    <option value="macro">Rilasci macro</option>
-                  </select>
-                </label>
-                {bozza.tipo === "macro" && (
-                  <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                    Serie FRED
-                    <input className={cn(CAMPO, "w-28 uppercase")} value={bozza.serie}
-                      onChange={(e) => setBozza({ ...bozza, serie: e.target.value })} placeholder="CPIAUCSL" />
-                  </label>
-                )}
-              </>
-            )}
-            {bozza.modello !== "stagionalita" && (
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                Orizzonte (sedute)
-                <input type="number" min={1} max={bozza.modello === "evento" ? DOPO_MAX : 252}
-                  className={cn(CAMPO, "w-20")} value={bozza.orizzonte}
-                  onChange={(e) => setBozza({ ...bozza, orizzonte: Number(e.target.value) })} />
-                <span className="text-[0.6765rem]">{bozza.modello === "evento" ? `1–${DOPO_MAX} attorno a un evento` : "1–252"}</span>
-              </label>
-            )}
-            <Button type="submit" variant="default">
-              Calcola
-            </Button>
-          </form>
+            <ModuloStudio bozza={bozza} onBozza={setBozza} onCalcola={calcola} />
           )}
         </CardContent>
       </Card>

@@ -1,4 +1,5 @@
 import { api } from "@/api/client";
+import type { Calendario } from "@/hooks/useMercati";
 
 /* La pagina Studio (FA-157). Forme del server: `backend/app/services/studio_service.py`. */
 
@@ -63,6 +64,8 @@ export type Stagionalita = {
   base_giorni: Misura;
   confronti?: number;
   sopravvissuti?: number;
+  /** FA-195: anni per mesi, dallo stesso calcolo della pagina Mercati. */
+  calendario?: Calendario;
 };
 
 export type Evento = Confronto & {

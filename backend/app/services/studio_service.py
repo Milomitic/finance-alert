@@ -31,6 +31,7 @@ from statistics import mean, median
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.stats import calendario as cal
 from app.stats.media import mean_interval, t_cdf
 from app.stats.sizing import blocco_di_ogni_data, independent_blocks
 
@@ -281,17 +282,16 @@ def stagionalita(s: Serie) -> dict:
     """Rendimento per mese (da fine mese a fine mese) e per giorno della
     settimana (seduta su seduta). Mesi e giorni diversi sono finestre
     disgiunte: ogni osservazione e' indipendente dalle altre del suo gruppo."""
-    fine_mese: dict[tuple[int, int], float] = {}
-    for g, c in zip(s.date, s.chiusure, strict=True):
-        fine_mese[(g.year, g.month)] = c
-    chiavi = sorted(fine_mese)
+    # FA-195: i mesi dal proprietario unico (`app/stats/calendario`), lo
+    # stesso numero del calendario della pagina Mercati. Prima si accoppiavano
+    # mesi consecutivi NELL'ELENCO: un mese senza sedute dava un rendimento di
+    # due mesi attribuito al secondo.
+    mensili = cal.rendimenti_mensili(s.date, s.chiusure)
     per_mese: dict[int, list[float]] = defaultdict(list)
     tutti_mesi = []
-    for prima, dopo in zip(chiavi, chiavi[1:], strict=False):
-        if fine_mese[prima] > 0:
-            r = fine_mese[dopo] / fine_mese[prima] - 1.0
-            per_mese[dopo[1]].append(r)
-            tutti_mesi.append(r)
+    for (_a, m), r in sorted(mensili.items()):
+        per_mese[m].append(r)
+        tutti_mesi.append(r)
     per_giorno: dict[int, list[float]] = defaultdict(list)
     tutti_giorni = []
     for i in range(1, len(s.chiusure)):
@@ -328,6 +328,9 @@ def stagionalita(s: Serie) -> dict:
         "base_giorni": gruppo(tutti_giorni),
         "confronti": len(pv),
         "sopravvissuti": sum(passano),
+        # FA-195: anni per mesi, per vedere se un mese «forte» lo e' con
+        # regolarita' o per tre anni eccezionali.
+        "calendario": cal.calendario_mensile(s.date, s.chiusure),
     }
 
 

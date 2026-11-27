@@ -144,4 +144,20 @@ describe("StudioPage", () => {
     expect(screen.queryByText("2025-04-07")).toBeNull();
     expect(screen.getByText("2025-04-04")).toBeInTheDocument();
   });
+
+  it("la stagionalita' e' un forest plot con il calendario anno per anno (FA-195)", async () => {
+    const mese = (n: string, media: number, sig: boolean) => ({ mese: n, ...misura(media, 30), significativo: sig });
+    risposte["/api/studio/stagionalita"] = {
+      simbolo: "^GSPC",
+      mesi: [mese("gen", 0.012, false), mese("apr", 0.0136, true)],
+      base_mesi: misura(0.006, 360), giorni: [{ giorno: "lun", ...misura(0.0002, 900) }], base_giorni: misura(0.0003, 4500),
+      confronti: 17, sopravvissuti: 4,
+      calendario: { anni: [{ anno: 2025, mesi: Array(12).fill(0.01), anno_totale: 0.12, parziale: false }],
+        media_mesi: Array(12).fill(0.01), positivi_mesi: Array(12).fill(0.6), casi_mesi: Array(12).fill(1), ultimo_mese: "2025-12" },
+    };
+    monta("/studio?simbolo=%5EGSPC&modello=stagionalita");
+    expect(await screen.findByRole("img", { name: /Rendimento medio per mese di \^GSPC, con l'intervallo al 95%/ })).toBeInTheDocument();
+    expect(screen.getByText(/Punto: media del mese; barra: intervallo al 95%/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Anno per anno" })).toBeInTheDocument();
+  });
 });
