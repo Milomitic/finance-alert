@@ -99,3 +99,92 @@ export function useStatisticheMercato(simbolo: string) {
     enabled: !!simbolo,
   });
 }
+
+// ─── FA-186: composizione dell'indice ────────────────────────────────────
+
+export interface IndiceComposizione {
+  code: string;
+  nome: string;
+  titoli_nel_catalogo: number;
+  nota: string | null;
+  pesato_sul_prezzo: boolean;
+}
+
+export interface AmpiezzaIndice {
+  avanzano: number;
+  scendono: number;
+  sopra_ema50_pct: number | null;
+  sopra_ema200_pct: number | null;
+  nuovi_massimi_52s: number;
+  nuovi_minimi_52s: number;
+  rsi_sopra_70: number;
+  rsi_sotto_30: number;
+  var_media_pct: number | null;
+}
+
+export interface SettoreIndice {
+  settore: string;
+  titoli: number;
+  var_media_pct: number | null;
+  peso_pct: number | null;
+}
+
+/** ⚠️ `var_pct` e `contributo_pp` in PUNTI percentuali, non frazioni. */
+export interface Costituente {
+  ticker: string;
+  nome: string;
+  settore: string;
+  var_pct: number | null;
+  peso_pct: number | null;
+  contributo_pp: number | null;
+}
+
+export interface Composizione {
+  indice: IndiceComposizione;
+  ampiezza: AmpiezzaIndice;
+  settori: SettoreIndice[];
+  migliori: Costituente[];
+  peggiori: Costituente[];
+  alla_scansione_del: string | null;
+}
+
+/** 404 quando il catalogo non ha i costituenti: non e' un errore da mostrare. */
+export function useComposizione(simbolo: string, attivo: boolean) {
+  return useQuery({
+    queryKey: ["markets", "composizione", simbolo],
+    queryFn: ({ signal }) => api<Composizione>(`/api/markets/${encodeURIComponent(simbolo)}/composizione`, { signal }),
+    staleTime: 5 * 60_000,
+    enabled: attivo && !!simbolo,
+    retry: false,
+  });
+}
+
+// ─── FA-187: confronto normalizzato ──────────────────────────────────────
+
+export interface RiepilogoConfrontoMercati {
+  rendimento: number;
+  peggior_calo: number;
+}
+
+export interface ConfrontoMercati {
+  date: string[];
+  serie: Record<string, number[]>;
+  riepilogo: Record<string, RiepilogoConfrontoMercati>;
+  dal: string | null;
+  al: string | null;
+}
+
+export const PERIODI_CONFRONTO = ["1m", "3m", "6m", "ytd", "1a", "3a", "5a", "10a"] as const;
+export type PeriodoConfronto = (typeof PERIODI_CONFRONTO)[number];
+
+export function useConfronto(simboli: string[], periodo: PeriodoConfronto) {
+  return useQuery({
+    queryKey: ["markets", "confronto", simboli.join(","), periodo],
+    queryFn: ({ signal }) => api<ConfrontoMercati>(
+      `/api/markets/confronto?simboli=${encodeURIComponent(simboli.join(","))}&periodo=${periodo}`, { signal }),
+    staleTime: 5 * 60_000,
+    enabled: simboli.length > 0,
+    retry: false,
+    placeholderData: (prev) => prev,
+  });
+}

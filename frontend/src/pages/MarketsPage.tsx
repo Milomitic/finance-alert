@@ -1,5 +1,8 @@
 import { Globe2 } from "lucide-react";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
+import { ConfrontoNormalizzato } from "@/components/markets/ConfrontoNormalizzato";
 import { TabellaPanoramica } from "@/components/markets/TabellaPanoramica";
 import { Card, CardContent } from "@/components/ui/card";
 import { QueryError } from "@/components/ui/query-error";
@@ -20,6 +23,14 @@ export default function MarketsPage() {
   const vivi = useLiveAssets();
   const pan = usePanoramica();
   const righe = pan.data ? unisciRighe(pan.data.strumenti, vivi.data?.assets ?? []) : [];
+  const nomi = Object.fromEntries((vivi.data?.assets ?? []).map((a) => [a.symbol, a.name]));
+  const { hash } = useLocation();
+  // Arrivando da «Confronta con altri mercati» si va al grafico: il router
+  // non scorre da solo all'ancora, e la tabella sopra e' lunga.
+  const pronta = pan.data != null;
+  useEffect(() => {
+    if (hash === "#confronto" && pronta) document.getElementById("confronto")?.scrollIntoView({ block: "start" });
+  }, [hash, pronta]);
   return (
     <div className="space-y-4">
       <h1 className="sr-only">Mercati</h1>
@@ -35,6 +46,12 @@ export default function MarketsPage() {
           ) : (
             <TabellaPanoramica righe={righe} allaChiusuraDel={pan.data?.alla_chiusura_del ?? null} />
           )}
+        </CardContent>
+      </Card>
+      {/* FA-187: il confronto in base 100, anche con titoli del catalogo. */}
+      <Card>
+        <CardContent className="p-3 sm:p-4">
+          <ConfrontoNormalizzato nomi={nomi} />
         </CardContent>
       </Card>
     </div>

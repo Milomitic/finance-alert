@@ -20,8 +20,9 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from loguru import logger
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_db
 from app.api.indicatori_compatti import Formato, serie_compatte
 from app.api.market import LIVE_ASSET_DEFINITIONS, quotazione_da_mostrare
 from app.models import User
@@ -202,6 +203,98 @@ class StatisticheOut(BaseModel):
     calo_massimo_5a: CaloOut | None
     calo_massimo_storico: CaloOut | None
     calendario: CalendarioOut
+
+
+class IndiceComposizioneOut(BaseModel):
+    code: str
+    nome: str
+    titoli_nel_catalogo: int
+    nota: str | None
+    pesato_sul_prezzo: bool
+
+
+class AmpiezzaIndiceOut(BaseModel):
+    avanzano: int
+    scendono: int
+    sopra_ema50_pct: float | None
+    sopra_ema200_pct: float | None
+    nuovi_massimi_52s: int
+    nuovi_minimi_52s: int
+    rsi_sopra_70: int
+    rsi_sotto_30: int
+    var_media_pct: float | None
+
+
+class SettoreIndiceOut(BaseModel):
+    settore: str
+    titoli: int
+    var_media_pct: float | None
+    peso_pct: float | None
+
+
+class CostituenteOut(BaseModel):
+    ticker: str
+    nome: str
+    settore: str
+    #: ⚠️ In PUNTI percentuali (1,5 = +1,5%), come `stock_metrics.change_pct`;
+    #: il resto delle API dei mercati usa frazioni.
+    var_pct: float | None
+    peso_pct: float | None
+    #: Peso di capitalizzazione nel catalogo x variazione, in punti
+    #: percentuali; None per gli indici pesati sul prezzo.
+    contributo_pp: float | None
+
+
+class ComposizioneOut(BaseModel):
+    indice: IndiceComposizioneOut
+    ampiezza: AmpiezzaIndiceOut
+    settori: list[SettoreIndiceOut]
+    migliori: list[CostituenteOut]
+    peggiori: list[CostituenteOut]
+    alla_scansione_del: str | None
+
+
+@router.get("/{symbol}/composizione", response_model=ComposizioneOut)
+def get_composizione(
+    symbol: str, db: Session = Depends(get_db), _user: User = Depends(get_current_user),
+) -> ComposizioneOut:
+    """FA-186: ampiezza, settori, migliori e peggiori dei costituenti di un
+    indice, dalla scansione piu' recente. 404 se il catalogo non ne ha."""
+    c = mercati_service.composizione(db, symbol)
+    if c is None:
+        raise HTTPException(status_code=404, detail="Nessun costituente nel catalogo")
+    return ComposizioneOut(**c)
+
+
+class RiepilogoConfrontoMercatiOut(BaseModel):
+    rendimento: float
+    peggior_calo: float
+
+
+class ConfrontoMercatiOut(BaseModel):
+    date: list[str]
+    #: simbolo -> valori in base 100, allineati a `date`.
+    serie: dict[str, list[float]]
+    riepilogo: dict[str, RiepilogoConfrontoMercatiOut]
+    dal: str | None
+    al: str | None
+
+
+@router.get("/confronto", response_model=ConfrontoMercatiOut)
+def get_confronto(
+    simboli: Annotated[str, Query(description="fino a 6, separati da virgola: mercati o titoli del catalogo")],
+    periodo: Annotated[Literal["1m", "3m", "6m", "ytd", "1a", "3a", "5a", "10a"], Query()] = "ytd",
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ConfrontoMercatiOut:
+    """FA-187: mercati e titoli in base 100 dalla stessa data."""
+    elenco = list(dict.fromkeys(s.strip() for s in simboli.split(",") if s.strip()))
+    if not elenco or len(elenco) > mercati_service.MAX_SIMBOLI:
+        raise HTTPException(status_code=422, detail=f"da 1 a {mercati_service.MAX_SIMBOLI} simboli")
+    try:
+        return ConfrontoMercatiOut(**mercati_service.confronto(db, elenco, periodo))
+    except mercati_service.SimboloSconosciuto as e:
+        raise HTTPException(status_code=404, detail=f"Nessuna storia per {e.simbolo}") from e
 
 
 @router.get("/panoramica", response_model=PanoramicaOut)

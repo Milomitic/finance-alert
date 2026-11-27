@@ -111,6 +111,18 @@ export interface AlertsByIndexPointOut {
   alert_count: number;
 }
 
+export interface AmpiezzaIndiceOut {
+  avanzano: number;
+  scendono: number;
+  sopra_ema50_pct: number | null;
+  sopra_ema200_pct: number | null;
+  nuovi_massimi_52s: number;
+  nuovi_minimi_52s: number;
+  rsi_sopra_70: number;
+  rsi_sotto_30: number;
+  var_media_pct: number | null;
+}
+
 export interface AnalistaMioOut {
   ticker: string;
   rilevanza: string;
@@ -262,6 +274,15 @@ export interface CompanyProfileOut {
   founded?: number | null;
 }
 
+export interface ComposizioneOut {
+  indice: IndiceComposizioneOut;
+  ampiezza: AmpiezzaIndiceOut;
+  settori: SettoreIndiceOut[];
+  migliori: CostituenteOut[];
+  peggiori: CostituenteOut[];
+  alla_scansione_del: string | null;
+}
+
 export interface ConfluenceComponentOut {
   alert_id: number;
   rule_kind: string;
@@ -288,6 +309,14 @@ export interface ConfluenceOut {
   components: ConfluenceComponentOut[];
 }
 
+export interface ConfrontoMercatiOut {
+  date: string[];
+  serie: Record<string, number[]>;
+  riepilogo: Record<string, RiepilogoConfrontoMercatiOut>;
+  dal: string | null;
+  al: string | null;
+}
+
 export interface ConsensoPeriodoOut {
   periodo: string;
   previsto?: number | null;
@@ -299,6 +328,15 @@ export interface ContributoOut {
   da: number;
   a: number;
   contributo: number;
+}
+
+export interface CostituenteOut {
+  ticker: string;
+  nome: string;
+  settore: string;
+  var_pct: number | null;
+  peso_pct: number | null;
+  contributo_pp: number | null;
 }
 
 export interface CountBucket {
@@ -990,6 +1028,14 @@ export interface IndicatorSeriesOut {
   macd_signal?: app__schemas__stock_detail__IndicatorPointOut[];
   macd_hist?: app__schemas__stock_detail__IndicatorPointOut[];
   periods?: IndicatorPeriodsOut;
+}
+
+export interface IndiceComposizioneOut {
+  code: string;
+  nome: string;
+  titoli_nel_catalogo: number;
+  nota: string | null;
+  pesato_sul_prezzo: boolean;
 }
 
 export interface IndustryRow {
@@ -1841,6 +1887,11 @@ export interface RestartDetailOut {
   reason?: string | null;
 }
 
+export interface RiepilogoConfrontoMercatiOut {
+  rendimento: number;
+  peggior_calo: number;
+}
+
 export interface RigaPanoramicaOut {
   symbol: string;
   name: string;
@@ -2071,6 +2122,13 @@ export interface SegnaliSettoreOut {
   rialzisti: number;
   ribassisti: number;
   recenti: SegnaleRecenteOut[];
+}
+
+export interface SettoreIndiceOut {
+  settore: string;
+  titoli: number;
+  var_media_pct: number | null;
+  peso_pct: number | null;
 }
 
 export interface SetupListOut {

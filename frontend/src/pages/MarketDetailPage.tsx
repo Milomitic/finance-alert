@@ -30,9 +30,11 @@ import {
 import { DEFAULT_INDICATOR_STATE } from "@/lib/indicatorState";
 import { useChartSync } from "@/hooks/useChartSync";
 import { useMarketDetail } from "@/hooks/useMarketDetail";
-import { useStatisticheMercato } from "@/hooks/useMercati";
+import { useComposizione, useStatisticheMercato } from "@/hooks/useMercati";
+import { ComposizioneIndice } from "@/components/markets/ComposizioneIndice";
 import { StatisticheMercato } from "@/components/markets/StatisticheMercato";
 import { CalendarioRendimenti } from "@/components/stats/CalendarioRendimenti";
+import { DomandePronte } from "@/components/studio/DomandePronte";
 import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
@@ -103,6 +105,8 @@ export default function MarketDetailPage() {
   const decoded = decodeURIComponent(symbol);
   const q = useMarketDetail(decoded, range);
   const statistiche = useStatisticheMercato(decoded);
+  // FA-186: solo un indice puo' avere costituenti; per gli altri niente richiesta.
+  const composizione = useComposizione(decoded, q.data?.category === "index");
   useTitoloScheda(q.data?.name ?? decoded);
 
   // Same convention as StockDetailPage: indicator visibility/style is
@@ -178,13 +182,22 @@ export default function MarketDetailPage() {
           `navigate(-1)`, perche dice DOVE porta ed e l'unico dei due che
           funziona su un caricamento diretto, dove la storia del browser e
           vuota — cioe' esattamente quando si apre un link ricevuto. */}
-      <Link
-        to="/markets"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Mercati
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link
+          to="/markets"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Mercati
+        </Link>
+        {/* FA-187: lo strumento nel confronto in base 100, accanto a un riferimento. */}
+        <Link
+          to={`/markets?confronta=${encodeURIComponent([d.symbol, d.symbol === "^GSPC" ? "^IXIC" : "^GSPC"].join(","))}&periodo=1a#confronto`}
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          Confronta con altri mercati →
+        </Link>
+      </div>
       {/* Header — full StockHeader-style hero with gradient sparkline +
           prev close + tone-tinted bg + left accent stripe. Same visual
           language as /stocks/:ticker so the user feels at home no matter
@@ -391,13 +404,27 @@ export default function MarketDetailPage() {
       </div>
       </div>
 
+      {/* FA-186: la composizione, per gli indici con i costituenti nel catalogo. */}
+      {composizione.isLoading ? (
+        <div className="h-[300px] animate-pulse rounded-lg bg-muted/30" aria-hidden />
+      ) : composizione.data && (
+        <Card>
+          <CardContent className="p-4">
+            <ComposizioneIndice c={composizione.data} />
+          </CardContent>
+        </Card>
+      )}
+
       {/* FA-185: il calendario dei rendimenti, anni per mesi. */}
       {statistiche.isLoading ? (
         <div className="h-[420px] animate-pulse rounded-lg bg-muted/30" aria-hidden />
       ) : statistiche.data && statistiche.data.calendario.anni.length > 0 && (
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_260px] [&>*]:min-w-0">
             <CalendarioRendimenti calendario={statistiche.data.calendario} />
+            {/* FA-199: dal calendario alla domanda giusta (la correzione per
+                famiglia sta nello Studio). */}
+            <DomandePronte simbolo={d.symbol} tipo="mercato" />
           </CardContent>
         </Card>
       )}

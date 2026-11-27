@@ -44,6 +44,11 @@ export const SERIE = {
   macd: "#d946ef",
 } as const;
 
+/** FA-187: sei colori per serie diverse dello stesso grafico (il confronto
+ *  fra mercati). Lontani dalla coppia smeraldo/rosa, che in questo progetto
+ *  significa direzione: una linea del confronto non e' «su» o «giu'». */
+export const CATEGORICA = ["#3b82f6", "#f59e0b", "#a855f7", "#06b6d4", "#ec4899", "#84cc16"] as const;
+
 /** Assi, griglia e bordi dei grafici canvas, per tema (FA-175, B-12, A-51).
  *  Erano scritti per il fondo chiaro: `#374151` su `#1a1a1a` vale 1,7:1, e la
  *  griglia nera al 5% spariva. Testo dell'asse sopra 4,5:1 in entrambi i

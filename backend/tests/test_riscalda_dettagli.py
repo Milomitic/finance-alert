@@ -45,8 +45,10 @@ def test_un_guasto_su_un_titolo_non_ferma_gli_altri_ne_gli_indici(monkeypatch):
     monkeypatch.setattr(api_stocks, "riscalda_dettaglio", dettaglio)
     monkeypatch.setattr(market_detail_service, "get_detail", mercato)
     job.run_riscalda_dettagli()
-    assert fatti[0] == "OK"
+    assert "OK" in fatti and "ROTTO" not in fatti
     assert "^IXIC" in fatti and "^GSPC" not in fatti
+    # Prima i mercati (servono alla panoramica), poi i titoli seguiti.
+    assert fatti.index("^IXIC") < fatti.index("OK")
 
 
 def test_se_l_elenco_fallisce_si_riscaldano_comunque_gli_indici(monkeypatch):

@@ -27,6 +27,8 @@ const riga = (symbol: string, name: string, category: string, flag: string | nul
 });
 
 vi.mock("@/hooks/useMercati", () => ({
+  PERIODI_CONFRONTO: ["1m", "3m", "6m", "ytd", "1a", "3a", "5a", "10a"],
+  useConfronto: () => ({ data: undefined, error: null }),
   usePanoramica: () => ({
     isLoading: false, isError: false,
     data: {
@@ -72,12 +74,13 @@ describe("la pagina dei mercati", () => {
 
   it("si ordina per colonna: decrescente, crescente, di nuovo l'ordine del server", () => {
     render(<MemoryRouter><MarketsPage /></MemoryRouter>);
-    const th = () => screen.getByRole("button", { name: /YTD/ }).closest("th")!;
-    fireEvent.click(screen.getByRole("button", { name: /YTD/ }));
+    const ytd = () => within(screen.getByRole("table")).getByRole("button", { name: /YTD/ });
+    const th = () => ytd().closest("th")!;
+    fireEvent.click(ytd());
     expect(th()).toHaveAttribute("aria-sort", "descending");
-    fireEvent.click(screen.getByRole("button", { name: /YTD/ }));
+    fireEvent.click(ytd());
     expect(th()).toHaveAttribute("aria-sort", "ascending");
-    fireEvent.click(screen.getByRole("button", { name: /YTD/ }));
+    fireEvent.click(ytd());
     expect(th()).toHaveAttribute("aria-sort", "none");
   });
 });
