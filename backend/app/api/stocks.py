@@ -1,5 +1,6 @@
 """Stock router."""
 import datetime as dt
+import json
 import threading
 from datetime import UTC
 from typing import Annotated
@@ -10,6 +11,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.api.indicatori_compatti import Formato, serie_compatte
 from app.core.cache_fresca import CacheFresca
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
@@ -425,6 +427,7 @@ def _safe_volume(v) -> int:
 def get_stock_detail(
     ticker: str,
     range: str = "1y",
+    formato: Formato = "esteso",
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> StockDetailOut:
@@ -444,10 +447,10 @@ def get_stock_detail(
     if range not in ("5m", "30m", "1h", "1d", "1w", "1m"):
         raise HTTPException(status_code=422, detail="invalid timeframe")
     if range in _GIORNALIERI:
-        cache = _cache_dettaglio(ticker, range)
-        corpo = cache.leggi() if cache.accesa() else costruisci_dettaglio(db, ticker, range)
+        cache = _cache_dettaglio(ticker, range, formato)
+        corpo = cache.leggi() if cache.accesa() else costruisci_dettaglio(db, ticker, range, formato)
     else:
-        corpo = costruisci_dettaglio(db, ticker, range)
+        corpo = costruisci_dettaglio(db, ticker, range, formato)
     if corpo is None:
         raise HTTPException(status_code=404, detail="Ticker not found")
     return Response(content=corpo, media_type="application/json")
@@ -468,12 +471,14 @@ _GIORNALIERI = ("1d", "1w", "1m")
 _DETTAGLIO_ETA_S = 120
 _DETTAGLIO_LIMITE_S = 15 * 60
 _DETTAGLIO_MAX_VOCI = 300
-_CACHE_DETTAGLI: dict[tuple[str, str], CacheFresca[bytes | None]] = {}
+_CACHE_DETTAGLI: dict[tuple[str, str, str], CacheFresca[bytes | None]] = {}
 _CACHE_DETTAGLI_LOCK = threading.Lock()
 
 
-def _cache_dettaglio(ticker: str, range_key: str) -> CacheFresca[bytes | None]:
-    chiave = (ticker, range_key)
+def _cache_dettaglio(
+    ticker: str, range_key: str, formato: Formato = "esteso",
+) -> CacheFresca[bytes | None]:
+    chiave = (ticker, range_key, formato)
     with _CACHE_DETTAGLI_LOCK:
         cache = _CACHE_DETTAGLI.get(chiave)
         if cache is None:
@@ -481,35 +486,42 @@ def _cache_dettaglio(ticker: str, range_key: str) -> CacheFresca[bytes | None]:
                 # La piu' vecchia inserita: i dict conservano l'ordine.
                 _CACHE_DETTAGLI.pop(next(iter(_CACHE_DETTAGLI)))
             cache = CacheFresca(
-                f"dettaglio-{ticker}-{range_key}", _DETTAGLIO_ETA_S,
-                lambda: _costruisci_in_sessione(ticker, range_key),
+                f"dettaglio-{ticker}-{range_key}-{formato}", _DETTAGLIO_ETA_S,
+                lambda: _costruisci_in_sessione(ticker, range_key, formato),
                 eta_limite_s=_DETTAGLIO_LIMITE_S,
             )
             _CACHE_DETTAGLI[chiave] = cache
         return cache
 
 
-def _costruisci_in_sessione(ticker: str, range_key: str) -> bytes | None:
+def _costruisci_in_sessione(ticker: str, range_key: str, formato: Formato = "esteso") -> bytes | None:
     """La cache ricalcola anche in un thread suo, fuori dalla richiesta:
     serve una sessione propria."""
     from app.core import db as core_db  # noqa: PLC0415
 
     with core_db.SessionLocal() as db:
-        return costruisci_dettaglio(db, ticker, range_key)
+        return costruisci_dettaglio(db, ticker, range_key, formato)
 
 
 def riscalda_dettaglio(ticker: str, range_key: str = "1d") -> None:
-    """Per il job: ricalcola e conserva il dettaglio di un titolo."""
-    _cache_dettaglio(ticker, range_key).rinfresca()
+    """Per il job: ricalcola e conserva il dettaglio di un titolo, nella
+    forma che chiede la pagina (la compatta, FA-182)."""
+    _cache_dettaglio(ticker, range_key, "compatto").rinfresca()
 
 
-def costruisci_dettaglio(db: Session, ticker: str, range_key: str) -> bytes | None:
+def costruisci_dettaglio(
+    db: Session, ticker: str, range_key: str, formato: Formato = "esteso",
+) -> bytes | None:
     """Il corpo JSON del dettaglio, o None se il titolo non c'e'."""
     range = range_key
     detail = stock_detail_service.get_detail(db, ticker, range_key=range)
     if detail is None:
         return None
-    return StockDetailOut(
+    compatto = formato == "compatto"
+    # Nella forma compatta le serie si scrivono dopo, come soli valori: qui
+    # non si costruiscono le ~26 mila coppie data/valore che si butterebbero.
+    sorgente = _SENZA_SERIE if compatto else detail
+    uscita = StockDetailOut(
         # ⚠️ `_con_appartenenze`, non una `model_validate` nuda: quella
         # lasciava `in_indices` e `in_etfs` ai loro default vuoti, e la pagina
         # di dettaglio — l'unica che mostra quelle pastiglie — non ne ha mai
@@ -526,16 +538,16 @@ def costruisci_dettaglio(db: Session, ticker: str, range_key: str) -> bytes | No
             for b in detail.ohlcv
         ],
         indicators=IndicatorSeriesOut(
-            ema20=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema20],
-            ema50=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema50],
-            ema200=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.ema200],
-            rsi14=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.rsi14],
-            bb_upper=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_upper],
-            bb_middle=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_middle],
-            bb_lower=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.bb_lower],
-            macd_line=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_line],
-            macd_signal=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_signal],
-            macd_hist=[IndicatorPointOut(date=p.date, value=p.value) for p in detail.macd_hist],
+            ema20=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.ema20],
+            ema50=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.ema50],
+            ema200=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.ema200],
+            rsi14=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.rsi14],
+            bb_upper=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.bb_upper],
+            bb_middle=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.bb_middle],
+            bb_lower=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.bb_lower],
+            macd_line=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.macd_line],
+            macd_signal=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.macd_signal],
+            macd_hist=[IndicatorPointOut(date=p.date, value=p.value) for p in sorgente.macd_hist],
             periods=IndicatorPeriodsOut(**detail.indicator_periods.__dict__),
         ),
         kpis=StockKpisOut(
@@ -557,7 +569,25 @@ def costruisci_dettaglio(db: Session, ticker: str, range_key: str) -> bytes | No
         # ricostruzione a mano che stava qui ometteva `currency` e l'intero
         # blocco esito.
         alerts_history=[AlertOut(**a) for a in detail.alerts_history],
-    ).model_dump_json().encode()
+    )
+    if not compatto:
+        return uscita.model_dump_json().encode()
+    # Da `model_dump_json`, non `model_dump(mode="json")`: il secondo lascia i
+    # NaN come NaN, il primo li scrive null come la forma estesa.
+    corpo = json.loads(uscita.model_dump_json())
+    corpo["indicators"].update(serie_compatte(detail, [b.date for b in detail.ohlcv]))
+    corpo["indicators_formato"] = "compatto"
+    return json.dumps(corpo, separators=(",", ":"), allow_nan=False).encode()
+
+
+class _SenzaSerie:
+    """Una sorgente con le dieci serie vuote, per la forma compatta."""
+
+    def __getattr__(self, nome: str) -> list:
+        return []
+
+
+_SENZA_SERIE = _SenzaSerie()
 
 
 #: Tetto di un intervallo di date: ~24 anni di sedute, oltre la storia che il

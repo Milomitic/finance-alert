@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { FORMATO_COMPATTO, riespandiIndicatori } from "@/lib/indicatoriCompatti";
 
 export interface MarketDetailBar {
   date: string;
@@ -69,11 +70,13 @@ export interface MarketDetail {
 export function useMarketDetail(symbol: string, range: string = "1y") {
   return useQuery({
     queryKey: ["market-detail", symbol, range],
-    queryFn: ({ signal }) =>
-      api<MarketDetail>(
-        `/api/markets/${encodeURIComponent(symbol)}/detail?range=${range}`,
+    queryFn: async ({ signal }) => {
+      const corpo = await api<MarketDetail>(
+        `/api/markets/${encodeURIComponent(symbol)}/detail?range=${range}&${FORMATO_COMPATTO}`,
         { signal },
-      ),
+      );
+      return riespandiIndicatori(corpo, corpo.bars);
+    },
     staleTime: 60_000,
     enabled: !!symbol,
   });

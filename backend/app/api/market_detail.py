@@ -12,15 +12,17 @@ Why a separate router from `/api/stocks/...`
   straight to yfinance with a 15-min cache, no DB roundtrip for
   the OHLCV.
 """
+import json
 from datetime import date as date_t
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from loguru import logger
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
+from app.api.indicatori_compatti import Formato, serie_compatte
 from app.api.market import LIVE_ASSET_DEFINITIONS, quotazione_da_mostrare
 from app.models import User
 from app.services import live_quote_service, market_detail_service
@@ -128,8 +130,9 @@ def get_market_detail(
     symbol: str,
     range: Annotated[str, Query()] = "1d",
     storia: Annotated[Literal["recente", "completa"], Query()] = "recente",
+    formato: Formato = "esteso",
     _user: User = Depends(get_current_user),
-) -> MarketDetailOut:
+) -> MarketDetailOut | Response:
     """`storia=completa` rende tutte le barre giornaliere (dal 1927 per
     l'S&P 500): serve al server MCP per le domande sul passato. Il grafico
     chiede la recente, gli ultimi dieci anni."""
@@ -194,7 +197,12 @@ def get_market_detail(
 
     ind = detail.indicators
 
+    compatto = formato == "compatto"
+
     def _pts(series):
+        # Nella forma compatta (FA-182) le serie si scrivono dopo, come valori.
+        if compatto:
+            return []
         return [IndicatorPointOut(date=p.date, value=p.value) for p in series]
 
     indicators_out = IndicatorBundleOut(
@@ -210,7 +218,7 @@ def get_market_detail(
         macd_hist=_pts(ind.macd_hist),
     )
 
-    return MarketDetailOut(
+    uscita = MarketDetailOut(
         symbol=symbol,
         name=name,
         category=category,
@@ -238,4 +246,13 @@ def get_market_detail(
         quote=quote_out,
         using_futures=using_futures,
         quote_symbol=quote_symbol,
+    )
+    if not compatto:
+        return uscita
+    corpo = json.loads(uscita.model_dump_json())
+    corpo["indicators"].update(serie_compatte(ind, [b.date for b in detail.bars]))
+    corpo["indicators_formato"] = "compatto"
+    return Response(
+        content=json.dumps(corpo, separators=(",", ":"), allow_nan=False),
+        media_type="application/json",
     )

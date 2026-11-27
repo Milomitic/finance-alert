@@ -1,3 +1,5 @@
+import { FORMATO_COMPATTO, riespandiIndicatori } from "@/lib/indicatoriCompatti";
+
 import { api } from "./client";
 import type {
   FilterOptions,
@@ -169,9 +171,11 @@ export const stocks = {
   filters: (signal?: AbortSignal) => api<FilterOptions>("/api/stocks/filters", { signal }),
   byTicker: (ticker: string, signal?: AbortSignal) =>
     api<Stock>(`/api/stocks/${encodeURIComponent(ticker)}`, { signal }),
-  detail: (ticker: string, range = "1y", signal?: AbortSignal) =>
-    api<StockDetail>(
-      `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}`, { signal }),
+  detail: async (ticker: string, range = "1y", signal?: AbortSignal) => {
+    const corpo = await api<StockDetail>(
+      `/api/stocks/${encodeURIComponent(ticker)}/detail?range=${range}&${FORMATO_COMPATTO}`, { signal });
+    return riespandiIndicatori(corpo, corpo.ohlcv);
+  },
   /** `force=true` bypasses the backend cache and re-fetches upstream; an
    *  upstream failure surfaces as a 502 ApiError (used by the card refresh). */
   fundamentals: (ticker: string, opts: { force?: boolean } = {}, signal?: AbortSignal) =>

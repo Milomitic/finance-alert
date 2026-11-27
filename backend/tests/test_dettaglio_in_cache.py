@@ -61,9 +61,10 @@ def test_il_riscaldamento_rende_pronta_la_prima_apertura(ambiente, db):
     client, chiamate = ambiente
     _seed(db, "AAPL")
     _accendi("AAPL")
+    api_stocks._cache_dettaglio("AAPL", "1d", "compatto")._attiva = True
     api_stocks.riscalda_dettaglio("AAPL")
     assert chiamate["n"] == 1
-    r = client.get("/api/stocks/AAPL/detail?range=1d")
+    r = client.get("/api/stocks/AAPL/detail?range=1d&formato=compatto")
     assert r.status_code == 200
     assert chiamate["n"] == 1
 
@@ -79,7 +80,7 @@ def test_gli_intraday_non_passano_dalla_cache(ambiente, db, monkeypatch):
     _seed(db, "AAPL")
     monkeypatch.setattr(api_stocks, "costruisci_dettaglio", lambda *a: json.dumps({"x": 1}).encode())
     client.get("/api/stocks/AAPL/detail?range=5m")
-    assert ("AAPL", "5m") not in api_stocks._CACHE_DETTAGLI
+    assert not any(k[1] == "5m" for k in api_stocks._CACHE_DETTAGLI)
 
 
 def test_la_cache_ha_un_tetto(monkeypatch):
@@ -87,4 +88,4 @@ def test_la_cache_ha_un_tetto(monkeypatch):
     monkeypatch.setattr(api_stocks, "_DETTAGLIO_MAX_VOCI", 3)
     for t in ("A", "B", "C", "D"):
         api_stocks._cache_dettaglio(t, "1d")
-    assert list(api_stocks._CACHE_DETTAGLI) == [("B", "1d"), ("C", "1d"), ("D", "1d")]
+    assert list(api_stocks._CACHE_DETTAGLI) == [("B", "1d", "esteso"), ("C", "1d", "esteso"), ("D", "1d", "esteso")]
