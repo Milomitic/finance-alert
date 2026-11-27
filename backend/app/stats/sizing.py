@@ -81,14 +81,29 @@ def independent_blocks(dates: Sequence[date], horizon_trading_days: int) -> int:
     """
     if not dates:
         return 0
+    return max(blocco_di_ogni_data(dates, horizon_trading_days)) + 1
+
+
+def blocco_di_ogni_data(dates: Sequence[date], horizon_trading_days: int) -> list[int]:
+    """Il numero del blocco (0, 1, 2, …, in ordine di tempo) di ogni data,
+    nello STESSO ordine dell'ingresso. E' la copertura greedy di
+    `independent_blocks`, che ne conta i blocchi: un proprietario solo per
+    «che cos'e' una finestra indipendente», cosi' gli episodi mostrati a
+    schermo (FA-193) sono esattamente le finestre contate nel verdetto."""
+    if not dates:
+        return []
     span = max(1, math.ceil(horizon_trading_days * _TRADING_TO_CALENDAR))
-    blocks = 0
+    ordine = sorted(range(len(dates)), key=lambda i: dates[i])
+    out = [0] * len(dates)
+    blocco = -1
     open_until: date | None = None
-    for d in sorted(dates):
+    for i in ordine:
+        d = dates[i]
         if open_until is None or d >= open_until:
-            blocks += 1
+            blocco += 1
             open_until = d + timedelta(days=span)
-    return blocks
+        out[i] = blocco
+    return out
 
 
 def sized_interval(*, rate_pct: float, effective_n: int) -> tuple[float, float]:

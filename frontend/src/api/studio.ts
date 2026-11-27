@@ -31,11 +31,28 @@ export type Confronto = {
   istogramma?: Fascia[];
 };
 
+/** FA-193: un caso, dal piu' recente. `episodio` e' la finestra indipendente
+ *  (numerata in ordine di tempo da 1), `primo` il suo primo giorno. */
+export type Caso = { data: string; esito: number; episodio: number; primo: boolean; mossa?: number };
+
+/** FA-194: il rendimento cumulato seduta per seduta. */
+export type PuntoPercorso = {
+  seduta: number; media: number; mediana?: number; p10?: number; p90?: number;
+  base?: number; n?: number;
+};
+
+export type Escursioni = {
+  mae_mediana: number; mae_p10: number; mfe_mediana: number; mfe_p90: number; casi: number;
+};
+
 export type DopoMovimento = Confronto & {
   simbolo: string;
   condizione: Misura;
   base: Misura;
   parametri: { sedute: number; soglia_pct: number; orizzonte: number };
+  elenco_casi?: Caso[];
+  percorso?: PuntoPercorso[];
+  escursioni?: Escursioni | null;
 };
 
 export type Stagionalita = {
@@ -53,7 +70,9 @@ export type Evento = Confronto & {
   tipo: string;
   serie_macro: string | null;
   eventi: number;
-  percorso: { seduta: number; media: number }[];
+  percorso: PuntoPercorso[];
+  singoli?: { data: string; valori: number[] }[];
+  elenco_casi?: Caso[];
   a_orizzonte: Misura;
   base: Misura;
   orizzonte: number;

@@ -195,3 +195,63 @@ def test_la_serie_di_un_mercato_si_tiene_per_il_giorno(monkeypatch):
     b = ss.serie_di(Db(), "^xyz")
     assert a is b and chiamate == ["^XYZ"]
     ss._SERIE_MERCATI.clear()
+
+
+# ── FA-193: i casi uno per uno ──────────────────────────────────────────────
+
+def test_gli_episodi_sono_le_finestre_del_verdetto():
+    c = []
+    for _ in range(8):
+        c += [100.0] * 40 + [96, 92, 88, 84, 80] + [85, 90, 95, 100, 100]
+    out = ss.dopo_movimento(_serie(c), sedute=5, soglia_pct=-15, orizzonte=5)
+    casi = out["elenco_casi"]
+    assert len(casi) == out["condizione"]["casi"]
+    assert max(x["episodio"] for x in casi) == out["condizione"]["finestre"]
+    assert sum(1 for x in casi if x["primo"]) == out["condizione"]["finestre"]
+    assert casi[0]["data"] > casi[-1]["data"]            # dal piu' recente
+    assert all(x["mossa"] <= -0.15 for x in casi)
+
+
+def test_il_blocco_di_ogni_data_segue_l_ordine_dell_ingresso():
+    from app.stats.sizing import blocco_di_ogni_data, independent_blocks
+
+    d = [D0 + timedelta(days=60), D0, D0 + timedelta(days=1)]
+    assert blocco_di_ogni_data(d, 5) == [1, 0, 0]
+    assert independent_blocks(d, 5) == 2
+
+
+# ── FA-194: il percorso ─────────────────────────────────────────────────────
+
+def test_il_percorso_e_le_escursioni_su_una_serie_nota():
+    c = [100.0, 90.0, 110.0, 120.0, 100.0, 100.0]
+    p = ss.percorso_cumulato(c, [0], 3, base=[0, 1])
+    assert [round(r["media"], 4) for r in p] == [0.0, -0.1, 0.1, 0.2]
+    assert p[1]["base"] == pytest.approx((-0.1 + 110 / 90 - 1) / 2)
+    e = ss.escursioni(c, [0], 3)
+    assert e["mae_mediana"] == pytest.approx(-0.1) and e["mfe_mediana"] == pytest.approx(0.2)
+
+
+def test_una_serie_che_sale_soltanto_non_ha_discesa_lungo_il_percorso():
+    c = [100.0 + i for i in range(30)]
+    assert ss.escursioni(c, [0, 5, 10], 10)["mae_mediana"] == 0.0
+    assert ss.escursioni(c, [], 10) is None
+
+
+def test_dopo_un_movimento_rende_percorso_ed_escursioni():
+    c = []
+    for _ in range(8):
+        c += [100.0] * 40 + [96, 92, 88, 84, 80] + [85, 90, 95, 100, 100]
+    out = ss.dopo_movimento(_serie(c), sedute=5, soglia_pct=-15, orizzonte=5)
+    assert len(out["percorso"]) == 6 and out["percorso"][0]["media"] == 0.0
+    assert "base" in out["percorso"][-1]
+    assert out["escursioni"]["casi"] == out["condizione"]["casi"]
+
+
+def test_l_evento_rende_i_percorsi_singoli_e_quanti_eventi_per_seduta():
+    c = [100.0] * 60 + [110.0] * 60
+    eventi = [D0 + timedelta(days=60), D0 + timedelta(days=30)]
+    out = ss.evento(_serie(c), eventi, orizzonte=3)
+    assert {s["data"] for s in out["singoli"]} == {e.isoformat() for e in eventi}
+    assert all(r["n"] == 2 for r in out["percorso"])
+    assert {"mediana", "p10", "p90"} <= set(out["percorso"][0])
+    assert len(out["elenco_casi"]) == 2

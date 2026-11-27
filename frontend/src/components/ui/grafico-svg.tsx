@@ -38,6 +38,16 @@ export type SerieGrafico<T> = {
 
 export type RiferimentoGrafico = { y: number; asse?: "sx" | "dx"; tratteggio?: string; colore?: string };
 
+/** FA-194: un'area fra due valori per riga (la banda 10°-90° di un percorso). */
+export type BandaGrafico<T> = {
+  chiave: string;
+  da: (riga: T) => number | null | undefined;
+  a: (riga: T) => number | null | undefined;
+  colore: string;
+  opacita?: number;
+  asse?: "sx" | "dx";
+};
+
 type Props<T> = {
   dati: T[];
   x: (riga: T) => string;
@@ -49,6 +59,10 @@ type Props<T> = {
   /** Mostra un'etichetta dell'asse X ogni N (0 = automatico). */
   ogniX?: number;
   riferimenti?: RiferimentoGrafico[];
+  /** Aree fra due valori, sotto le linee (FA-194). */
+  bande?: BandaGrafico<T>[];
+  /** Linee verticali sugli indici dati (il giorno di un evento, FA-194). */
+  verticali?: number[];
   /** Includi lo zero nella scala di sinistra (sempre vero con le barre). */
   zero?: boolean;
   tooltip?: (riga: T) => ReactNode;
@@ -95,7 +109,7 @@ function useLarghezza() {
 
 export function GraficoSvg<T>({
   dati, x, serie, altezza, formatoY = (v) => String(v), formatoYDx, formatoX = (s) => s,
-  ogniX = 0, riferimenti = [], zero = false, tooltip, etichetta, className,
+  ogniX = 0, riferimenti = [], bande = [], verticali = [], zero = false, tooltip, etichetta, className,
 }: Props<T>) {
   const { ref, w, h: hContenitore } = useLarghezza();
   const [attivo, setAttivo] = useState<number | null>(null);
@@ -113,13 +127,16 @@ export function GraficoSvg<T>({
       const v = s.flatMap((x) => dati.map((r) => x.valore(r))).filter(
         (v): v is number => v != null && Number.isFinite(v));
       riferimenti.filter((r) => (r.asse ?? "sx") === asse).forEach((r) => v.push(r.y));
+      bande.filter((b) => (b.asse ?? "sx") === asse).forEach((b) => dati.forEach((r) => {
+        for (const x of [b.da(r), b.a(r)]) if (x != null && Number.isFinite(x)) v.push(x);
+      }));
       if (v.length === 0) return null;
       const barre = s.some((x) => x.tipo === "barre");
       const [lo, hi] = estremi(v, barre || (asse === "sx" && zero));
       return { lo, hi, y: (val: number) => M.alto + alt - ((val - lo) / (hi - lo)) * alt };
     };
     return { sx: per("sx"), dx: per("dx") };
-  }, [dati, serie, riferimenti, zero, alt]);
+  }, [dati, serie, riferimenti, bande, zero, alt]);
 
   const banda = n > 0 ? larg / n : larg;
   const cx = (i: number) => ml + banda * (i + 0.5);
@@ -207,6 +224,27 @@ export function GraficoSvg<T>({
               strokeDasharray={rf.tratteggio} />
           ) : null;
         })}
+        {bande.map((b) => {
+          const sc = scale[b.asse ?? "sx"];
+          if (!sc) return null;
+          const sopra: string[] = [];
+          const sotto: string[] = [];
+          dati.forEach((r, i) => {
+            const da = b.da(r);
+            const a = b.a(r);
+            if (da == null || a == null || !Number.isFinite(da) || !Number.isFinite(a)) return;
+            sopra.push(`${cx(i).toFixed(1)},${sc.y(a).toFixed(1)}`);
+            sotto.unshift(`${cx(i).toFixed(1)},${sc.y(da).toFixed(1)}`);
+          });
+          return sopra.length > 1 ? (
+            <polygon key={b.chiave} points={[...sopra, ...sotto].join(" ")} fill={b.colore}
+              fillOpacity={b.opacita ?? 0.18} stroke="none" />
+          ) : null;
+        })}
+        {verticali.filter((i) => i >= 0 && i < n).map((i) => (
+          <line key={`v${i}`} x1={cx(i)} x2={cx(i)} y1={M.alto} y2={M.alto + alt}
+            stroke="hsl(var(--muted-foreground))" strokeOpacity={0.7} strokeDasharray="4 3" />
+        ))}
         {barre.map((s, b) => {
           const sc = scale[s.asse ?? "sx"];
           if (!sc) return null;

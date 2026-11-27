@@ -32,7 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.stats.media import mean_interval, t_cdf
-from app.stats.sizing import independent_blocks
+from app.stats.sizing import blocco_di_ogni_data, independent_blocks
 
 MODELLI = ("dopo_movimento", "stagionalita", "evento")
 MESI = ("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic")
@@ -72,6 +72,69 @@ def _misura(valori: list[float], date_: list[date], orizzonte: int) -> dict:
         "p10": _percentile(ordinati, 0.10), "p90": _percentile(ordinati, 0.90),
         "peggiore": ordinati[0], "migliore": ordinati[-1],
     }
+
+
+#: Quanti casi al massimo nell'elenco (FA-193): i piu' recenti. Il conteggio e
+#: il verdetto usano sempre tutti.
+MAX_CASI = 500
+
+
+def elenco_casi(date_: list[date], valori: list[float], orizzonte: int,
+                mosse: list[float] | None = None) -> list[dict]:
+    """I casi uno per uno, dal piu' recente (FA-193): data, esito, episodio
+    (la finestra indipendente a cui appartiene, numerata in ordine di tempo
+    da 1) e se e' il primo giorno del suo episodio. `mosse`, se c'e', e' la
+    variazione che ha fatto scattare la condizione."""
+    if not valori:
+        return []
+    blocchi = blocco_di_ogni_data(date_, orizzonte)
+    visti: set[int] = set()
+    righe = []
+    for i in sorted(range(len(date_)), key=lambda k: date_[k]):
+        b = blocchi[i]
+        righe.append({"data": date_[i].isoformat(), "esito": valori[i], "episodio": b + 1,
+                      "primo": b not in visti, **({"mossa": mosse[i]} if mosse is not None else {})})
+        visti.add(b)
+    return list(reversed(righe))[:MAX_CASI]
+
+
+def _quantili(valori: list[float]) -> dict:
+    o = sorted(valori)
+    return {"media": mean(o), "mediana": median(o), "p10": _percentile(o, 0.10), "p90": _percentile(o, 0.90)}
+
+
+def percorso_cumulato(chiusure: list[float], partenze: list[int], orizzonte: int,
+                      base: list[int] | None = None) -> list[dict]:
+    """FA-194: il rendimento cumulato seduta per seduta, da 0 a `orizzonte`,
+    per i casi che partono dagli indici `partenze`: media, mediana, 10° e 90°
+    percentile; e la media della base sugli indici `base`."""
+    if not partenze:
+        return []
+    out = []
+    for k in range(orizzonte + 1):
+        v = [chiusure[t + k] / chiusure[t] - 1.0 for t in partenze]
+        riga = {"seduta": k, **_quantili(v)}
+        if base:
+            vb = [chiusure[t + k] / chiusure[t] - 1.0 for t in base]
+            riga["base"] = mean(vb)
+        out.append(riga)
+    return out
+
+
+def escursioni(chiusure: list[float], partenze: list[int], orizzonte: int) -> dict | None:
+    """FA-194: per ogni caso la discesa massima (MAE, <= 0) e la salita
+    massima (MFE, >= 0) LUNGO il percorso, riassunte. Dice quanto bisognava
+    sopportare per arrivare all'esito, cioe' la geometria di uno stop."""
+    if not partenze:
+        return None
+    mae, mfe = [], []
+    for t in partenze:
+        tratto = [chiusure[t + k] / chiusure[t] - 1.0 for k in range(1, orizzonte + 1)]
+        mae.append(min(0.0, min(tratto)))
+        mfe.append(max(0.0, max(tratto)))
+    om, of = sorted(mae), sorted(mfe)
+    return {"mae_mediana": median(om), "mae_p10": _percentile(om, 0.10),
+            "mfe_mediana": median(of), "mfe_p90": _percentile(of, 0.90), "casi": len(partenze)}
 
 
 def istogramma(cond: list[float], base: list[float], fasce: int = 12) -> list[dict]:
@@ -184,16 +247,20 @@ def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) 
     c, d = s.chiusure, s.date
     soglia = soglia_pct / 100.0
     casi, date_casi, base, date_base = [], [], [], []
+    mosse, partenze, partenze_base = [], [], []
     for t in range(sedute, len(c) - orizzonte):
         if c[t] <= 0 or c[t - sedute] <= 0:
             continue
         avanti = c[t + orizzonte] / c[t] - 1.0
         base.append(avanti)
         date_base.append(d[t])
+        partenze_base.append(t)
         mossa = c[t] / c[t - sedute] - 1.0
         if (soglia < 0 and mossa <= soglia) or (soglia > 0 and mossa >= soglia):
             casi.append(avanti)
             date_casi.append(d[t])
+            mosse.append(mossa)
+            partenze.append(t)
     out = {"condizione": _misura(casi, date_casi, orizzonte),
            "base": _misura(base, date_base, orizzonte),
            "parametri": {"sedute": sedute, "soglia_pct": soglia_pct, "orizzonte": orizzonte}}
@@ -201,6 +268,12 @@ def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) 
     out.update(confronto(out["condizione"], out["base"], stab))
     out["stabilita"] = stab
     out["istogramma"] = istogramma(casi, base)
+    out["elenco_casi"] = elenco_casi(date_casi, casi, orizzonte, mosse)
+    # La base del percorso: un campione regolare delle finestre (al massimo
+    # ~400), che per una media basta e tiene il calcolo sotto i millisecondi.
+    passo = max(1, len(partenze_base) // 400)
+    out["percorso"] = percorso_cumulato(c, partenze, orizzonte, partenze_base[::passo])
+    out["escursioni"] = escursioni(c, partenze, orizzonte)
     return out
 
 
@@ -266,7 +339,7 @@ def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
     in rendimento dalla chiusura della seduta precedente all'evento; e la
     misura a `orizzonte` sedute contro il caso base."""
     c = s.chiusure
-    percorsi, a_h, date_h = [], [], []
+    percorsi, a_h, date_h, date_ev = [], [], [], []
     for g in sorted(set(date_eventi)):
         # La seduta dell'evento: la prima in data g o dopo (un annuncio di
         # sabato reagisce il lunedi').
@@ -277,20 +350,28 @@ def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
         percorsi.append([c[t0 + k] / rif - 1.0 for k in range(-PRIMA - 1, DOPO + 1)])
         a_h.append(c[t0 - 1 + orizzonte] / rif - 1.0)
         date_h.append(g)
+        date_ev.append(s.date[t0])
     base, date_base = [], []
     for t in range(1, len(c) - orizzonte):
         if c[t - 1] > 0:
             base.append(c[t - 1 + orizzonte] / c[t - 1] - 1.0)
             date_base.append(s.date[t])
+    # FA-194: per ogni seduta anche mediana, 10° e 90° percentile e quanti
+    # eventi contribuiscono (tutti, qui: i bordi sono gia' esclusi sopra).
     percorso = [
-        {"seduta": k, "media": mean(p[k + PRIMA + 1] for p in percorsi)}
+        {"seduta": k, "n": len(percorsi), **_quantili([p[k + PRIMA + 1] for p in percorsi])}
         for k in range(-PRIMA - 1, DOPO + 1)
     ] if percorsi else []
+    # I percorsi dei singoli eventi, se pochi: con venti eventi la media
+    # nasconde proprio cio' che si vuole vedere (due code che la trascinano).
+    singoli = [{"data": g.isoformat(), "valori": p} for g, p in zip(date_ev, percorsi, strict=True)] \
+        if 0 < len(percorsi) <= 40 else []
     a_orizzonte = _misura(a_h, date_h, orizzonte)
     base_m = _misura(base, date_base, orizzonte)
     stab = stabilita(a_h, date_h, base, date_base)
-    return {"percorso": percorso, "a_orizzonte": a_orizzonte, "base": base_m, "orizzonte": orizzonte,
-            **confronto(a_orizzonte, base_m, stab), "stabilita": stab, "istogramma": istogramma(a_h, base)}
+    return {"percorso": percorso, "singoli": singoli, "a_orizzonte": a_orizzonte, "base": base_m,
+            "orizzonte": orizzonte, **confronto(a_orizzonte, base_m, stab), "stabilita": stab,
+            "istogramma": istogramma(a_h, base), "elenco_casi": elenco_casi(date_h, a_h, orizzonte)}
 
 
 def _primo_da(date_: list[date], g: date) -> int:

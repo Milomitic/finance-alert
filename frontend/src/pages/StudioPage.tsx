@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
 import { Segmentato } from "@/components/ui/segmentato";
 import { Button } from "@/components/ui/button";
+import { ElencoCasi } from "@/components/studio/ElencoCasi";
+import { FraseEscursioni, GraficoPercorso, LegendaPercorso } from "@/components/studio/GraficoPercorso";
 
 /* ─── Studio: statistica storica di un simbolo (FA-157) ───────────────────
  *
@@ -274,8 +276,21 @@ function Risultato({ p, onEsempio }: {
           {p.soglia < 0 ? " o peggio" : " o più"} in {p.sedute} sedute.
         </p>
         <RigaVerdetto c={r} finestre={r.condizione.finestre} />
+        {r.percorso && r.percorso.length > 1 && r.condizione.casi > 0 && (
+          <div className="space-y-1">
+            {/* FA-194: il percorso, non solo il punto d'arrivo. */}
+            <GraficoPercorso percorso={r.percorso}
+              etichetta={`Rendimento cumulato di ${p.simbolo} nelle ${p.orizzonte} sedute dopo il movimento`} />
+            <LegendaPercorso conSingoli={false} />
+            {r.escursioni && <FraseEscursioni e={r.escursioni} orizzonte={p.orizzonte} />}
+          </div>
+        )}
         <TabellaMisure righe={[["Dopo il movimento", r.condizione], ["Base: tutte le finestre", r.base]]} />
         <Distribuzione cond={r.condizione} base={r.base} fasce={r.istogramma} />
+        {r.elenco_casi && (
+          <ElencoCasi casi={r.elenco_casi} totale={r.condizione.casi} episodi={r.condizione.finestre}
+            simbolo={p.simbolo} modello={p.modello} etichettaMossa="Mossa" />
+        )}
       </div>
     );
   }
@@ -318,17 +333,25 @@ function Risultato({ p, onEsempio }: {
         {r.eventi} {p.tipo === "macro" ? `rilasci di ${p.serie}` : "trimestrali passate"}; percorso medio di {p.simbolo}
         {" "}dalla chiusura della seduta precedente.
       </p>
-      {r.percorso.length > 0 && (
-        <div className="h-[220px]">
-          <GraficoSvg dati={r.percorso} x={(s) => (s.seduta > 0 ? `+${s.seduta}` : String(s.seduta))}
-            formatoY={(v) => pct(v, 1)} riferimenti={[{ y: 0 }]}
-            etichetta="Rendimento medio attorno all'evento, per seduta"
-            serie={[{ chiave: "media", nome: "Media", valore: (s) => s.media, colore: "hsl(var(--primary))", spessore: 2, punti: true }]} />
+      {r.percorso.length > 1 && (
+        <div className="space-y-1">
+          {/* FA-194 (D-86): banda, mediana e i singoli eventi, non solo la media. */}
+          <GraficoPercorso percorso={r.percorso} singoli={r.singoli} conBase={false}
+            giornoEvento={r.percorso.findIndex((s) => s.seduta === 0)}
+            etichetta={`Rendimento di ${p.simbolo} attorno all'evento, per seduta, dalla chiusura precedente`} />
+          <LegendaPercorso conSingoli={(r.singoli?.length ?? 0) > 0} conBase={false} />
+          <p className="text-xs text-muted-foreground">
+            {r.percorso[0].n ?? r.eventi} eventi in ogni seduta; la linea verticale è il giorno dell&apos;evento.
+          </p>
         </div>
       )}
       <RigaVerdetto c={r} finestre={r.a_orizzonte.finestre} />
       <TabellaMisure righe={[[`A ${r.orizzonte} sedute dall'evento`, r.a_orizzonte], ["Base: tutte le finestre", r.base]]} />
       <Distribuzione cond={r.a_orizzonte} base={r.base} fasce={r.istogramma} />
+      {r.elenco_casi && (
+        <ElencoCasi casi={r.elenco_casi} totale={r.a_orizzonte.casi} episodi={r.a_orizzonte.finestre}
+          simbolo={p.simbolo} modello={p.modello} />
+      )}
     </div>
   );
 }

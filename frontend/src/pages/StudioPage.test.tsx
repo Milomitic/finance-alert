@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -118,5 +118,30 @@ describe("StudioPage", () => {
       window.matchMedia = mm;
     }
   });
-});
 
+  it("il percorso con la discesa massima, e i casi uno per uno (FA-193, FA-194)", async () => {
+    risposte["/api/studio/dopo_movimento"] = {
+      simbolo: "AAPL", condizione: misura(0.03), base: misura(0.01), differenza: 0.02,
+      intervallo_differenza: [-0.01, 0.05], verdetto: "non_concludente",
+      parametri: { sedute: 5, soglia_pct: -10, orizzonte: 21 },
+      percorso: [0, 1, 2].map((k) => ({ seduta: k, media: 0.01 * k, mediana: 0.008 * k, p10: -0.02 * k, p90: 0.03 * k, base: 0.002 * k })),
+      escursioni: { mae_mediana: -0.041, mae_p10: -0.112, mfe_mediana: 0.065, mfe_p90: 0.2, casi: 12 },
+      elenco_casi: [
+        { data: "2025-04-07", esito: 0.05, episodio: 6, primo: false, mossa: -0.12 },
+        { data: "2025-04-04", esito: 0.08, episodio: 6, primo: true, mossa: -0.14 },
+        { data: "2020-03-12", esito: -0.03, episodio: 5, primo: true, mossa: -0.2 },
+      ],
+    };
+    monta("/studio?simbolo=AAPL&modello=dopo_movimento&soglia=-10&sedute=5&orizzonte=21");
+    expect(await screen.findByText(/nel caso tipico la discesa massima è stata/)).toBeInTheDocument();
+    expect(screen.getByText("−4,1%")).toBeInTheDocument();
+    expect(screen.getByText("−11,2%")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Rendimento cumulato di AAPL nelle 21 sedute/ })).toBeInTheDocument();
+    expect(screen.getByText("I 12 casi (6 episodi)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Esporta CSV/ })).toBeInTheDocument();
+    expect(screen.getByText("2020-03-12")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Solo il primo giorno di ogni episodio/));
+    expect(screen.queryByText("2025-04-07")).toBeNull();
+    expect(screen.getByText("2025-04-04")).toBeInTheDocument();
+  });
+});
