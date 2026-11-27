@@ -184,13 +184,13 @@ const ROWS: MatrixRowDef[] = [
   },
   {
     label: "MACD",
-    hint: "Linea MACD vs signal: sopra = bullish, sotto = bearish. Backend espone solo il tono binario (no intensità).",
+    hint: "La linea MACD rispetto alla sua media (signal): sopra = rialzo, sotto = ribasso. Solo il verso, senza intensità.",
     cell: (it) => ({
       text:
         it.macd_tone === "bullish"
-          ? "bull"
+          ? "rialzo"
           : it.macd_tone === "bearish"
-            ? "bear"
+            ? "ribasso"
             : "—",
       score: macdScore(it.macd_tone),
     }),

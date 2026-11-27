@@ -39,8 +39,11 @@ describe("MarketDetailPage — la quotazione fuori orario", () => {
     monta();
     expect(screen.getByText("Future NQ=F")).toBeInTheDocument();
     expect(screen.queryByText("Ultima chiusura")).toBeNull();
-    expect(screen.getByText(/\+2[.,]68%/)).toBeInTheDocument();
-    expect(screen.getByText(/Prev close/)).toBeInTheDocument();
+    // FA-183: numeri all'italiano, etichette in italiano.
+    expect(screen.getByText("+2,68%")).toBeInTheDocument();
+    expect(screen.getByText(/Chiusura prec\./)).toBeInTheDocument();
+    expect(screen.getByText("25.962,25")).toBeInTheDocument();
+    expect(screen.queryByText(/Prev close|LIVE/)).toBeNull();
   });
 
   it("senza future resta l'ultima chiusura", () => {

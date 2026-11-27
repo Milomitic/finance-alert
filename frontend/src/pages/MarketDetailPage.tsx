@@ -33,6 +33,8 @@ import { useMarketDetail } from "@/hooks/useMarketDetail";
 import { newsDelMercato } from "@/lib/schedeStrumento";
 import { cn } from "@/lib/utils";
 import { useTitoloScheda } from "@/hooks/useTitoloScheda";
+import { percentuale } from "@/lib/numeri";
+import { nomeCategoria, prezzoMercato } from "@/lib/prezzoMercato";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { QueryError } from "@/components/ui/query-error";
 
@@ -162,12 +164,6 @@ export default function MarketDetailPage() {
     .map((b) => b.close)
     .filter((c) => Number.isFinite(c));
   const headerSparkUp = (changePct ?? 0) >= 0;
-  const categoryLabel =
-    d.category === "index"
-      ? "Indice di mercato"
-      : d.category === "commodity"
-        ? "Materia prima"
-        : "Criptovaluta";
 
   return (
     <div className="space-y-3">
@@ -192,7 +188,11 @@ export default function MarketDetailPage() {
       <Card className={cn("relative overflow-hidden border-border/60", tone.bg)}>
         <HeaderSparkline closes={headerCloses} up={headerSparkUp} />
         <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 z-10", tone.stripe)} aria-hidden />
-        <CardContent className="relative z-10 p-5 pl-7 flex items-start gap-6 flex-wrap">
+        {/* FA-183: su telefono identita' e prezzo uno SOTTO l'altro. Affiancati
+            a 375 px il simbolo e il prezzo si toccavano e il nome diventava
+            «S&P …». */}
+        <CardContent className="relative z-10 p-4 pl-6 sm:p-5 sm:pl-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+          <div className="flex-1 min-w-0 flex items-start gap-4">
           <span className="shrink-0 inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-white dark:bg-zinc-900 border border-border/60 shadow-sm">
             {symbolIcon ? (
               <symbolIcon.Component className={cn("h-8 w-8", symbolIcon.color)} />
@@ -200,23 +200,16 @@ export default function MarketDetailPage() {
               <FallbackIcon className="h-8 w-8 text-muted-foreground" />
             )}
           </span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="text-4xl sm:text-5xl font-bold tracking-tight tabular-nums leading-none">
-                {d.symbol}
-              </span>
-              <span
-                className="text-xl text-foreground/80 font-medium truncate"
-                title={d.name}
-              >
-                {d.name}
-              </span>
+          <div className="min-w-0">
+            <div className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight break-words">
+              {d.name}
             </div>
+            <div className="mt-0.5 font-mono text-sm text-muted-foreground">{d.symbol}</div>
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               {/* Category tag now hosts the country flag (when known) so
                   the listing geography is anchored to the asset class
                   chip — same pattern as the stock-detail exchange tag. */}
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/70 dark:bg-muted/40 px-2.5 py-1 text-sm font-medium">
                 {d.flag && (
                   <img
                     src={`/flags/${d.flag}.svg`}
@@ -228,23 +221,26 @@ export default function MarketDetailPage() {
                     aria-hidden
                   />
                 )}
-                {d.category}
+                {nomeCategoria(d.category)}
               </span>
-              <span className="text-sm text-muted-foreground">{categoryLabel}</span>
+              {d.quote?.currency && (
+                <span className="text-sm text-muted-foreground">{d.quote.currency}</span>
+              )}
             </div>
           </div>
-          <div className="text-right tabular-nums shrink-0 flex flex-col gap-1 items-end">
+          </div>
+          <div className="tabular-nums shrink-0 flex flex-col gap-1 items-start sm:items-end sm:text-right">
             <div className="flex items-center gap-1.5 text-sm uppercase tracking-wide">
               {isLive ? (
                 <span
                   className="inline-flex items-center gap-1 text-emerald-800 dark:text-emerald-300 font-semibold"
-                  title="Mercato aperto · prezzo live"
+                  title="Borsa aperta: il prezzo si aggiorna in seduta"
                 >
                   <span className="relative inline-flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
-                  LIVE
+                  In seduta
                 </span>
               ) : sulFuture ? (
                 <span
@@ -261,8 +257,8 @@ export default function MarketDetailPage() {
             </div>
             <FlashValue
               value={livePrice}
-              format={(v) => formatMarketPrice(v, d.category)}
-              className="text-5xl font-bold leading-none"
+              format={(v) => prezzoMercato(v, d.category)}
+              className="text-4xl sm:text-5xl font-bold leading-none"
             />
             {changePct != null && (
               <div
@@ -272,10 +268,7 @@ export default function MarketDetailPage() {
                 )}
               >
                 <span className="text-lg">{tone.arrow}</span>
-                <span>
-                  {changePct >= 0 ? "+" : ""}
-                  {changePct.toFixed(2)}%
-                </span>
+                <span>{percentuale(changePct)}</span>
               </div>
             )}
             {/* Prev close caption when live — same UX as stock detail. */}
@@ -284,15 +277,10 @@ export default function MarketDetailPage() {
                 className="text-[0.7059rem] uppercase tracking-wider text-muted-foreground mt-0.5"
                 title="Chiusura della sessione precedente"
               >
-                Prev close:{" "}
+                Chiusura prec.{" "}
                 <span className="text-foreground/80 font-semibold tabular-nums">
-                  {formatMarketPrice(d.quote.prev_close, d.category)}
+                  {prezzoMercato(d.quote.prev_close, d.category)}
                 </span>
-              </div>
-            )}
-            {d.quote?.currency && (
-              <div className="text-[0.6765rem] uppercase tracking-wider text-muted-foreground mt-0.5">
-                {d.quote.currency}
               </div>
             )}
           </div>
@@ -389,66 +377,22 @@ export default function MarketDetailPage() {
             </div>
             <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
               <KpiCell
-                label="52W high (chiusure)"
-                value={d.high_52w != null ? formatMarketPrice(d.high_52w, d.category) : "—"}
+                label="Massimo a 52 settimane"
+                value={d.high_52w != null ? prezzoMercato(d.high_52w, d.category) : "—"}
               />
               <KpiCell
-                label="52W low (chiusure)"
-                value={d.low_52w != null ? formatMarketPrice(d.low_52w, d.category) : "—"}
+                label="Minimo a 52 settimane"
+                value={d.low_52w != null ? prezzoMercato(d.low_52w, d.category) : "—"}
               />
               <KpiCell
-                label="Range high"
-                value={d.high_window != null ? formatMarketPrice(d.high_window, d.category) : "—"}
+                label="Massimo del grafico"
+                value={d.high_window != null ? prezzoMercato(d.high_window, d.category) : "—"}
               />
               <KpiCell
-                label="Range low"
-                value={d.low_window != null ? formatMarketPrice(d.low_window, d.category) : "—"}
+                label="Minimo del grafico"
+                value={d.low_window != null ? prezzoMercato(d.low_window, d.category) : "—"}
               />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-[0.7059rem] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
-              Meta
-            </div>
-            <dl className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Simbolo</dt>
-                <dd className="font-mono">{d.symbol}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Categoria</dt>
-                <dd className="capitalize">{d.category}</dd>
-              </div>
-              {d.quote?.currency && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Valuta</dt>
-                  <dd className="font-semibold">{d.quote.currency}</dd>
-                </div>
-              )}
-              {d.quote?.market_state && (
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Stato mercato</dt>
-                  <dd className={cn(
-                    "font-semibold",
-                    d.quote.market_state === "OPEN"
-                      ? TESTO_SU
-                      : "text-muted-foreground",
-                  )}>
-                    {d.quote.market_state}
-                  </dd>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Range attivo</dt>
-                <dd className="font-semibold">{d.range_key}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Bar nel chart</dt>
-                <dd className="tabular-nums">{d.bars.length.toLocaleString("it-IT")}</dd>
-              </div>
-            </dl>
           </CardContent>
         </Card>
       </div>
@@ -481,14 +425,3 @@ function KpiCell({ label, value }: { label: string; value: string }) {
 
 /** Format a market price by category. Indices and commodities at 2dp;
  *  crypto at variable precision (BTC at 0dp, low-cap cryptos at 4dp). */
-function formatMarketPrice(v: number, category: string): string {
-  if (!Number.isFinite(v)) return "—";
-  const abs = Math.abs(v);
-  if (category === "crypto") {
-    if (abs >= 1000) return v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
-    if (abs >= 1) return v.toFixed(2);
-    return v.toFixed(4);
-  }
-  if (abs >= 1000) return v.toLocaleString("it-IT", { maximumFractionDigits: 0 });
-  return v.toFixed(2);
-}

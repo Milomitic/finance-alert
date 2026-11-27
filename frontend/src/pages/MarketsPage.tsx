@@ -6,6 +6,8 @@ import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
 import { useLiveAssets, type LiveAsset } from "@/hooks/useLiveAssets";
 import { coloreDirezione } from "@/lib/coloriGrafico";
+import { percentuale } from "@/lib/numeri";
+import { prezzoMercato } from "@/lib/prezzoMercato";
 import { TESTO_GIU, TESTO_SU } from "@/lib/toni";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +24,6 @@ const CATEGORIE: { id: LiveAsset["category"]; titolo: string }[] = [
   { id: "crypto", titolo: "Cripto" },
 ];
 
-const NUM = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 });
 
 function Linea({ serie }: { serie: number[] | null }) {
   if (!serie || serie.length < 2) return <span className="inline-block w-20" aria-hidden />;
@@ -39,26 +40,38 @@ function Linea({ serie }: { serie: number[] | null }) {
   );
 }
 
+/* FA-183: la bandiera e' un'immagine, non il codice paese stampato come
+ * testo («us Nasdaq…», che nella colonna stretta diventava «us…»); il nome ha
+ * la riga intera e il prezzo sta SOTTO la variazione, cosi' su un telefono il
+ * nome non si riduce a due lettere. Il link porta sempre allo strumento
+ * (la pagina dell'indice mostra da sola il future fuori orario, FA-180). */
 function Riga({ a }: { a: LiveAsset }) {
   const q = a.quote;
   const ch = q?.change_pct ?? null;
   return (
     <li>
       <Link
-        to={`/markets/${encodeURIComponent(a.quote_symbol ?? a.symbol)}`}
+        to={`/markets/${encodeURIComponent(a.symbol)}`}
         className="flex items-center gap-3 rounded px-2 py-1.5 hover:bg-muted/50"
       >
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">
-            {a.flag && <span className="mr-1" aria-hidden>{a.flag}</span>}
-            {a.name}
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            {a.flag && (
+              <img src={`/flags/${a.flag}.svg`} alt="" width={18} height={12}
+                className="h-3 w-[18px] shrink-0 rounded-sm object-cover" />
+            )}
+            <span className="truncate">{a.name}</span>
           </span>
-          <span className="block text-xs text-muted-foreground">{a.symbol}</span>
+          <span className="block text-xs text-muted-foreground">
+            {a.symbol}{a.using_futures && a.quote_symbol ? ` · future ${a.quote_symbol}` : ""}
+          </span>
         </span>
         <Linea serie={a.history} />
-        <span className="w-24 shrink-0 text-right text-sm tabular-nums">{q?.price != null ? NUM.format(q.price) : "—"}</span>
-        <span className={cn("w-16 shrink-0 text-right text-sm font-semibold tabular-nums", ch == null ? "text-muted-foreground" : ch >= 0 ? TESTO_SU : TESTO_GIU)}>
-          {ch == null ? "—" : `${ch > 0 ? "+" : ch < 0 ? "−" : ""}${Math.abs(ch).toFixed(2).replace(".", ",")}%`}
+        <span className="flex w-24 shrink-0 flex-col items-end tabular-nums">
+          <span className="text-sm">{prezzoMercato(q?.price, a.category)}</span>
+          <span className={cn("text-xs font-semibold", ch == null ? "text-muted-foreground" : ch >= 0 ? TESTO_SU : TESTO_GIU)}>
+            {percentuale(ch)}
+          </span>
         </span>
       </Link>
     </li>
