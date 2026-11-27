@@ -35,6 +35,7 @@ const JOB_LABEL: Record<string, string> = {
   retention: "Retention scan_runs",
   live_movers_sweep: "Sweep live top movers",
   riscalda_cache_home: "Risposte della home sempre pronte",
+  riscalda_dettagli: "Pagine dei titoli seguiti e degli indici sempre pronte",
   repair_ohlcv_gaps: "Riparazione buchi OHLCV",
   kpi_rollup: "Rollup KPI giornaliero",
   health_probes_fast: "Probe salute (set veloce)",

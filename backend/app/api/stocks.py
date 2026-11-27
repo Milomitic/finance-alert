@@ -1,14 +1,16 @@
 """Stock router."""
 import datetime as dt
+import threading
 from datetime import UTC
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from loguru import logger
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache_fresca import CacheFresca
 from app.core.errors import UpstreamError
 from app.core.visibility import visible_country_clause
 from app.models import Index, OhlcvDaily, Stock, StockIndex, User
@@ -441,9 +443,72 @@ def get_stock_detail(
         range = LEGACY_TF_MAP[range]
     if range not in ("5m", "30m", "1h", "1d", "1w", "1m"):
         raise HTTPException(status_code=422, detail="invalid timeframe")
+    if range in _GIORNALIERI:
+        cache = _cache_dettaglio(ticker, range)
+        corpo = cache.leggi() if cache.accesa() else costruisci_dettaglio(db, ticker, range)
+    else:
+        corpo = costruisci_dettaglio(db, ticker, range)
+    if corpo is None:
+        raise HTTPException(status_code=404, detail="Ticker not found")
+    return Response(content=corpo, media_type="application/json")
+
+
+# ─── Il dettaglio di un titolo, pronto in memoria (FA-181) ─────────────────
+#
+# Misurato in produzione il 27/11: 1,27 MB di JSON (l'87% sono dieci serie di
+# indicatori su dieci anni), 0,5 s di calcolo, 1,1 s con la compressione, e a
+# freddo fino a 3 s. Ricalcolato a ogni apertura sopra barre che cambiano solo
+# a fine scansione. Ora i byte gia' serializzati restano in memoria: entro due
+# minuti escono subito, poi esce l'ultima risposta e una sola la ricalcola
+# dietro; oltre 15 minuti — la stessa eta' della cache delle barre — si
+# ricalcola sul posto. Solo i timeframe giornalieri: gli intraday sono dati
+# vivi con la loro cache.
+
+_GIORNALIERI = ("1d", "1w", "1m")
+_DETTAGLIO_ETA_S = 120
+_DETTAGLIO_LIMITE_S = 15 * 60
+_DETTAGLIO_MAX_VOCI = 300
+_CACHE_DETTAGLI: dict[tuple[str, str], CacheFresca[bytes | None]] = {}
+_CACHE_DETTAGLI_LOCK = threading.Lock()
+
+
+def _cache_dettaglio(ticker: str, range_key: str) -> CacheFresca[bytes | None]:
+    chiave = (ticker, range_key)
+    with _CACHE_DETTAGLI_LOCK:
+        cache = _CACHE_DETTAGLI.get(chiave)
+        if cache is None:
+            if len(_CACHE_DETTAGLI) >= _DETTAGLIO_MAX_VOCI:
+                # La piu' vecchia inserita: i dict conservano l'ordine.
+                _CACHE_DETTAGLI.pop(next(iter(_CACHE_DETTAGLI)))
+            cache = CacheFresca(
+                f"dettaglio-{ticker}-{range_key}", _DETTAGLIO_ETA_S,
+                lambda: _costruisci_in_sessione(ticker, range_key),
+                eta_limite_s=_DETTAGLIO_LIMITE_S,
+            )
+            _CACHE_DETTAGLI[chiave] = cache
+        return cache
+
+
+def _costruisci_in_sessione(ticker: str, range_key: str) -> bytes | None:
+    """La cache ricalcola anche in un thread suo, fuori dalla richiesta:
+    serve una sessione propria."""
+    from app.core import db as core_db  # noqa: PLC0415
+
+    with core_db.SessionLocal() as db:
+        return costruisci_dettaglio(db, ticker, range_key)
+
+
+def riscalda_dettaglio(ticker: str, range_key: str = "1d") -> None:
+    """Per il job: ricalcola e conserva il dettaglio di un titolo."""
+    _cache_dettaglio(ticker, range_key).rinfresca()
+
+
+def costruisci_dettaglio(db: Session, ticker: str, range_key: str) -> bytes | None:
+    """Il corpo JSON del dettaglio, o None se il titolo non c'e'."""
+    range = range_key
     detail = stock_detail_service.get_detail(db, ticker, range_key=range)
     if detail is None:
-        raise HTTPException(status_code=404, detail="Ticker not found")
+        return None
     return StockDetailOut(
         # ⚠️ `_con_appartenenze`, non una `model_validate` nuda: quella
         # lasciava `in_indices` e `in_etfs` ai loro default vuoti, e la pagina
@@ -492,7 +557,7 @@ def get_stock_detail(
         # ricostruzione a mano che stava qui ometteva `currency` e l'intero
         # blocco esito.
         alerts_history=[AlertOut(**a) for a in detail.alerts_history],
-    )
+    ).model_dump_json().encode()
 
 
 #: Tetto di un intervallo di date: ~24 anni di sedute, oltre la storia che il

@@ -32,6 +32,7 @@ from app.scheduler.jobs.repair_ohlcv_gaps import run_repair_ohlcv_gaps
 from app.scheduler.jobs.retention import run_retention
 from app.scheduler.jobs.riallinea_esiti import run_riallinea_esiti
 from app.scheduler.jobs.riscalda_cache_home import run_riscalda_cache_home
+from app.scheduler.jobs.riscalda_dettagli import run_riscalda_dettagli
 from app.scheduler.jobs.scan_alerts import run_scan_alerts
 from app.scheduler.jobs.send_digest import run_send_digest
 from app.scheduler.jobs.sincronizza_etoro import (
@@ -232,6 +233,16 @@ def get_scheduler() -> BackgroundScheduler:
             run_riscalda_cache_home,
             trigger=IntervalTrigger(seconds=60),
             id="riscalda_cache_home",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # FA-181: le pagine di dettaglio dei titoli seguiti e degli indici
+        # sempre pronte (fino a 3-3,7 s a freddo).
+        _scheduler.add_job(
+            run_riscalda_dettagli,
+            trigger=IntervalTrigger(minutes=5),
+            id="riscalda_dettagli",
             replace_existing=True,
             max_instances=1,
             coalesce=True,

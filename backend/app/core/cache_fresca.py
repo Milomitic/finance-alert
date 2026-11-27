@@ -33,9 +33,16 @@ def _in_test() -> bool:
 
 
 class CacheFresca(Generic[T]):
-    def __init__(self, nome: str, eta_massima_s: float, calcola: Callable[[], T], *, attiva: bool | None = None):
+    def __init__(
+        self, nome: str, eta_massima_s: float, calcola: Callable[[], T], *,
+        attiva: bool | None = None, eta_limite_s: float | None = None,
+    ):
         self.nome = nome
         self.eta_massima_s = eta_massima_s
+        # Oltre questa eta' il vecchio NON si serve: si ricalcola sul posto.
+        # Senza, una voce rimasta in memoria per ore uscirebbe una volta come
+        # se fosse fresca (FA-181).
+        self.eta_limite_s = eta_limite_s
         self._calcola = calcola
         self._attiva = attiva
         self._valore: T | None = None
@@ -71,6 +78,11 @@ class CacheFresca(Generic[T]):
             return self._calcola()
         with self._lock:
             valore, quando = self._valore, self._quando
+            if (
+                valore is not None and self.eta_limite_s is not None
+                and time.monotonic() - quando > self.eta_limite_s
+            ):
+                valore = None
             scaduta = valore is not None and time.monotonic() - quando > self.eta_massima_s
             parti = scaduta and not self._in_corso
             if parti:

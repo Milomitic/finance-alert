@@ -187,8 +187,13 @@ def _warm_home_cache_on_boot() -> None:
         return
     try:
         from app.scheduler.jobs.riscalda_cache_home import run_riscalda_cache_home
+        from app.scheduler.jobs.riscalda_dettagli import run_riscalda_dettagli
 
-        threading.Thread(target=run_riscalda_cache_home, name="home-boot-warm", daemon=True).start()
+        def riscalda() -> None:
+            run_riscalda_cache_home()
+            run_riscalda_dettagli()  # FA-181, dopo la home: e' la pagina che si apre prima
+
+        threading.Thread(target=riscalda, name="home-boot-warm", daemon=True).start()
     except Exception as exc:  # noqa: BLE001 — never block startup
         logger.warning(f"[startup] riscaldamento della home saltato: {exc}")
 
@@ -654,7 +659,9 @@ Instrumentator().add(
 # Compress every response over 1KB: :8000 serves both the SPA bundle (~1MB of
 # JS) and fat JSON payloads (market-summary ~264KB, stock detail ~1.4MB) that
 # previously travelled uncompressed. gzip cuts these 3-10x for ~ms of CPU.
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+# Livello 6, non il 9 di default (FA-181): sul dettaglio di un titolo (1,27
+# MB) il 9 costava 165 ms per risparmiare 16 KB rispetto al 6 (38 ms).
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
 # Reject requests whose Host header we don't recognise (M4). Starlette rebuilds
 # request.url from the Host header, so an unvalidated Host is an injection point.

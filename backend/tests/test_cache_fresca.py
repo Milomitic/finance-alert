@@ -97,3 +97,13 @@ def test_il_riepilogo_si_calcola_anche_fuori_da_una_richiesta(db, monkeypatch):
     monkeypatch.setattr(dashboard, "SessionLocal", lambda: contextlib.nullcontext(db))
     r = dashboard._riepilogo_da_sessione()
     assert r.kpis is not None
+
+
+def test_oltre_il_limite_non_serve_il_vecchio_ma_ricalcola_sul_posto():
+    """FA-181: una voce dimenticata per ore non esce come se fosse fresca."""
+    n, calcola = _contatore()
+    c = CacheFresca("t", 0.01, calcola, attiva=True, eta_limite_s=0.02)
+    assert c.leggi() == 1
+    time.sleep(0.04)
+    assert c.leggi() == 2            # sul posto, non il vecchio
+    assert n["v"] == 2
