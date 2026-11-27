@@ -70,13 +70,15 @@ _STATE: dict = {
 
 
 def us_market_open_now(now_et: datetime | None = None) -> bool:
-    """Best-effort: US regular session is Mon-Fri 09:30-16:00 ET.
-    Holidays not modelled (acceptable — worst case the card shows on a
-    holiday with the prior session's pre-market, still informative)."""
+    """US regular session, Mon-Fri 09:30-16:00 ET; FA-205: closed on NYSE
+    holidays and until 13:00 on early-close days."""
+    from app.core import chiusure_borsa  # noqa: PLC0415
+
     now_et = (now_et or datetime.now(_ET)).astimezone(_ET)
-    if now_et.weekday() >= 5:  # Sat/Sun
+    if now_et.weekday() >= 5 or chiusure_borsa.chiusa("US", now_et.date()):
         return False
-    return _RTH_OPEN <= now_et.time() < _RTH_CLOSE
+    chiusura = chiusure_borsa.chiusura_anticipata("US", now_et.date()) or _RTH_CLOSE
+    return _RTH_OPEN <= now_et.time() < chiusura
 
 
 def _candidate_us_tickers(db: Session) -> list[str]:

@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 
+from app.core import chiusure_borsa
 from app.services import live_quote_l2
 from app.services.currency_units import is_minor_unit, scale_minor_to_major
 
@@ -135,18 +136,21 @@ def exchange_timezone(ticker: str) -> str:
 
 def _is_market_open(ticker: str, now_utc: datetime | None = None) -> bool:
     """True iff the exchange of `ticker` is currently in regular trading hours.
-    No holiday calendar — only weekday + time-of-day check, but DST-aware:
-    we convert `now` into the exchange's local timezone and compare against
-    its local open/close, so the LIVE flag flips exactly at the local bell
-    year-round (no summer/winter 1-hour drift)."""
+    DST-aware: we convert `now` into the exchange's local timezone and compare
+    against its local open/close, so the LIVE flag flips exactly at the local
+    bell year-round. FA-205: festivita' e chiusure anticipate dove il
+    calendario le conosce (oggi NYSE); altrove solo giorno e ora."""
     now = now_utc or datetime.now(UTC)
     region = _exchange_region(ticker)
     tzname, (oh, om), (ch, cm) = _MARKET_HOURS_LOCAL[region]
     local = now.astimezone(_tz(tzname))
     if local.weekday() >= 5:   # Sat/Sun in the exchange's local time
         return False
+    if chiusure_borsa.chiusa(region, local.date()):
+        return False
+    chiusura = chiusure_borsa.chiusura_anticipata(region, local.date()) or dtime(ch, cm)
     cur = local.time()
-    return dtime(oh, om) <= cur <= dtime(ch, cm)
+    return dtime(oh, om) <= cur <= chiusura
 
 
 # US pre-market session: 4:00–9:30 ET (local). Pre/post-market data is
@@ -164,7 +168,7 @@ def _is_premarket(ticker: str, now_utc: datetime | None = None) -> bool:
     now = now_utc or datetime.now(UTC)
     tzname, (oh, om), _close = _MARKET_HOURS_LOCAL["US"]
     local = now.astimezone(_tz(tzname))
-    if local.weekday() >= 5:
+    if local.weekday() >= 5 or chiusure_borsa.chiusa("US", local.date()):
         return False
     return _US_PREMARKET_START_LOCAL <= local.time() < dtime(oh, om)
 
