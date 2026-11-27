@@ -74,10 +74,10 @@ def riga_panoramica(simbolo: str, nome: str, categoria: str, bandiera: str | Non
 
 
 def calcola_panoramica() -> dict:
-    from app.api.market import LIVE_ASSET_DEFINITIONS  # noqa: PLC0415
+    from app.api.market import TUTTI_I_MERCATI  # noqa: PLC0415
 
     righe = []
-    for simbolo, nome, categoria, bandiera, _future in LIVE_ASSET_DEFINITIONS:
+    for simbolo, nome, categoria, bandiera, _future in TUTTI_I_MERCATI:
         try:
             r = riga_panoramica(simbolo, nome, categoria, bandiera)
         except Exception as e:  # noqa: BLE001 — uno strumento non ferma gli altri
@@ -274,6 +274,210 @@ def confronto(db, simboli: list[str], periodo: str) -> dict:
         "riepilogo": riepilogo,
         "dal": partenza.isoformat(), "al": giorni_validi[-1].isoformat(),
     }
+
+
+# ─── FA-188: il contesto di mercato ────────────────────────────────────────
+
+#: Quanti giorni di archivio dell'ampiezza servono prima di dire un percentile.
+MIN_GIORNI_PERCENTILE_AMPIEZZA = 250
+
+
+def percentile_di(valore: float, storia: list[float]) -> float | None:
+    """La quota di valori della storia <= valore, in percento (0-100). Con i
+    pari che contano a meta': un valore uguale a tutti sta al 50, non al 100."""
+    if not storia:
+        return None
+    sotto = sum(1 for v in storia if v < valore)
+    pari = sum(1 for v in storia if v == valore)
+    return (sotto + pari / 2) / len(storia) * 100.0
+
+
+def _tessera_mercato(chiave: str, nome: str, simbolo: str, dal_anno: int, nota: str | None = None) -> dict | None:
+    s = _serie(simbolo)
+    if s is None:
+        return None
+    date_, c = s
+    storia = [v for g, v in zip(date_, c, strict=True) if g.year >= dal_anno]
+    un_mese_fa = rd._ultima_chiusura_entro(date_, c, date_[-1] - timedelta(days=30))
+    inizio = next((g for g in date_ if g.year >= dal_anno), date_[0])
+    return {
+        "chiave": chiave, "nome": nome, "valore": c[-1], "unita": "",
+        "prima": un_mese_fa, "variazione_relativa": (c[-1] / un_mese_fa - 1.0) if un_mese_fa else None,
+        "percentile": percentile_di(c[-1], storia), "percentile_dal": inizio.isoformat(),
+        "serie": c[-252:], "data": date_[-1].isoformat(), "nota": nota, "simbolo": simbolo,
+    }
+
+
+def _osservazioni(db, fred_id: str) -> list[tuple[date, float]]:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.models import MacroObservation, MacroSeries  # noqa: PLC0415
+
+    return [(g, float(v)) for g, v in db.execute(
+        select(MacroObservation.date, MacroObservation.value)
+        .join(MacroSeries, MacroSeries.id == MacroObservation.series_id)
+        .where(MacroSeries.fred_series_id == fred_id, MacroObservation.value.is_not(None))
+        .order_by(MacroObservation.date)
+    ).all()]
+
+
+def _tessera_tasso(db, chiave: str, nome: str, fred_id: str, nota: str | None = None) -> dict | None:
+    obs = _osservazioni(db, fred_id)
+    if not obs:
+        return None
+    ultimo_g, ultimo = obs[-1]
+    mese = [v for g, v in obs if g <= ultimo_g - timedelta(days=30)]
+    return {
+        "chiave": chiave, "nome": nome, "valore": ultimo, "unita": "%",
+        "prima": mese[-1] if mese else None, "variazione_relativa": None,
+        "percentile": percentile_di(ultimo, [v for _g, v in obs]), "percentile_dal": obs[0][0].isoformat(),
+        "serie": [v for _g, v in obs][-252:], "data": ultimo_g.isoformat(), "nota": nota, "simbolo": None,
+    }
+
+
+def _tessera_curva(db) -> dict | None:
+    dieci, due = dict(_osservazioni(db, "DGS10")), dict(_osservazioni(db, "DGS2"))
+    comuni = sorted(set(dieci) & set(due))
+    if not comuni:
+        return None
+    diff = [(g, dieci[g] - due[g]) for g in comuni]
+    ultimo_g, ultimo = diff[-1]
+    mese = [v for g, v in diff if g <= ultimo_g - timedelta(days=30)]
+    return {
+        "chiave": "curva", "nome": "Tassi USA 10 anni meno 2 anni", "valore": ultimo, "unita": "%",
+        "prima": mese[-1] if mese else None, "variazione_relativa": None,
+        "percentile": percentile_di(ultimo, [v for _g, v in diff]), "percentile_dal": comuni[0].isoformat(),
+        "serie": [v for _g, v in diff][-252:], "data": ultimo_g.isoformat(),
+        "nota": f"10 anni {dieci[ultimo_g]:.2f}%, 2 anni {due[ultimo_g]:.2f}%".replace(".", ","), "simbolo": None,
+    }
+
+
+def _tessera_ampiezza(db) -> dict | None:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.models.ampiezza_giornaliera import UNIVERSO, AmpiezzaGiornaliera  # noqa: PLC0415
+    from app.services import market_stats_service  # noqa: PLC0415
+
+    _snap, payload = market_stats_service.get_latest_snapshot_payload(db)
+    valore = (payload or {}).get("global", {}).get("pct_above_ema200")
+    if valore is None:
+        return None
+    storia = list(db.execute(
+        select(AmpiezzaGiornaliera.giorno, AmpiezzaGiornaliera.sopra_ema200_pct)
+        .where(AmpiezzaGiornaliera.ambito == UNIVERSO, AmpiezzaGiornaliera.sopra_ema200_pct.is_not(None))
+        .order_by(AmpiezzaGiornaliera.giorno)
+    ).all())
+    giorni = len(storia)
+    abbastanza = giorni >= MIN_GIORNI_PERCENTILE_AMPIEZZA
+    return {
+        "chiave": "ampiezza", "nome": "Titoli sopra la media a 200", "valore": float(valore), "unita": "%",
+        "prima": None, "variazione_relativa": None,
+        "percentile": percentile_di(float(valore), [float(v) for _g, v in storia]) if abbastanza else None,
+        "percentile_dal": storia[0][0].isoformat() if (abbastanza and storia) else None,
+        "serie": [float(v) for _g, v in storia][-252:], "data": None,
+        "nota": None if abbastanza else f"Archivio dal {storia[0][0].strftime('%d/%m/%Y')}: {giorni} {'giorno' if giorni == 1 else 'giorni'}, il percentile arriva con un anno."
+        if storia else "L'archivio dell'ampiezza comincia con la prossima scansione.",
+        "simbolo": None,
+    }
+
+
+def contesto(db) -> dict:
+    """FA-188: le tessere del contesto. Una fonte che manca toglie la sua
+    tessera, non le altre. Descrive la situazione, non la prevede."""
+    costruttori = [
+        lambda: _tessera_mercato("vix", "VIX, volatilita' attesa", "^VIX", 1990),
+        lambda: _tessera_curva(db),
+        lambda: _tessera_tasso(db, "fed", "Fed, tasso guida", "DFEDTARU", "estremo superiore dell'intervallo"),
+        lambda: _tessera_tasso(db, "bce", "BCE, depositi", "ECBDFR"),
+        lambda: _tessera_ampiezza(db),
+        lambda: _tessera_mercato("dollaro", "Indice del dollaro", "DX-Y.NYB", 2000),
+    ]
+    tessere = []
+    for c in costruttori:
+        try:
+            t = c()
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[contesto] tessera saltata: {e}")
+            t = None
+        if t is not None:
+            tessere.append(t)
+    return {"tessere": tessere}
+
+
+# ─── FA-189: le correlazioni fra mercati ───────────────────────────────────
+
+#: Sotto queste date comuni una coppia resta vuota: una correlazione su poche
+#: sedute e' rumore che sembra un numero.
+MIN_DATE_COMUNI = 40
+
+
+def correlazione_coppia(a: dict[date, float], b: dict[date, float], sedute: int,
+                        fino_a: date | None = None) -> float | None:
+    """La correlazione dei rendimenti giornalieri sulle ultime `sedute` date
+    comuni alla COPPIA (non a tutti i mercati: con Tokyo e le cripto
+    l'intersezione di tutti butterebbe via meta' delle sedute), fino a
+    `fino_a` compreso. None sotto `MIN_DATE_COMUNI` o se una serie e' ferma."""
+    import numpy as np  # noqa: PLC0415
+
+    comuni = sorted(d for d in set(a) & set(b) if fino_a is None or d <= fino_a)[-sedute:]
+    if len(comuni) < MIN_DATE_COMUNI:
+        return None
+    x = np.array([a[d] for d in comuni])
+    y = np.array([b[d] for d in comuni])
+    if float(np.std(x)) == 0.0 or float(np.std(y)) == 0.0:
+        return None
+    return round(float(np.corrcoef(x, y)[0, 1]), 3)
+
+
+def _rendimenti_giornalieri(simbolo: str) -> dict[date, float] | None:
+    s = _serie(simbolo)
+    if s is None:
+        return None
+    date_, c = s
+    return {date_[i]: c[i] / c[i - 1] - 1.0 for i in range(1, len(c)) if c[i - 1] > 0}
+
+
+def correlazioni(sedute: int) -> dict:
+    """FA-189: la matrice delle correlazioni del paniere, e la stessa misura
+    di un anno prima (finestra che finisce 365 giorni prima dell'ultima data)."""
+    from app.api.market import TUTTI_I_MERCATI  # noqa: PLC0415
+
+    serie: dict[str, dict[date, float]] = {}
+    nomi: list[dict] = []
+    for simbolo, nome, categoria, _f, _fut in TUTTI_I_MERCATI:
+        try:
+            r = _rendimenti_giornalieri(simbolo)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[correlazioni] {simbolo}: {e}")
+            r = None
+        if r:
+            serie[simbolo] = r
+            nomi.append({"symbol": simbolo, "name": nome, "category": categoria})
+    if not serie:
+        return {"simboli": [], "matrice": [], "un_anno_fa": [], "sedute": sedute, "al": None}
+    ultima = max(max(v) for v in serie.values())
+    anno_prima = ultima - timedelta(days=365)
+    simboli = [n["symbol"] for n in nomi]
+    matrice, prima = [], []
+    for s1 in simboli:
+        riga, riga_prima = [], []
+        for s2 in simboli:
+            if s1 == s2:
+                riga.append(1.0)
+                riga_prima.append(1.0)
+            else:
+                riga.append(correlazione_coppia(serie[s1], serie[s2], sedute))
+                riga_prima.append(correlazione_coppia(serie[s1], serie[s2], sedute, anno_prima))
+        matrice.append(riga)
+        prima.append(riga_prima)
+    return {"simboli": nomi, "matrice": matrice, "un_anno_fa": prima, "sedute": sedute, "al": ultima.isoformat()}
+
+
+#: Le due finestre in cache: le serie cambiano a fine seduta.
+CACHE_CORRELAZIONI: dict[int, CacheFresca[dict]] = {
+    n: CacheFresca(f"correlazioni-{n}", 30 * 60, lambda n=n: correlazioni(n), eta_limite_s=6 * 3600)
+    for n in (60, 250)
+}
 
 
 def statistiche(simbolo: str, categoria: str) -> dict | None:

@@ -12,7 +12,7 @@ import type { LiveQuote } from "@/api/types";
 export interface LiveAsset {
   symbol: string;
   name: string;
-  category: "index" | "commodity" | "crypto";
+  category: "index" | "commodity" | "crypto" | "fx";
   flag: string | null;
   quote: LiveQuote | null;
   /** ~22-30 trailing daily closes for the inline sparkline. `null` when
@@ -46,5 +46,17 @@ export function useLiveAssets({ attivo = true }: { attivo?: boolean } = {}) {
     refetchInterval: 15_000,
     refetchIntervalInBackground: false,
     staleTime: 5_000,
+  });
+}
+
+/** FA-190: i mercati che la home non mostra (Russell, DAX, CAC, FTSE 100,
+ *  KOSPI, rame, dollaro, euro, yen), solo per la pagina Mercati. */
+export function useMercatiEstesi() {
+  return useQuery({
+    queryKey: ["markets", "estesi"],
+    queryFn: ({ signal }) => api<LiveAssetsResponse>("/api/markets/estesi", { signal }),
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    staleTime: 10_000,
   });
 }

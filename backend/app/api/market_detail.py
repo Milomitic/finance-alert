@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.api.indicatori_compatti import Formato, serie_compatte
-from app.api.market import LIVE_ASSET_DEFINITIONS, quotazione_da_mostrare
+from app.api.market import CACHE_ESTESI, TUTTI_I_MERCATI, LiveAssetsOut, quotazione_da_mostrare
 from app.models import User
 from app.services import live_quote_service, market_detail_service, mercati_service
 
@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/markets", tags=["markets"])
 # is unused here so we discard it with `_`.
 _LIVE_META: dict[str, tuple[str, str, str | None]] = {
     symbol: (name, category, flag)
-    for (symbol, name, category, flag, _) in LIVE_ASSET_DEFINITIONS
+    for (symbol, name, category, flag, _) in TUTTI_I_MERCATI
 }
 # Also accept the index E-mini FUTURES symbols (ES=F, NQ=F, …) as valid
 # detail targets: the dashboard's "Mercati live" card links the row to the
@@ -46,13 +46,13 @@ _LIVE_META: dict[str, tuple[str, str, str | None]] = {
 # detail must resolve the same instrument (otherwise the card's ~30.5k
 # Nasdaq futures price would open a ~25k cash-index detail — the mismatch
 # the user reported). Labeled "(futures)" + the index's category/flag.
-for _sym, _name, _cat, _flag, _fut in LIVE_ASSET_DEFINITIONS:
+for _sym, _name, _cat, _flag, _fut in TUTTI_I_MERCATI:
     if _fut and _fut not in _LIVE_META:
         _LIVE_META[_fut] = (f"{_name} (futures)", _cat, _flag)
 
 #: L'indice cash -> il suo future, per mostrare in pagina la STESSA quotazione
 #: della home a cash chiuso (FA-180).
-_FUTURE_DI: dict[str, str] = {s: f for (s, _n, _c, _fl, f) in LIVE_ASSET_DEFINITIONS if f}
+_FUTURE_DI: dict[str, str] = {s: f for (s, _n, _c, _fl, f) in TUTTI_I_MERCATI if f}
 
 
 class OhlcvBarOut(BaseModel):
@@ -295,6 +295,95 @@ def get_confronto(
         return ConfrontoMercatiOut(**mercati_service.confronto(db, elenco, periodo))
     except mercati_service.SimboloSconosciuto as e:
         raise HTTPException(status_code=404, detail=f"Nessuna storia per {e.simbolo}") from e
+
+
+class BorsaOut(BaseModel):
+    regione: str
+    nome: str
+    #: «pre» | «seduta» | «after» | «chiusa»
+    fase: str
+    fino_alle: str | None
+    prossima_fase: str | None
+    dalle: str | None
+    #: False: per questa borsa le festivita' non sono nel calendario dell'app.
+    festivita_note: bool
+
+
+class SessioniOut(BaseModel):
+    adesso: str
+    borse: list[BorsaOut]
+
+
+@router.get("/sessioni", response_model=SessioniOut)
+def get_sessioni(_user: User = Depends(get_current_user)) -> SessioniOut:
+    """FA-191: lo stato delle borse e il prossimo cambio."""
+    from app.services import sessioni_borsa  # noqa: PLC0415
+
+    return SessioniOut(**sessioni_borsa.sessioni())
+
+
+@router.get("/estesi", response_model=LiveAssetsOut)
+def get_estesi(_user: User = Depends(get_current_user)) -> LiveAssetsOut:
+    """FA-190: prezzo e variazione di oggi dei mercati che la home non mostra
+    (Russell, DAX, CAC, FTSE 100, KOSPI, rame, dollaro, euro, yen)."""
+    return CACHE_ESTESI.leggi()
+
+
+class TesseraContestoOut(BaseModel):
+    chiave: str
+    nome: str
+    valore: float
+    #: «%» per tassi e ampiezza (il valore e' gia' una percentuale), «» per i livelli.
+    unita: str
+    #: il valore di un mese prima, per dire «da X a Y».
+    prima: float | None
+    #: solo per i livelli di mercato (VIX, dollaro): variazione relativa a un mese.
+    variazione_relativa: float | None
+    percentile: float | None
+    percentile_dal: str | None
+    serie: list[float]
+    data: str | None
+    nota: str | None
+    simbolo: str | None
+
+
+class ContestoOut(BaseModel):
+    tessere: list[TesseraContestoOut]
+
+
+@router.get("/contesto", response_model=ContestoOut)
+def get_contesto(db: Session = Depends(get_db), _user: User = Depends(get_current_user)) -> ContestoOut:
+    """FA-188: VIX, curva dei tassi, Fed e BCE, ampiezza, dollaro."""
+    return ContestoOut(**mercati_service.contesto(db))
+
+
+class SimboloCorrelazioneOut(BaseModel):
+    symbol: str
+    name: str
+    category: str
+
+
+class CorrelazioniOut(BaseModel):
+    simboli: list[SimboloCorrelazioneOut]
+    #: matrice[i][j]: correlazione dei rendimenti giornalieri; None con meno di
+    #: 40 date comuni alla coppia.
+    matrice: list[list[float | None]]
+    un_anno_fa: list[list[float | None]]
+    sedute: int
+    al: str | None
+
+
+@router.get("/correlazioni", response_model=CorrelazioniOut)
+def get_correlazioni(
+    sedute: Annotated[int, Query(description="60 o 250")] = 60,
+    _user: User = Depends(get_current_user),
+) -> CorrelazioniOut:
+    """FA-189: correlazioni fra i mercati, adesso e un anno prima."""
+    # Un intero controllato a mano: un Literal[60, 250] rifiuta la stringa
+    # «60» che arriva dall'indirizzo.
+    if sedute not in mercati_service.CACHE_CORRELAZIONI:
+        raise HTTPException(status_code=422, detail="sedute: 60 o 250")
+    return CorrelazioniOut(**mercati_service.CACHE_CORRELAZIONI[sedute].leggi())
 
 
 @router.get("/panoramica", response_model=PanoramicaOut)

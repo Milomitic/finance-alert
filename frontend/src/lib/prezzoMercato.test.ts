@@ -12,6 +12,8 @@ describe("prezzoMercato", () => {
     [1775.38, "crypto", "1.775,38"],
     [0.006812, "fx", "0,0068"],
     [-1.5, "index", "−1,50"],
+    [1.093612, "fx", "1,0936"],
+    [104.053, "fx", "104,05"],
   ])("%s (%s) → %s", (v, c, atteso) => {
     expect(prezzoMercato(v, c)).toBe(atteso);
   });

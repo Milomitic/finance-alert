@@ -203,4 +203,7 @@ def test_la_home_e_la_pagina_scelgono_con_la_stessa_regola():
 
     from app.api import market
 
-    assert "quotazione_da_mostrare(" in inspect.getsource(market.calcola_paniere)
+    assert "quotazione_da_mostrare(" in inspect.getsource(market._paniere)
+    # FA-190: home e mercati estesi passano entrambi da `_paniere`.
+    assert "_paniere(LIVE_ASSET_DEFINITIONS)" in inspect.getsource(market.calcola_paniere)
+    assert "_paniere(MERCATI_ESTESI)" in inspect.getsource(market.calcola_estesi)

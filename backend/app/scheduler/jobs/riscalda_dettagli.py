@@ -27,7 +27,7 @@ def titoli_da_riscaldare() -> list[str]:
 
 
 def run_riscalda_dettagli() -> None:
-    from app.api.market import LIVE_ASSET_DEFINITIONS  # noqa: PLC0415
+    from app.api.market import TUTTI_I_MERCATI  # noqa: PLC0415
     from app.api.stocks import riscalda_dettaglio  # noqa: PLC0415
     from app.services import market_detail_service  # noqa: PLC0415
 
@@ -35,7 +35,7 @@ def run_riscalda_dettagli() -> None:
     # 28/11, la panoramica letta 90 s dopo un rilascio costava ancora 22,6 s
     # perche' il riscaldamento era fermo sui titoli. Le serie dei mercati sono
     # poche e servono a due pagine.
-    for simbolo, *_ in LIVE_ASSET_DEFINITIONS:
+    for simbolo, *_ in TUTTI_I_MERCATI:
         try:
             market_detail_service.get_detail(simbolo, "1d")
         except Exception as e:  # noqa: BLE001

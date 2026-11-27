@@ -176,6 +176,16 @@ export interface ArretratoOut {
   perche?: string;
 }
 
+export interface BorsaOut {
+  regione: string;
+  nome: string;
+  fase: string;
+  fino_alle: string | null;
+  prossima_fase: string | null;
+  dalle: string | null;
+  festivita_note: boolean;
+}
+
 export interface BulkAction {
   ids: number[];
   action: "archive" | "unarchive";
@@ -323,11 +333,23 @@ export interface ConsensoPeriodoOut {
   attuale?: number | null;
 }
 
+export interface ContestoOut {
+  tessere: TesseraContestoOut[];
+}
+
 export interface ContributoOut {
   pilastro: string;
   da: number;
   a: number;
   contributo: number;
+}
+
+export interface CorrelazioniOut {
+  simboli: SimboloCorrelazioneOut[];
+  matrice: ((number | null)[])[];
+  un_anno_fa: ((number | null)[])[];
+  sedute: number;
+  al: string | null;
 }
 
 export interface CostituenteOut {
@@ -2124,6 +2146,11 @@ export interface SegnaliSettoreOut {
   recenti: SegnaleRecenteOut[];
 }
 
+export interface SessioniOut {
+  adesso: string;
+  borse: BorsaOut[];
+}
+
 export interface SettoreIndiceOut {
   settore: string;
   titoli: number;
@@ -2200,6 +2227,12 @@ export interface SignalDriftSummaryOut {
   window_days: number;
   min_n: number;
   computed_at: string;
+}
+
+export interface SimboloCorrelazioneOut {
+  symbol: string;
+  name: string;
+  category: string;
 }
 
 export interface SpotlightCardOut {
@@ -2405,6 +2438,21 @@ export interface TechnicalScoreRefOut {
   rel_strength?: number | null;
   signals?: number | null;
   posture?: string | null;
+}
+
+export interface TesseraContestoOut {
+  chiave: string;
+  nome: string;
+  valore: number;
+  unita: string;
+  prima: number | null;
+  variazione_relativa: number | null;
+  percentile: number | null;
+  percentile_dal: string | null;
+  serie: number[];
+  data: string | null;
+  nota: string | null;
+  simbolo: string | null;
 }
 
 export interface TickerAggregateOut {

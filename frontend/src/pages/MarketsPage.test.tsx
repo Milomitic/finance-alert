@@ -7,6 +7,9 @@ import { describe, expect, it, vi } from "vitest";
  * rendimenti per periodo alla chiusura giornaliera. */
 
 vi.mock("@/hooks/useLiveAssets", () => ({
+  useMercatiEstesi: () => ({
+    data: { assets: [{ symbol: "EURUSD=X", name: "Euro / dollaro", category: "fx", flag: "eu", quote: { price: 1.093612, change_pct: 0.2 }, history: null }] },
+  }),
   useLiveAssets: () => ({
     data: {
       assets: [
@@ -37,10 +40,15 @@ vi.mock("@/hooks/useMercati", () => ({
         riga("^GSPC", "S&P 500", "index", "us"),
         riga("GC=F", "Oro", "commodity", null, { rendimenti: { ytd: 0.31 } }),
         riga("BTC-USD", "Bitcoin", "crypto", null),
+        riga("EURUSD=X", "Euro / dollaro", "fx", "eu"),
       ],
     },
   }),
 }));
+
+vi.mock("@/components/markets/OrariBorse", () => ({ OrariBorse: () => null }));
+vi.mock("@/components/markets/ContestoMercato", () => ({ ContestoMercato: () => null }));
+vi.mock("@/components/markets/MatriceCorrelazioni", () => ({ MatriceCorrelazioni: () => null }));
 
 const { default: MarketsPage } = await import("./MarketsPage");
 
@@ -70,6 +78,14 @@ describe("la pagina dei mercati", () => {
     render(<MemoryRouter><MarketsPage /></MemoryRouter>);
     const riga = screen.getByRole("link", { name: /Bitcoin/ }).closest("tr")!;
     expect(within(riga).getByText("100,00")).toBeInTheDocument();
+  });
+
+  it("i mercati estesi entrano nella stessa tabella, con i cambi a quattro decimali (FA-190)", () => {
+    render(<MemoryRouter><MarketsPage /></MemoryRouter>);
+    expect(screen.getByText("Valute")).toBeInTheDocument();
+    const riga = screen.getByRole("link", { name: /Euro \/ dollaro/ }).closest("tr")!;
+    expect(within(riga).getByText("1,0936")).toBeInTheDocument();
+    expect(within(riga).getByText("+0,20%")).toBeInTheDocument();
   });
 
   it("si ordina per colonna: decrescente, crescente, di nuovo l'ordine del server", () => {

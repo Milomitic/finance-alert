@@ -118,7 +118,7 @@ class LiveAsset(BaseModel):
     """One row of the live assets panel."""
     symbol: str           # yfinance symbol (^GSPC, BTC-USD, GC=F, ...)
     name: str             # human label ("S&P 500", "Bitcoin", "Gold")
-    category: str         # "index" | "commodity" | "crypto"
+    category: str         # "index" | "commodity" | "crypto" | "fx" (FA-190)
     flag: str | None = None  # 2-letter region code, lowercase ("us", "jp", "it"); None for global assets
     quote: LiveQuoteOut | None = None  # null when fetch failed / breaker open
     history: list[float] | None = None  # ~30 trailing daily closes for the sparkline; None on fetch failure
@@ -188,6 +188,28 @@ LIVE_ASSET_DEFINITIONS: list[tuple[str, str, str, str | None, str | None]] = [
 ]
 
 
+#: FA-190: gli strumenti della pagina Mercati che la home NON mostra. Lista
+#: separata di proposito: il nastro e il paniere della home restano come sono.
+#: ⚠️ Niente rendimenti obbligazionari (^TNX): sono livelli, e una loro
+#: variazione in percentuale accanto ai rendimenti si leggerebbe male; i
+#: tassi stanno nel contesto, da FRED.
+MERCATI_ESTESI: list[tuple[str, str, str, str | None, str | None]] = [
+    ("^RUT",         "Russell 2000",       "index",     "us", "RTY=F"),
+    ("^GDAXI",       "DAX",                "index",     "de", None),
+    ("^FCHI",        "CAC 40",             "index",     "fr", None),
+    ("^FTSE",        "FTSE 100",           "index",     "gb", None),
+    ("^KS11",        "KOSPI",              "index",     "kr", None),
+    ("HG=F",         "Rame (futures)",     "commodity", None, None),
+    ("DX-Y.NYB",     "Indice del dollaro", "fx",        "us", None),
+    ("EURUSD=X",     "Euro / dollaro",     "fx",        "eu", None),
+    ("USDJPY=X",     "Dollaro / yen",      "fx",        "jp", None),
+]
+
+#: Tutto cio' che la pagina Mercati conosce: per il dettaglio, la panoramica
+#: e il riscaldamento. La home usa solo `LIVE_ASSET_DEFINITIONS`.
+TUTTI_I_MERCATI = LIVE_ASSET_DEFINITIONS + MERCATI_ESTESI
+
+
 def _globex_session_live(now: datetime) -> bool:
     """Approximate whether the CME Globex futures session is open at `now`
     (UTC). Globex runs Sun 22:00 → Fri 22:00 UTC with a ~60-min daily break
@@ -213,7 +235,8 @@ def _quote_is_live(category: str, using_futures: bool, cash_q, now: datetime) ->
     (the quote's own market_state)."""
     if category == "crypto":
         return True
-    if category == "commodity" or using_futures:
+    # FA-190: i cambi scambiano quasi 24 ore su 5 giorni, come i future.
+    if category in ("commodity", "fx") or using_futures:
         return _globex_session_live(now)
     return bool(cash_q and cash_q.market_state == "OPEN" and cash_q.error is None)
 
@@ -259,12 +282,18 @@ def calcola_paniere() -> LiveAssetsOut:
     `/api/stocks/quotes` applies — these symbols are intentionally NOT
     in the catalog (they aren't tradeable equities the user follows).
     """
+    return _paniere(LIVE_ASSET_DEFINITIONS)
+
+
+def _paniere(definizioni: list[tuple[str, str, str, str | None, str | None]]) -> LiveAssetsOut:
+    """Il paniere di una lista di strumenti: la home (`LIVE_ASSET_DEFINITIONS`)
+    o i mercati estesi della pagina Mercati (FA-190)."""
     # Single batch call for cash + futures symbols — minimizes the
     # roundtrip to live_quote_service.get_quotes_batch which itself
     # fans out to yfinance.
     now_utc = datetime.now(UTC)
-    cash_symbols = [d[0] for d in LIVE_ASSET_DEFINITIONS]
-    futures_symbols = [d[4] for d in LIVE_ASSET_DEFINITIONS if d[4]]
+    cash_symbols = [d[0] for d in definizioni]
+    futures_symbols = [d[4] for d in definizioni if d[4]]
     all_symbols = cash_symbols + futures_symbols
     quotes = live_quote_service.get_quotes_batch(all_symbols)
     # Sparkline history has its own 15-min TTL cache; it returns
@@ -274,7 +303,7 @@ def calcola_paniere() -> LiveAssetsOut:
     # phantom jumps at the cash↔futures swap-over).
     histories = live_sparkline_service.get_sparklines(cash_symbols)
     out: list[LiveAsset] = []
-    for symbol, name, category, flag, futures_symbol in LIVE_ASSET_DEFINITIONS:
+    for symbol, name, category, flag, futures_symbol in definizioni:
         cash_q = quotes.get(symbol)
         # Decide: use cash or futures?
         # - If cash market is OPEN (or the row is a 24h commodity / crypto
@@ -307,6 +336,15 @@ def calcola_paniere() -> LiveAssetsOut:
 
 
 CACHE_PANIERE = CacheFresca("paniere", 15, calcola_paniere)
+
+
+def calcola_estesi() -> LiveAssetsOut:
+    return _paniere(MERCATI_ESTESI)
+
+
+#: FA-190: i mercati estesi, aggiornati come il paniere ma solo quando la
+#: pagina Mercati li chiede (nessun job: la home non li usa).
+CACHE_ESTESI = CacheFresca("mercati-estesi", 30, calcola_estesi)
 
 
 def _migrate_sma_keys_in_place(payload: dict) -> None:

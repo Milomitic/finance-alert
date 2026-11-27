@@ -3,11 +3,14 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 import { ConfrontoNormalizzato } from "@/components/markets/ConfrontoNormalizzato";
+import { ContestoMercato } from "@/components/markets/ContestoMercato";
+import { MatriceCorrelazioni } from "@/components/markets/MatriceCorrelazioni";
+import { OrariBorse } from "@/components/markets/OrariBorse";
 import { TabellaPanoramica } from "@/components/markets/TabellaPanoramica";
 import { Card, CardContent } from "@/components/ui/card";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { useLiveAssets } from "@/hooks/useLiveAssets";
+import { useLiveAssets, useMercatiEstesi } from "@/hooks/useLiveAssets";
 import { usePanoramica } from "@/hooks/useMercati";
 import { unisciRighe } from "@/lib/panoramica";
 
@@ -21,9 +24,12 @@ import { unisciRighe } from "@/lib/panoramica";
 
 export default function MarketsPage() {
   const vivi = useLiveAssets();
+  const estesi = useMercatiEstesi();
   const pan = usePanoramica();
-  const righe = pan.data ? unisciRighe(pan.data.strumenti, vivi.data?.assets ?? []) : [];
-  const nomi = Object.fromEntries((vivi.data?.assets ?? []).map((a) => [a.symbol, a.name]));
+  // FA-190: il paniere della home piu' i mercati estesi, una lista sola.
+  const tuttiVivi = [...(vivi.data?.assets ?? []), ...(estesi.data?.assets ?? [])];
+  const righe = pan.data ? unisciRighe(pan.data.strumenti, tuttiVivi) : [];
+  const nomi = Object.fromEntries(tuttiVivi.map((a) => [a.symbol, a.name]));
   const { hash } = useLocation();
   // Arrivando da «Confronta con altri mercati» si va al grafico: il router
   // non scorre da solo all'ancora, e la tabella sopra e' lunga.
@@ -37,6 +43,10 @@ export default function MarketsPage() {
       <Card>
         <CardContent className="space-y-3 p-3 sm:p-4">
           <SectionTitle icon={Globe2} label="Mercati" />
+          {/* FA-191: in che fase e' ogni borsa, e quanto manca al cambio. */}
+          <OrariBorse />
+          {/* FA-188: tassi, volatilita' attesa, ampiezza, dollaro. */}
+          <ContestoMercato />
           {pan.isError ? (
             <QueryError message="dei mercati" errore={pan.error} onRetry={() => pan.refetch()} isRetrying={pan.isFetching} />
           ) : pan.isLoading ? (
@@ -52,6 +62,12 @@ export default function MarketsPage() {
       <Card>
         <CardContent className="p-3 sm:p-4">
           <ConfrontoNormalizzato nomi={nomi} />
+        </CardContent>
+      </Card>
+      {/* FA-189: le correlazioni fra mercati, adesso e un anno prima. */}
+      <Card>
+        <CardContent className="p-3 sm:p-4">
+          <MatriceCorrelazioni />
         </CardContent>
       </Card>
     </div>

@@ -21,6 +21,7 @@ const CATEGORIE: { id: string; titolo: string }[] = [
   { id: "index", titolo: "Indici" },
   { id: "commodity", titolo: "Materie prime" },
   { id: "crypto", titolo: "Cripto" },
+  { id: "fx", titolo: "Valute" },
 ];
 
 type Colonna = { id: string; titolo: string; periodo: PeriodoTinta };

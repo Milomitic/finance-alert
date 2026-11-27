@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.api.market import LIVE_ASSET_DEFINITIONS
+from app.api.market import TUTTI_I_MERCATI
 from app.core.visibility import visible_country_clause
 from app.models import Stock, User
 from app.services.timeframe_service import (
@@ -204,7 +204,7 @@ def get_market_multi_tf_kpis(
     """Same shape as the stock variant but for non-catalog symbols
     (^GSPC, BTC-USD, GC=F, …) listed in the dashboard's
     LiveAssetsPanel. yfinance for everything; no DB roundtrip."""
-    valid_symbols = {d[0] for d in LIVE_ASSET_DEFINITIONS}
+    valid_symbols = {d[0] for d in TUTTI_I_MERCATI}
     if symbol not in valid_symbols:
         raise HTTPException(status_code=404, detail="Unknown market symbol")
     # no db → all timeframes via yfinance

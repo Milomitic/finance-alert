@@ -13,6 +13,8 @@ export function prezzoMercato(v: number | null | undefined, categoria?: string):
   if (v == null || !Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
   if (categoria === "crypto" && abs >= 10_000) return numero(v, 0, true);
+  // FA-190: un cambio vive sulla quarta cifra (euro/dollaro 1,0936).
+  if (categoria === "fx" && abs < 10) return numero(v, 4, true);
   if (abs > 0 && abs < 1) return numero(v, 4, true);
   return numero(v, 2, true);
 }

@@ -192,3 +192,166 @@ def test_una_serie_lunga_si_sfoltisce_tenendo_l_ultimo_giorno():
         d = ms.confronto(None, ["X"], "10a")
     assert len(d["date"]) <= ms.MAX_PUNTI + 1
     assert d["date"][-1] == giorni[-1].isoformat()
+
+
+def test_l_endpoint_delle_sessioni(client):
+    d = client.get("/api/markets/sessioni").json()
+    assert [b["regione"] for b in d["borse"]] == ["JP", "HK", "EU", "UK", "US"]
+    assert all(b["fase"] in {"pre", "seduta", "after", "chiusa"} for b in d["borse"])
+
+
+# ── FA-190: paniere esteso ──────────────────────────────────────────────────
+
+def test_il_paniere_della_home_non_cambia_e_i_mercati_estesi_si_aprono():
+    from app.api import market, market_detail
+
+    assert len(market.LIVE_ASSET_DEFINITIONS) == 15          # la home resta com'era
+    simboli = [d[0] for d in market.TUTTI_I_MERCATI]
+    assert len(simboli) == len(set(simboli))
+    assert {"^RUT", "^GDAXI", "DX-Y.NYB", "EURUSD=X", "HG=F"} <= set(simboli)
+    assert "^TNX" not in simboli                              # un livello, non un prezzo
+    assert market_detail._LIVE_META["^RUT"][1] == "index"
+    assert market_detail._FUTURE_DI["^RUT"] == "RTY=F"
+
+
+def test_i_cambi_sono_vivi_come_i_future():
+    from datetime import UTC, datetime
+
+    from app.api import market
+
+    martedi = datetime(2026, 12, 1, 3, 0, tzinfo=UTC)        # notte europea, Globex aperto
+    assert market._quote_is_live("fx", False, None, martedi)
+    sabato = datetime(2026, 11, 28, 12, 0, tzinfo=UTC)
+    assert not market._quote_is_live("fx", False, None, sabato)
+
+
+def test_l_endpoint_dei_mercati_estesi(client):
+    from app.api import market
+    from app.services import live_quote_service as lq
+
+    def quotazioni(simboli, **k):
+        return {s: lq.LiveQuote(ticker=s, price=1.0, change_pct=0.5, market_state="CLOSED") for s in simboli}
+
+    with patch.object(lq, "get_quotes_batch", side_effect=quotazioni), \
+         patch("app.services.live_sparkline_service.get_sparklines", return_value={}):
+        d = client.get("/api/markets/estesi").json()
+    assert [a["symbol"] for a in d["assets"]] == [x[0] for x in market.MERCATI_ESTESI]
+    rut = next(a for a in d["assets"] if a["symbol"] == "^RUT")
+    assert rut["using_futures"] is True and rut["quote_symbol"] == "RTY=F"
+
+
+# ── FA-188: contesto ────────────────────────────────────────────────────────
+
+def test_percentile_con_i_pari_a_meta():
+    assert ms.percentile_di(5.0, [1.0, 2.0, 5.0, 9.0]) == pytest.approx(62.5)
+    assert ms.percentile_di(3.0, [3.0, 3.0]) == 50.0
+    assert ms.percentile_di(3.0, []) is None
+
+
+def _semina_fred(db, fred_id: str, valori: list[tuple[date, float]]):
+    from app.models import MacroObservation, MacroSeries
+
+    s = MacroSeries(fred_series_id=fred_id, label=fred_id, region="US", importance="high")
+    db.add(s)
+    db.flush()
+    for g, v in valori:
+        db.add(MacroObservation(series_id=s.id, date=g, value=v))
+    db.commit()
+
+
+def test_il_contesto_ha_tassi_curva_e_ampiezza_senza_percentile_se_l_archivio_e_corto(client, db):
+    from datetime import UTC, datetime
+
+    from app.models.ampiezza_giornaliera import AmpiezzaGiornaliera
+
+    g0 = date(2026, 9, 1)
+    giorni = [g0 + timedelta(days=i) for i in range(90)]
+    _semina_fred(db, "DGS10", [(g, 4.0 + i / 100) for i, g in enumerate(giorni)])
+    _semina_fred(db, "DGS2", [(g, 3.5) for g in giorni])
+    _semina_fred(db, "DFEDTARU", [(g, 4.25) for g in giorni])
+    db.add(AmpiezzaGiornaliera(giorno=g0, ambito="universo", titoli=1000, avanzano=500, scendono=400,
+                               sopra_ema50_pct=50, sopra_ema200_pct=49.5, rsi_sopra_70=1, rsi_sotto_30=1,
+                               var_media_pct=0.1, scritto_il=datetime(2026, 9, 1, tzinfo=UTC)))
+    db.commit()
+    snap = (None, {"global": {"pct_above_ema200": 49.5}})
+    with patch.object(mds, "get_detail", side_effect=lambda s, r: _dettaglio(s)), \
+         patch("app.services.market_stats_service.get_latest_snapshot_payload", return_value=snap):
+        d = client.get("/api/markets/contesto").json()
+    t = {x["chiave"]: x for x in d["tessere"]}
+    assert set(t) == {"vix", "curva", "fed", "ampiezza", "dollaro"}          # la BCE manca: niente tessera
+    assert t["curva"]["valore"] == pytest.approx(4.89 - 3.5)
+    assert t["curva"]["prima"] == pytest.approx(4.0 + 59 / 100 - 3.5)
+    assert t["fed"]["valore"] == 4.25 and t["fed"]["unita"] == "%"
+    assert t["ampiezza"]["percentile"] is None and "1 giorno," in t["ampiezza"]["nota"]
+    assert t["vix"]["variazione_relativa"] is not None and t["vix"]["percentile_dal"].startswith("20")
+
+
+def test_una_fonte_guasta_toglie_solo_la_sua_tessera(client, db):
+    def guasto(s, r):
+        raise RuntimeError("yahoo giu'")
+
+    with patch.object(mds, "get_detail", side_effect=guasto), \
+         patch("app.services.market_stats_service.get_latest_snapshot_payload", return_value=(None, {})):
+        d = client.get("/api/markets/contesto").json()
+    assert d["tessere"] == []
+
+
+def test_con_abbastanza_archivio_l_ampiezza_ha_il_suo_percentile(client, db, monkeypatch):
+    from datetime import UTC, datetime
+
+    from app.models.ampiezza_giornaliera import AmpiezzaGiornaliera
+
+    monkeypatch.setattr(ms, "MIN_GIORNI_PERCENTILE_AMPIEZZA", 3)
+    for i, v in enumerate([40.0, 45.0, 60.0]):
+        db.add(AmpiezzaGiornaliera(giorno=date(2026, 11, 1 + i), ambito="universo", titoli=1, avanzano=0, scendono=0,
+                                   sopra_ema50_pct=v, sopra_ema200_pct=v, rsi_sopra_70=0, rsi_sotto_30=0,
+                                   var_media_pct=0, scritto_il=datetime(2026, 11, 1, tzinfo=UTC)))
+    db.commit()
+    with patch.object(mds, "get_detail", return_value=None), \
+         patch("app.services.market_stats_service.get_latest_snapshot_payload",
+               return_value=(None, {"global": {"pct_above_ema200": 50.0}})):
+        t = client.get("/api/markets/contesto").json()["tessere"][0]
+    assert t["chiave"] == "ampiezza" and t["percentile"] == pytest.approx(200 / 3)
+    assert t["percentile_dal"] == "2026-11-01" and t["nota"] is None
+
+
+# ── FA-189: correlazioni ────────────────────────────────────────────────────
+
+def _rend(n: int, f, dal: date = date(2025, 1, 1)) -> dict:
+    return {dal + timedelta(days=i): f(i) for i in range(n)}
+
+
+def test_correlazione_di_una_coppia_simmetrica_e_con_se_stessa():
+    import math
+
+    a = _rend(100, lambda i: math.sin(i))
+    b = _rend(100, lambda i: -math.sin(i))
+    assert ms.correlazione_coppia(a, a, 60) == 1.0
+    assert ms.correlazione_coppia(a, b, 60) == -1.0
+    assert ms.correlazione_coppia(a, b, 60) == ms.correlazione_coppia(b, a, 60)
+
+
+def test_poche_date_comuni_o_serie_ferma_danno_vuoto_non_nan():
+    import math
+
+    a = _rend(100, lambda i: math.sin(i))
+    assert ms.correlazione_coppia(a, _rend(20, lambda i: 0.01 * i), 60) is None
+    assert ms.correlazione_coppia(a, _rend(100, lambda i: 0.0), 60) is None
+
+
+def test_la_correlazione_si_calcola_sulle_date_della_coppia_e_fino_a_una_data():
+    import math
+
+    a = _rend(400, lambda i: math.sin(i))
+    b = {d: (v if d < date(2025, 9, 1) else -v) for d, v in a.items()}   # cambia segno a settembre
+    assert ms.correlazione_coppia(a, b, 60) == -1.0
+    assert ms.correlazione_coppia(a, b, 60, fino_a=date(2025, 8, 1)) == 1.0
+
+
+def test_l_endpoint_delle_correlazioni(client):
+    with patch.object(mds, "get_detail", side_effect=lambda s, r: _dettaglio(s) if s in ("^GSPC", "GC=F") else None):
+        ms.CACHE_CORRELAZIONI[60].svuota()
+        d = client.get("/api/markets/correlazioni?sedute=60").json()
+    assert [s["symbol"] for s in d["simboli"]] == ["^GSPC", "GC=F"]
+    assert d["matrice"][0][0] == 1.0 and d["matrice"][0][1] == d["matrice"][1][0]
+    assert client.get("/api/markets/correlazioni?sedute=33").status_code == 422
