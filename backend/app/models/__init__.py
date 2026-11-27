@@ -1,5 +1,6 @@
 """Aggregate model imports so Alembic sees them."""
 from app.models.alert import Alert
+from app.models.ampiezza_giornaliera import AmpiezzaGiornaliera
 from app.models.archivio_non_prezzo import ArchivioNonPrezzo
 from app.models.catalog_log import CatalogRefreshLog
 from app.models.costo_tipico import CostoTipico
@@ -61,6 +62,7 @@ __all__ = [
     "CostoTipico",
     "OhlcvDaily",
     "MarketSnapshot",
+    "AmpiezzaGiornaliera",
     "Alert",
     "Position",
     "EtoroStrumento",

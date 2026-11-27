@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -832,8 +833,55 @@ def recompute_snapshot(db: Session, *, scan_run_id: int | None = None) -> Market
         scan_run_id=scan_run_id,
     )
     db.merge(snap)
+    archivia_ampiezza(db, payload["global"], payload["by_index"])
     db.commit()
     return snap
+
+
+def _righe_ampiezza(globale: dict, per_indice: list[dict], giorno: date, quando: datetime) -> list[dict]:
+    """Le righe dell'archivio dell'ampiezza: l'universo e ogni indice con
+    almeno un titolo. Pura, per i test."""
+    from app.models.ampiezza_giornaliera import UNIVERSO  # noqa: PLC0415
+
+    righe = [{
+        "giorno": giorno, "ambito": UNIVERSO, "titoli": globale.get("stocks_total", 0),
+        "avanzano": globale.get("advancers", 0), "scendono": globale.get("decliners", 0),
+        "sopra_ema50_pct": globale.get("pct_above_ema50"), "sopra_ema200_pct": globale.get("pct_above_ema200"),
+        "rsi_sopra_70": globale.get("rsi_overbought_count", 0), "rsi_sotto_30": globale.get("rsi_oversold_count", 0),
+        "var_media_pct": globale.get("avg_change_pct"), "scritto_il": quando,
+    }]
+    for i in per_indice:
+        if not i.get("n"):
+            continue
+        righe.append({
+            "giorno": giorno, "ambito": str(i["code"])[:32], "titoli": i["n"],
+            "avanzano": i.get("advancers", 0), "scendono": i.get("decliners", 0),
+            "sopra_ema50_pct": i.get("pct_above_ema50"), "sopra_ema200_pct": i.get("pct_above_ema200"),
+            "rsi_sopra_70": i.get("rsi_overbought_count", 0), "rsi_sotto_30": i.get("rsi_oversold_count", 0),
+            "var_media_pct": i.get("avg_change_pct"), "scritto_il": quando,
+        })
+    return righe
+
+
+def archivia_ampiezza(db: Session, globale: dict, per_indice: list[dict]) -> int:
+    """FA-188: archivia l'ampiezza del giorno (UTC), sostituendo la riga
+    della stessa giornata. In un SAVEPOINT: un guasto qui non deve abortire la
+    transazione dello snapshot su Postgres — l'archivio e' un di piu', lo
+    snapshot no. Rende quante righe ha scritto (0 se ha rinunciato)."""
+    from sqlalchemy import delete  # noqa: PLC0415
+
+    from app.models.ampiezza_giornaliera import AmpiezzaGiornaliera  # noqa: PLC0415
+
+    quando = datetime.now(UTC)
+    righe = _righe_ampiezza(globale, per_indice, quando.date(), quando)
+    try:
+        with db.begin_nested():
+            db.execute(delete(AmpiezzaGiornaliera).where(AmpiezzaGiornaliera.giorno == quando.date()))
+            db.add_all([AmpiezzaGiornaliera(**r) for r in righe])
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[ampiezza] archivio del giorno non scritto: {e}")
+        return 0
+    return len(righe)
 
 
 def _persist_stock_metrics(db: Session, metrics: list[StockMetrics]) -> None:
