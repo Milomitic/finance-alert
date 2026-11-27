@@ -23,7 +23,10 @@ export type SerieGrafico<T> = {
   nome?: string;
   valore: (riga: T) => number | null | undefined;
   colore: string;
-  tipo?: "linea" | "barre";
+  /** «punti»: solo i vertici, senza linea (il punto di un forest plot). */
+  tipo?: "linea" | "barre" | "punti";
+  /** Colore del singolo punto, per `tipo: "punti"`. */
+  colorePunto?: (riga: T, i: number) => string;
   spessore?: number;
   tratteggio?: string;
   /** Punti sui vertici della linea. */
@@ -37,6 +40,15 @@ export type SerieGrafico<T> = {
 };
 
 export type RiferimentoGrafico = { y: number; asse?: "sx" | "dx"; tratteggio?: string; colore?: string };
+
+/** FA-195: la barra d'intervallo verticale di ogni categoria (forest plot). */
+export type BaffoGrafico<T> = {
+  chiave: string;
+  da: (riga: T) => number | null | undefined;
+  a: (riga: T) => number | null | undefined;
+  colore: (riga: T, i: number) => string;
+  asse?: "sx" | "dx";
+};
 
 /** FA-194: un'area fra due valori per riga (la banda 10°-90° di un percorso). */
 export type BandaGrafico<T> = {
@@ -63,6 +75,8 @@ type Props<T> = {
   bande?: BandaGrafico<T>[];
   /** Linee verticali sugli indici dati (il giorno di un evento, FA-194). */
   verticali?: number[];
+  /** Barre d'intervallo verticali per categoria (FA-195). */
+  baffi?: BaffoGrafico<T>[];
   /** Includi lo zero nella scala di sinistra (sempre vero con le barre). */
   zero?: boolean;
   tooltip?: (riga: T) => ReactNode;
@@ -109,7 +123,7 @@ function useLarghezza() {
 
 export function GraficoSvg<T>({
   dati, x, serie, altezza, formatoY = (v) => String(v), formatoYDx, formatoX = (s) => s,
-  ogniX = 0, riferimenti = [], bande = [], verticali = [], zero = false, tooltip, etichetta, className,
+  ogniX = 0, riferimenti = [], bande = [], verticali = [], baffi = [], zero = false, tooltip, etichetta, className,
 }: Props<T>) {
   const { ref, w, h: hContenitore } = useLarghezza();
   const [attivo, setAttivo] = useState<number | null>(null);
@@ -127,7 +141,7 @@ export function GraficoSvg<T>({
       const v = s.flatMap((x) => dati.map((r) => x.valore(r))).filter(
         (v): v is number => v != null && Number.isFinite(v));
       riferimenti.filter((r) => (r.asse ?? "sx") === asse).forEach((r) => v.push(r.y));
-      bande.filter((b) => (b.asse ?? "sx") === asse).forEach((b) => dati.forEach((r) => {
+      [...bande, ...baffi].filter((b) => (b.asse ?? "sx") === asse).forEach((b) => dati.forEach((r) => {
         for (const x of [b.da(r), b.a(r)]) if (x != null && Number.isFinite(x)) v.push(x);
       }));
       if (v.length === 0) return null;
@@ -136,7 +150,7 @@ export function GraficoSvg<T>({
       return { lo, hi, y: (val: number) => M.alto + alt - ((val - lo) / (hi - lo)) * alt };
     };
     return { sx: per("sx"), dx: per("dx") };
-  }, [dati, serie, riferimenti, bande, zero, alt]);
+  }, [dati, serie, riferimenti, bande, baffi, zero, alt]);
 
   const banda = n > 0 ? larg / n : larg;
   const cx = (i: number) => ml + banda * (i + 0.5);
@@ -241,6 +255,28 @@ export function GraficoSvg<T>({
               fillOpacity={b.opacita ?? 0.18} stroke="none" />
           ) : null;
         })}
+        {baffi.map((b) => {
+          const sc = scale[b.asse ?? "sx"];
+          if (!sc) return null;
+          return (
+            <g key={b.chiave}>
+              {dati.map((r, i) => {
+                const da = b.da(r);
+                const a = b.a(r);
+                if (da == null || a == null || !Number.isFinite(da) || !Number.isFinite(a)) return null;
+                const c = b.colore(r, i);
+                const x = cx(i);
+                return (
+                  <g key={i} stroke={c} strokeWidth={1.5}>
+                    <line x1={x} x2={x} y1={sc.y(da)} y2={sc.y(a)} />
+                    <line x1={x - 4} x2={x + 4} y1={sc.y(da)} y2={sc.y(da)} />
+                    <line x1={x - 4} x2={x + 4} y1={sc.y(a)} y2={sc.y(a)} />
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
         {verticali.filter((i) => i >= 0 && i < n).map((i) => (
           <line key={`v${i}`} x1={cx(i)} x2={cx(i)} y1={M.alto} y2={M.alto + alt}
             stroke="hsl(var(--muted-foreground))" strokeOpacity={0.7} strokeDasharray="4 3" />
@@ -265,7 +301,21 @@ export function GraficoSvg<T>({
             </g>
           );
         })}
-        {serie.filter((s) => s.tipo !== "barre").map((s) => {
+        {serie.filter((s) => s.tipo === "punti").map((s) => {
+          const sc = scale[s.asse ?? "sx"];
+          if (!sc) return null;
+          return (
+            <g key={s.chiave}>
+              {dati.map((r, i) => {
+                const v = s.valore(r);
+                if (v == null || !Number.isFinite(v)) return null;
+                return <circle key={i} cx={cx(i)} cy={sc.y(v)} r={i === attivo ? 5.5 : 4.5}
+                  fill={s.colorePunto ? s.colorePunto(r, i) : s.colore} />;
+              })}
+            </g>
+          );
+        })}
+        {serie.filter((s) => s.tipo !== "barre" && s.tipo !== "punti").map((s) => {
           const sc = scale[s.asse ?? "sx"];
           return (
             <g key={s.chiave}>
@@ -285,8 +335,13 @@ export function GraficoSvg<T>({
         )}
       </svg>
       {/* I dati come tabella per i lettori di schermo (B-61): l'etichetta del
-          grafico diceva che cosa misura, non i numeri. */}
-      <table className="sr-only">
+          grafico diceva che cosa misura, non i numeri.
+          ⚠️ `sr-only` sul DIV, non sulla tabella: una tabella ignora una
+          larghezza minore del suo contenuto, quindi restava larga ~700 px e,
+          posizionata in assoluto, allargava l'area scorrevole di <main> — su
+          telefono /markets scorreva di lato fino a 715 px (misurato il 28/11). */}
+      <div className="sr-only">
+      <table>
         <caption>{etichetta}</caption>
         <thead>
           <tr>
@@ -310,6 +365,7 @@ export function GraficoSvg<T>({
           ))}
         </tbody>
       </table>
+      </div>
       {attivo != null && dati[attivo] != null && (
         // Annunciato quando il punto cambia da tastiera.
         <div aria-live="polite" className="sr-only">

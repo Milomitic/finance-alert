@@ -39,7 +39,7 @@ describe("le schede dell'andamento di un settore", () => {
     monta(<AndamentoCard a={A} nTitoli={131} />);
     // La tabella dei rendimenti, non quella nascosta che il grafico porta per
     // i lettori di schermo (B-61).
-    const tabella = screen.getAllByRole("table").find((t) => !t.classList.contains("sr-only"))!;
+    const tabella = screen.getAllByRole("table").find((t) => !t.closest(".sr-only"))!;
     const righe = within(tabella).getAllByRole("row");
     expect(within(righe[0]).getAllByRole("columnheader").map((h) => h.textContent).slice(1))
       .toEqual(["1S", "1M", "3M", "6M", "YTD", "1A"]);

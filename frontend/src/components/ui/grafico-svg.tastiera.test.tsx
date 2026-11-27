@@ -29,7 +29,10 @@ describe("GraficoSvg da tastiera", () => {
 
   it("porta i dati in una tabella nascosta col nome del grafico", () => {
     const { container } = monta();
-    const tabella = container.querySelector("table.sr-only");
+    // `sr-only` sta sul contenitore: una tabella ignora una larghezza minore
+    // del suo contenuto e, nascosta in assoluto, allargava l'area scorrevole.
+    expect(container.querySelector("table.sr-only")).toBeNull();
+    const tabella = container.querySelector("div.sr-only > table");
     expect(tabella?.querySelector("caption")?.textContent).toBe("Rendimento medio per mese");
     expect(tabella?.querySelectorAll("tbody tr")).toHaveLength(3);
     expect(tabella?.textContent).toContain("-2%");
