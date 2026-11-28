@@ -147,13 +147,31 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(screen.getByText("Nessun fondo tracciato detiene questo titolo.")).toBeInTheDocument();
   });
 
-  it("le posizioni invariate compaiono, senza valore d'operazione", async () => {
-    dati = { ticker: "AAPL", holders: [fondo(1, "Fermo"), fondo(2, "Mosso", { action: "add", valore_operazione: 5e6 })], historical: [] };
+  it("mostra Invariata nei detentori anche se il peso è cambiato", async () => {
+    dati = {
+      ticker: "AAPL",
+      holders: [
+        fondo(1, "Fermo", { portfolio_weight_delta_pp: 0.4 }),
+        fondo(2, "Mosso", { action: "reduce", valore_operazione: 5e6 }),
+        fondo(3, "Senza confronto", { action: null }),
+      ],
+      historical: [fondo(4, "Storico fermo"), fondo(1, "Vecchia uscita", { action: "sold_out" })],
+    };
     const { container } = monta();
-    await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
-    const r = righe(container, "operazioni");
-    const fermo = r.find((li) => li.querySelector("a")?.textContent === "Fermo")!;
+    const fermo = righe(container, "detentori").find((li) => within(li).queryByText("Fermo"))!;
     expect(within(fermo).getByText("Invariata")).toBeInTheDocument();
-    expect(r).toHaveLength(2);
+    await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
+    expect(righe(container, "operazioni").map((li) => li.querySelector("a")?.textContent)).toEqual(["Mosso"]);
+    expect(screen.queryByText("Invariata")).not.toBeInTheDocument();
+  });
+
+  it("se tutti i fondi sono fermi mostra lo stato vuoto delle operazioni", async () => {
+    dati = { ticker: "AAPL", holders: [fondo(1, "Fermo")], historical: [] };
+    monta();
+    await userEvent.click(screen.getByRole("button", { name: "Ultime operazioni" }));
+    expect(screen.getByText("Nessuna operazione segnalata nelle ultime dichiarazioni.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Detentori" }));
+    expect(screen.getByText("Fermo")).toBeInTheDocument();
+    expect(screen.getByText("Invariata")).toBeInTheDocument();
   });
 });

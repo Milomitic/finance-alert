@@ -40,7 +40,7 @@ describe("i fondi che detengono un titolo", () => {
     expect(variazione(FONDI[0])).toMatchObject({ testo: "+3,0%", tono: "su" });
     expect(variazione(FONDI[2])).toMatchObject({ testo: "−0,3%", tono: "giu" });
     expect(variazione(FONDI[3])).toMatchObject({ testo: "nuovo", tono: "su" });
-    expect(variazione(fondo(5, "A", { portfolio_weight_delta_pp: 0.02 }))).toMatchObject({ testo: "=", tono: "fermo" });
+    expect(variazione(fondo(5, "A", { portfolio_weight_delta_pp: 0.02 }))).toMatchObject({ testo: "Invariata", tono: "fermo" });
     expect(variazione(fondo(6, "B", { shares_change_pct: -12.4, action: "reduce" })))
       .toMatchObject({ testo: "−12% az.", tono: "giu" });
     expect(variazione(fondo(7, "C", { action: null }))).toBeNull();

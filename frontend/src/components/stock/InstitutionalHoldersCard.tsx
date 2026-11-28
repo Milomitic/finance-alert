@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
  *     in su; le altre a richiesta.
  *   - «Ultime operazioni»: il verbo del 13F (nuova, aumento, riduzione,
  *     uscita) con lo spostamento di peso, il valore della SOLA operazione e la
- *     data, dal piu' recente, invariate comprese. I fondi usciti stanno qui,
+ *     data, dal piu' recente. I fondi usciti stanno qui,
  *     perche' sono un'operazione, non una posizione. ⚠️ Fino al 2026-11-22 le colonne «%» e
  *     «Valore» mostravano peso e valore della POSIZIONE, cioe' gli stessi
  *     numeri dei Detentori: 24 miliardi di BlackRock in entrambe le viste.
@@ -104,22 +104,12 @@ function RigaFondo({ h, maxPeso }: { h: TickerHolder; maxPeso: number }) {
 }
 
 /** Il verbo del 13F, in italiano come nel pannello dei fondi. */
-function verbo(action: string | null): { label: string; tone: string } {
-  switch (action) {
-    case "new":
-      return { label: "Nuova", tone: TESTO_SU };
-    case "add":
-      return { label: "Aumento", tone: TESTO_SU };
-    case "reduce":
-      return { label: "Riduzione", tone: TESTO_GIU };
-    case "sold_out":
-      return { label: "Uscita", tone: TESTO_GIU };
-    case "hold":
-      return { label: "Invariata", tone: "text-muted-foreground" };
-    default:
-      return { label: action ?? "—", tone: "text-muted-foreground" };
-  }
-}
+const AZIONI_OPERATIVE = new Map([
+  ["new", { label: "Nuova", tone: TESTO_SU }],
+  ["add", { label: "Aumento", tone: TESTO_SU }],
+  ["reduce", { label: "Riduzione", tone: TESTO_GIU }],
+  ["sold_out", { label: "Uscita", tone: TESTO_GIU }],
+]);
 
 /* Testata e righe usano la STESSA stringa: le colonne si allineano per
  * costruzione. `minmax(0,1fr)` e' cio' che lascia troncare il nome. */
@@ -139,7 +129,8 @@ function TestataOperazioni() {
 }
 
 function RigaOperazione({ h }: { h: TickerHolder }) {
-  const a = verbo(h.action);
+  const a = AZIONI_OPERATIVE.get(h.action ?? "");
+  if (!a) return null;
   // Lo spostamento di peso per aumenti e riduzioni; per una nuova e un'uscita
   // il peso intero, col segno: e' tutto il peso che entra o esce.
   const v = h.action === "new"
@@ -224,9 +215,7 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
   const operazioni = useMemo(() => {
     const attuali = new Set(fondi.map((h) => h.institutional_id));
     const usciti = (q.data?.historical ?? []).filter((h) => !attuali.has(h.institutional_id));
-    // Anche le posizioni invariate (richiesta del 2026-11-26): dicono che il
-    // fondo c'era e non ha mosso le quote. Valore dell'operazione «—».
-    return ordinaPerData([...fondi, ...usciti]);
+    return ordinaPerData([...fondi, ...usciti].filter((h) => AZIONI_OPERATIVE.has(h.action ?? "")));
   }, [fondi, q.data]);
   // La scala della barra e' quella di TUTTI i detentori, mostrati o no: aprire
   // «mostra altri» non deve ridisegnare le barre gia' a schermo.
@@ -285,6 +274,10 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
               </ul>
             )}
           </>
+        ) : operazioni.length === 0 ? (
+          <p className="py-2 text-center text-xs text-muted-foreground">
+            Nessuna operazione segnalata nelle ultime dichiarazioni.
+          </p>
         ) : (
           /* Le colonne fisse sono piu' larghe di un telefono: scorre la lista,
              invece di schiacciare il nome a zero. */

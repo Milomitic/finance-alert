@@ -54,6 +54,7 @@ export interface Variazione {
 /** Il movimento dell'ultimo trimestre, nella forma piu' informativa che c'e':
  *  il peso in punti se noto, se no la variazione delle azioni. */
 export function variazione(h: TickerHolder): Variazione | null {
+  if (h.action === "hold") return { testo: "Invariata", tono: "fermo", spiegazione: "quote invariate nell’ultimo trimestre" };
   if (h.action === "new") return { testo: "nuovo", tono: "su", spiegazione: "posizione nuova nell'ultimo trimestre" };
   const pp = h.portfolio_weight_delta_pp;
   if (pp != null && Number.isFinite(pp)) {
@@ -73,7 +74,6 @@ export function variazione(h: TickerHolder): Variazione | null {
       spiegazione: `azioni ${az > 0 ? "aumentate" : "ridotte"} del ${Math.abs(az).toFixed(0)}%`,
     };
   }
-  if (h.action === "hold") return { testo: "=", tono: "fermo", spiegazione: "posizione invariata" };
   return null;
 }
 
