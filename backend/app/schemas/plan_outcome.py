@@ -57,6 +57,32 @@ class PlanOutcomeRowOut(BaseModel):
     tp2_hit_date: date | None = None
 
 
+class OpenPlanPathOut(BaseModel):
+    entry: float
+    tp1: float
+    as_of: date
+    peak_fraction: float
+    peak_date: date | None
+    close_fraction: float
+    current_fraction: float
+
+
+class TargetReachOut(BaseModel):
+    threshold: int
+    touched: int
+    at_close: int
+    outcomes: dict[str, int]
+
+
+class HorizonReachOut(BaseModel):
+    horizon: int
+    plans: int
+    blocks: int
+    levels: list[TargetReachOut]
+    after_close_90: dict[str, int]
+    near_misses: int
+
+
 class PlanOutcomeSummaryOut(BaseModel):
     """Il riassunto della popolazione FILTRATA, mai della pagina."""
 
@@ -76,13 +102,25 @@ class PlanOutcomeSummaryOut(BaseModel):
     stop_too_tight: int
     mae_r_on_wins: float | None = None
     mfe_r_on_losses: float | None = None
+    reach: list[HorizonReachOut] = []
     median_bars: float | None = None
     low_confidence: bool
     #: Le righe filtrate escluse dalle misure perche' a finestra ancora aperta.
     open_excluded: int = 0
 
 
+class SignalDirectionOut(BaseModel):
+    horizon: int
+    signals: int
+    blocks: int
+    hits: int
+    market_hits: int
+    benchmarked: int
+    with_plan: int
+
+
 class PlanOutcomeListOut(BaseModel):
+    direction: list[SignalDirectionOut] = []
     items: list[PlanOutcomeRowOut]
     total: int
     has_more: bool

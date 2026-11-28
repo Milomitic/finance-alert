@@ -75,6 +75,9 @@ class PlanBriefOut(BaseModel):
     horizon_days: int
     mae_r: float
     mfe_r: float
+    peak_fraction: float | None = None
+    peak_date: date | None = None
+    close_fraction: float | None = None
     tp2_reached: bool
     #: Primo tocco di ciascuna gamba NELL'ORIZZONTE, anche dopo la chiusura.
     stop_hit_date: date | None = None

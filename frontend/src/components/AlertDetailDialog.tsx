@@ -24,7 +24,7 @@ import { AlertChartButton, type AlertChartLink } from "@/components/alert/AlertC
 import { AlertSetupOrigin } from "@/components/alert/AlertSetupOrigin";
 import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
-import { PlanOutcomeBlock } from "@/components/alert/PlanOutcomeBlock";
+import { OpenPlanBlock, PlanOutcomeBlock } from "@/components/alert/PlanOutcomeBlock";
 import { CostiEtoroPiano } from "@/components/CostiEtoroPiano";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
@@ -648,7 +648,7 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
             <div className="mb-2 flex items-center gap-1 text-[0.7059rem] font-semibold uppercase tracking-wider text-muted-foreground">
               Piano · stop contro target
             </div>
-            <PlanOutcomeBlock plan={alert.plan} />
+            {alert.plan ? <PlanOutcomeBlock plan={alert.plan} /> : <OpenPlanBlock id={alert.id} />}
           </div>
         )}
 

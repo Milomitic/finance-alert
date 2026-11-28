@@ -314,3 +314,31 @@ def test_un_ordinamento_sconosciuto_e_un_400(client: TestClient) -> None:
     assert "r_multiple" in r.json()["detail"]
     assert client.get("/api/alerts/plan-outcomes?sort_by=pl&sort_dir=su").status_code == 400
     assert client.get("/api/alerts/plan-outcomes?sort_by=pl&sort_dir=asc").status_code == 200
+
+
+def test_percorso_e_direzione_hanno_denominatori_distinti(db, client):
+    from app.models import SignalOutcome
+
+    stock = _titolo(db, "COORTE")
+    stop = _esito(db, stock, esito="stop")
+    stop.peak_fraction, stop.close_fraction, stop.close_90_before_exit = .96, .92, True
+    target = _esito(db, stock)
+    target.peak_fraction, target.close_fraction = 1., .3
+    _esito(db, stock, chiusa=False)
+    _esito(db, stock)  # Pre-migrazione, senza misure del percorso.
+    senza = Alert(stock_id=stock.id, signal_name="sr_flip", trigger_price=100,
+                  triggered_at=datetime.now(UTC))
+    db.add(senza)
+    db.flush()
+    for aid, hit in [(senza.id, 1), (stop.alert_id, 0)]:
+        db.add(SignalOutcome(alert_id=aid, stock_id=stock.id, detector="sr_flip", tone="bull",
+                             signal_date=stop.signal_date, horizon_days=5, entry_close=100,
+                             forward_close=101 if hit else 99, fwd_return=.01 if hit else -.01,
+                             abs_hit=hit, mkt_neutral_hit=1 if hit else None))
+    db.commit()
+    risposta = client.get("/api/alerts/plan-outcomes?detector=sr_flip&limit=1").json()
+    g, = risposta["summary"]["reach"]
+    assert g["plans"] == 2 and g["near_misses"] == 1 and g["after_close_90"] == {"stop": 1}
+    assert g["levels"][2] == dict(threshold=90, touched=2, at_close=1, outcomes=dict(stop=1, tp1=1))
+    d, = risposta["direction"]
+    assert (d["signals"], d["hits"], d["with_plan"], d["benchmarked"]) == (2, 1, 1, 1)

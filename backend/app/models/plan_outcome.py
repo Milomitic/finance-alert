@@ -115,6 +115,10 @@ class PlanOutcome(Base):
     #: Il secondo target e' stato toccato MENTRE LA POSIZIONE ERA APERTA.
     #: Tenuto fuori dall'esito primario perche' mescolarlo renderebbe
     #: incomparabili le righe.
+    close_90_before_exit: Mapped[bool | None] = mapped_column(Boolean)
+    peak_fraction: Mapped[float | None] = mapped_column(Float)
+    peak_date: Mapped[date | None] = mapped_column(Date)
+    close_fraction: Mapped[float | None] = mapped_column(Float)
     tp2_reached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # ── L'ORDINE degli eventi ──────────────────────────────────────────────

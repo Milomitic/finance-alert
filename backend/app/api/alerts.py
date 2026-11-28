@@ -30,11 +30,11 @@ from app.schemas.alert import (
     StockSignalScanOut,
 )
 from app.schemas.confluence import ConfluenceOut
-from app.schemas.plan_outcome import PlanOutcomeListOut
+from app.schemas.plan_outcome import OpenPlanPathOut, PlanOutcomeListOut
 from app.services import alert_service, confluence_service, plan_performance_service
 from app.services.notifier_service import send_daily_digest
 from app.services.ohlcv_service import fetch_and_upsert
-from app.services.plan_outcome_service import ESITI
+from app.services.plan_outcome_service import ESITI, percorso_piano_aperto
 from app.services.scan_runner import run_tracked_scan
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
@@ -908,6 +908,16 @@ def get_one(
     if item is None:
         raise HTTPException(status_code=404, detail="Alert not found")
     return AlertOut(**item)
+
+
+@router.get("/{alert_id}/open-plan-path", response_model=OpenPlanPathOut | None)
+def open_plan_path(alert_id: int, db: Session = Depends(get_db),
+                   _user: User = Depends(get_current_user)) -> OpenPlanPathOut | None:
+    alert = alert_service.get_alert(db, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    dati = percorso_piano_aperto(db, alert)
+    return OpenPlanPathOut(**dati) if dati else None
 
 
 @router.get("/{alert_id}/peers", response_model=list[AlertPeerOut])

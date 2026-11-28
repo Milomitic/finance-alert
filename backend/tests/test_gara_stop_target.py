@@ -301,3 +301,31 @@ def test_l_escursione_resta_ferma_alla_risoluzione_anche_col_censimento_esteso()
     assert e.mfe_r == pytest.approx(2.25)
     assert e.mae_r == pytest.approx(0.25)
     assert e.data_stop == "2026-03-03"   # censito, ma fuori dal conto del trade
+
+
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_percorso_confermato_prima_dello_stop(side):
+    from app.services.plan_outcome_service import percorso_confermato
+
+    barre = [_b(2, 148, 99, 146), _b(3, 151, 85, 110), _b(4, 170, 99, 161)]
+    piano = _piano(entry=100, stop=90, tp1=150, tp2=160)
+    if side == "short":
+        piano = _piano(side, entry=100, stop=110, tp1=50, tp2=40)
+        barre = [Barra(b.data, 200 - b.basso, 200 - b.alto, 200 - b.chiusura) for b in barre]
+    esito = corri_la_gara(piano, barre, 3)
+    assert esito.r_multiplo == -1
+    percorso = percorso_confermato(piano, barre, esito)
+    assert percorso["peak_fraction"] == pytest.approx(.96)
+    assert percorso["close_fraction"] == pytest.approx(.92)
+    assert percorso["peak_date"].isoformat() == barre[0].data
+    assert percorso["close_90_before_exit"]
+
+
+def test_soglia_in_chiusura_solo_alla_scadenza():
+    from app.services.plan_outcome_service import percorso_confermato
+
+    piano = _piano()
+    barre = [_b(2, 107.9, 99, 107.6)]
+    percorso = percorso_confermato(piano, barre, corri_la_gara(piano, barre, 1))
+    assert percorso["close_fraction"] == pytest.approx(.95)
+    assert not percorso["close_90_before_exit"]

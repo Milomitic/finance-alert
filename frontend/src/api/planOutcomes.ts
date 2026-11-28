@@ -1,3 +1,4 @@
+import type { HorizonReachOut, SignalDirectionOut } from "./schema.gen";
 import { api } from "./client";
 
 /* ─── Il magazzino degli esiti di PIANO ───────────────────────────────────
@@ -44,6 +45,7 @@ export interface PlanOutcomeRow {
 }
 
 export interface PlanOutcomeSummary {
+  reach?: HorizonReachOut[];
   n: number;
   effective_n: number;
   horizon_days: number;
@@ -62,6 +64,7 @@ export interface PlanOutcomeSummary {
 }
 
 export interface PlanOutcomeList {
+  direction?: SignalDirectionOut[];
   items: PlanOutcomeRow[];
   total: number;
   has_more: boolean;

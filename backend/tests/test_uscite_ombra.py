@@ -110,9 +110,9 @@ def test_matura_scrive_le_quattro_varianti_solo_a_finestra_chiusa(db):
             matured_at=datetime.now(UTC)))
         ids.append(a.id)
     db.commit()
-    assert uo.matura(db) == 4
+    assert uo.matura(db) == 5
     righe = {r.variante: r for r in db.query(PlanOutcomeOmbra).all()}
-    assert set(righe) == {"attuale", "pareggio_1r", "pareggio_05r", "uscita_meta"}
+    assert set(righe) == {"attuale", "pareggio_1r", "pareggio_05r", "uscita_meta", "meta_al_90"}
     assert {r.alert_id for r in righe.values()} == {ids[0]}
     assert righe["attuale"].r_multiple == -1.0 and righe["pareggio_1r"].esito == "pareggio"
     assert uo.matura(db) == 0          # idempotente
@@ -143,10 +143,16 @@ def test_la_variante_del_modello_scala_la_geometria_col_suo_fattore(db):
         method_version=PLAN_METHOD_VERSION, legs_window_complete=True,
         matured_at=datetime.now(UTC)))
     db.commit()
-    assert uo.matura(db) == 5
+    assert uo.matura(db) == 6
     righe = {r.variante: r for r in db.query(PlanOutcomeOmbra).all()}
     assert righe["attuale"].esito == "stop"
     # Stop a 80, target a 160, R = 20: scade alla chiusura dell'ultima barra (95).
     assert righe["vol_modello"].esito == "scaduto"
     assert righe["vol_modello"].r_multiple == pytest.approx((95 - 100) / 20)
     assert uo._fattori_vol(db, [a.id, 999]) == {a.id: 2.0}
+
+
+@pytest.mark.parametrize(("massimo", "minimo", "atteso"), [(128, 99, .85), (128, 89, -1), (131, 99, 2.85)])
+def test_meta_al_novanta(massimo, minimo, atteso):
+    barre = [_b(1, massimo, minimo, 110), _b(2, 110, 89, 95)]
+    assert _corri(barre, "meta_al_90", orizzonte=2).r_multiplo == pytest.approx(atteso)

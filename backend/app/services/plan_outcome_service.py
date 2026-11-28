@@ -233,7 +233,8 @@ def _esito(
 #:   "5"  candle_reversal e gap_and_go: piano medio a 21 sedute invece che
 #:        breve a 5 (FA-154). Cambiano solo le loro righe. Ragione e misura in
 #:        `trade_plan.PIANO_MEDIO`.
-PLAN_METHOD_VERSION = "5"
+#:   "6"  registra il percorso confermato prima della risoluzione.
+PLAN_METHOD_VERSION = "6"
 
 
 def _tutte_le_barre(db: Session, stock_id: int) -> list[Barra]:
@@ -325,7 +326,36 @@ def _invalidazione_dalle_barre(
             "reason": "prezzo sopra il massimo su cui poggia la divergenza"}
 
 
-def _calcola(db: Session, a: Alert, tutte: list[Barra]) -> tuple[str, dict | None]:
+def percorso_confermato(
+    piano: PianoDiTrade, barre: Sequence[Barra], esito: EsitoGara | None,
+) -> dict:
+    """Quote della distanza a TP1 dal lato del piano. L'ingresso vale zero."""
+    segno = 1 if piano.side == "long" else -1
+    distanza = abs(piano.targets[0].price - piano.entry)
+    picco = chiusura = 0.0
+    giorno = None
+    chiusura_90_prima = False
+    for i, barra in enumerate(barre, 1):
+        terminale = esito is not None and i == esito.barre
+        if terminale and esito.esito in ("stop", "ambigua"):
+            break
+        if terminale and esito.esito == "tp1":
+            picco, giorno = 1.0, barra.data
+            break
+        estremo = barra.alto if segno == 1 else barra.basso
+        frazione = segno * (estremo - piano.entry) / distanza
+        if frazione > picco:
+            picco, giorno = frazione, barra.data
+        chiusura = max(chiusura, segno * (barra.chiusura - piano.entry) / distanza)
+        if terminale:
+            break
+        if chiusura >= 0.90 - 1e-12:
+            chiusura_90_prima = True
+    return dict(peak_fraction=picco, peak_date=_giorno(giorno), close_fraction=chiusura,
+                close_90_before_exit=chiusura_90_prima)
+
+
+def _calcola(db: Session, a: Alert, tutte: list[Barra], *, dettaglio: bool = False) -> tuple[str, dict | None]:
     """L'esito del piano di UN alert sulle barre di oggi: ("ok", valori della
     riga), ("aperto", None) se la gara non e' risolta, ("niente", None) se non
     c'e' un piano da misurare. Il proprietario unico della regola: lo usano la
@@ -385,6 +415,14 @@ def _calcola(db: Session, a: Alert, tutte: list[Barra]) -> tuple[str, dict | Non
     orizzonte = sedute_della_gara(a.signal_name, _horizon_days(a.signal_name or ""))
     esito = corri_la_gara(piano, barre, orizzonte)
     if esito is None:
+        if dettaglio and barre:
+            distanza = abs(piano.targets[0].price - piano.entry)
+            segno = 1 if piano.side == "long" else -1
+            return "aperto", dict(
+                **percorso_confermato(piano, barre, None), entry=piano.entry,
+                tp1=piano.targets[0].price, as_of=barre[-1].data,
+                current_fraction=segno * (barre[-1].chiusura - piano.entry) / distanza,
+            )
         return "aperto", None
 
     valori = dict(
@@ -398,6 +436,7 @@ def _calcola(db: Session, a: Alert, tutte: list[Barra]) -> tuple[str, dict | Non
         esito=esito.esito, resolved_date=date.fromisoformat(esito.data),
         bars_to_outcome=esito.barre, r_multiple=esito.r_multiplo,
         mae_r=esito.mae_r, mfe_r=esito.mfe_r,
+        **percorso_confermato(piano, barre, esito),
         tp2_reached=esito.tp2_raggiunto,
         stop_hit_date=_giorno(esito.data_stop),
         tp1_hit_date=_giorno(esito.data_tp1),
@@ -407,6 +446,11 @@ def _calcola(db: Session, a: Alert, tutte: list[Barra]) -> tuple[str, dict | Non
         legs_window_complete=len(barre) >= orizzonte,
     )
     return "ok", valori
+
+
+def percorso_piano_aperto(db: Session, alert: Alert) -> dict | None:
+    stato, dati = _calcola(db, alert, _tutte_le_barre(db, alert.stock_id), dettaglio=True)
+    return dati if stato == "aperto" else None
 
 
 def mature_plan_outcomes(

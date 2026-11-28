@@ -55,6 +55,13 @@ describe("PlanOutcomeBlock", () => {
     expect(screen.queryByText(/la distanza dello stop no/)).not.toBeInTheDocument();
   });
 
+  it("mostra il quasi target anche su uno stop", () => {
+    render(<PlanOutcomeBlock plan={piano({ esito: "stop", entry: 100, tp1: 150,
+      r_multiple: -1, peak_fraction: .96, close_fraction: .92, peak_date: "2026-03-03" })} />);
+    expect(screen.getByText("96% del primo target")).toBeInTheDocument();
+    expect(screen.getByText(/Movimento favorevole \+48%/)).toBeInTheDocument();
+  });
+
   it("uno scaduto dice che non ha toccato niente, invece di lasciare il vuoto", () => {
     render(<PlanOutcomeBlock plan={piano({
       esito: "scaduto", r_multiple: 0.4, resolved_date: "2026-03-30",

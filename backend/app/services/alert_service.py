@@ -456,6 +456,9 @@ def _piano_dict(piano: PlanOutcome | None) -> dict[str, Any] | None:
         "horizon_days": piano.horizon_days,
         "mae_r": piano.mae_r,
         "mfe_r": piano.mfe_r,
+        "peak_fraction": piano.peak_fraction,
+        "peak_date": piano.peak_date,
+        "close_fraction": piano.close_fraction,
         "tp2_reached": piano.tp2_reached,
         # Il primo tocco di ciascuna gamba NELL'ORIZZONTE, anche dopo la
         # chiusura: e' la sola diagnosi che questo magazzino sa dare.

@@ -60,10 +60,12 @@ class Variante:
     #: cioe' la stessa geometria in «ATR del modello» invece che nell'ATR.
     #: Esiste solo per gli alert che il fattore ce l'hanno.
     vol_modello: bool = False
+    frazione_target_parziale: float | None = None
 
 
 VARIANTI: tuple[Variante, ...] = (
     Variante("attuale"),
+    Variante("meta_al_90", frazione_target_parziale=0.90),
     Variante("pareggio_1r", pareggio_dopo_r=1.0),
     Variante("pareggio_05r", pareggio_dopo_r=0.5),
     Variante("uscita_meta", uscita_meta_sotto_r=0.25),
@@ -90,6 +92,15 @@ def corri_variante(
     la finestra non e' ancora chiusa (meno barre dell'orizzonte). Pura."""
     if r <= 0 or orizzonte <= 0 or len(barre) < orizzonte:
         return None
+    if variante.frazione_target_parziale is not None:
+        # Due metà con lo stesso stop. L’ordine limite è già attivo all’ingresso.
+        comune = dict(lato=lato, ingresso=ingresso, stop=stop, r=r, barre=barre,
+                      orizzonte=orizzonte, variante=Variante("attuale"))
+        intera = corri_variante(tp1=tp1, **comune)
+        soglia = ingresso + (tp1 - ingresso) * variante.frazione_target_parziale
+        parziale = corri_variante(tp1=soglia, **comune)
+        return EsitoVariante(intera.esito, (intera.r_multiplo + parziale.r_multiplo) / 2,
+                             intera.barre)
     lungo = lato == "long"
     segno = 1.0 if lungo else -1.0
     rr1 = (tp1 - ingresso) * segno / r

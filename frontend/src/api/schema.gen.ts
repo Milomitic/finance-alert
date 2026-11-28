@@ -967,6 +967,15 @@ export interface HoldingDetailOut {
   stock_sector?: string | null;
 }
 
+export interface HorizonReachOut {
+  horizon: number;
+  plans: number;
+  blocks: number;
+  levels: TargetReachOut[];
+  after_close_90: Record<string, number>;
+  near_misses: number;
+}
+
 export interface HorizontalOut {
   id: number;
   price: number;
@@ -1512,6 +1521,16 @@ export interface OhlcvFreshnessOut {
   stocks_at_max?: number;
 }
 
+export interface OpenPlanPathOut {
+  entry: number;
+  tp1: number;
+  as_of: string;
+  peak_fraction: number;
+  peak_date: string | null;
+  close_fraction: number;
+  current_fraction: number;
+}
+
 export interface OperazioneFondoOut {
   ticker: string;
   company_name?: string | null;
@@ -1609,6 +1628,9 @@ export interface PlanBriefOut {
   horizon_days: number;
   mae_r: number;
   mfe_r: number;
+  peak_fraction?: number | null;
+  peak_date?: string | null;
+  close_fraction?: number | null;
   tp2_reached: boolean;
   stop_hit_date?: string | null;
   tp1_hit_date?: string | null;
@@ -1628,6 +1650,7 @@ export interface PlanOnlyOpenOut {
 }
 
 export interface PlanOutcomeListOut {
+  direction?: SignalDirectionOut[];
   items: PlanOutcomeRowOut[];
   total: number;
   has_more: boolean;
@@ -1674,6 +1697,7 @@ export interface PlanOutcomeSummaryOut {
   stop_too_tight: number;
   mae_r_on_wins?: number | null;
   mfe_r_on_losses?: number | null;
+  reach?: HorizonReachOut[];
   median_bars?: number | null;
   low_confidence: boolean;
   open_excluded?: number;
@@ -2199,6 +2223,16 @@ export interface SetupOut {
   next_earnings_date?: string | null;
 }
 
+export interface SignalDirectionOut {
+  horizon: number;
+  signals: number;
+  blocks: number;
+  hits: number;
+  market_hits: number;
+  benchmarked: number;
+  with_plan: number;
+}
+
 export interface SignalDriftOut {
   summary: SignalDriftSummaryOut;
   detectors: SignalDriftRowOut[];
@@ -2411,6 +2445,13 @@ export interface TargetDownOut {
   job: string;
   namespace: string;
   instance?: string | null;
+}
+
+export interface TargetReachOut {
+  threshold: number;
+  touched: number;
+  at_close: number;
+  outcomes: Record<string, number>;
 }
 
 export interface TechnicalScoreOut {

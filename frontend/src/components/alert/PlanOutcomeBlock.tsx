@@ -1,5 +1,8 @@
 import { CircleSlash, Hourglass, Target, TrendingDown, XCircle } from "lucide-react";
 
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/api/client";
+import type { OpenPlanPathOut } from "@/api/schema.gen";
 import type { PlanBrief } from "@/api/types";
 import { InfoHint } from "@/components/ui/info-hint";
 import {
@@ -50,6 +53,44 @@ function Livello({ label, valore }: { label: string; valore: string }) {
         {label}
       </div>
       <div className="truncate text-sm font-semibold tabular-nums">{valore}</div>
+    </div>
+  );
+}
+
+function percentuale(frazione: number) {
+  return (100 * frazione).toLocaleString("it-IT", { maximumFractionDigits: 1 }) + "%";
+}
+
+function Percorso({ piano }: { piano: Pick<PlanBrief,
+  "entry" | "tp1" | "peak_fraction" | "peak_date" | "close_fraction"> }) {
+  if (piano.peak_fraction == null || piano.close_fraction == null) return null;
+  const distanza = Math.abs(piano.tp1 - piano.entry) / piano.entry;
+  return (
+    <div className="space-y-1 text-sm">
+      <strong>{percentuale(piano.peak_fraction)} del primo target</strong>
+      <p>Movimento favorevole +{percentuale(piano.peak_fraction * distanza)}
+        {piano.peak_date && ` · ${giornoBreve(piano.peak_date)}`}</p>
+      <p className="text-xs text-muted-foreground">
+        Migliore chiusura favorevole a piano aperto +{percentuale(piano.close_fraction * distanza)}.
+      </p>
+    </div>
+  );
+}
+
+export function OpenPlanBlock({ id }: { id: number }) {
+  const q = useQuery({
+    queryKey: ["open-plan-path", id],
+    queryFn: ({ signal }) => api<OpenPlanPathOut | null>(`/api/alerts/${id}/open-plan-path`, { signal }),
+    staleTime: 60_000,
+  });
+  if (q.isLoading) return <p className="text-xs">Caricamento del percorso…</p>;
+  if (q.isError) return <button type="button" onClick={() => q.refetch()}>Riprova a caricare il percorso</button>;
+  if (!q.data) return <PlanOutcomeBlock plan={null} />;
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <strong>Piano aperto · {giornoBreve(q.data.as_of)}</strong>
+      <p className="text-sm">Ultima chiusura al {percentuale(q.data.current_fraction)} del tragitto verso TP1.</p>
+      <Percorso piano={q.data} />
     </div>
   );
 }
@@ -110,6 +151,15 @@ export function PlanOutcomeBlock({ plan }: { plan: PlanBrief | null | undefined 
           {plan.bars_to_outcome} sedute · orizzonte {plan.horizon_days}g
         </span>
       </div>
+
+      <Percorso piano={plan} />
+      {plan.peak_fraction != null && (plan.esito === "stop" || plan.esito === "ambigua")
+        && plan.mfe_r * plan.r > plan.peak_fraction * Math.abs(plan.tp1 - plan.entry) + 1e-9 && (
+          <p className="text-xs text-muted-foreground">
+            Estremo favorevole nella seduta dello stop +{percentuale(plan.mfe_r * plan.r / plan.entry)}.
+            L’ordine dei tocchi intraday è incerto.
+          </p>
+        )}
 
       {/* La geometria CONGELATA: quella su cui la gara è stata corsa, non
           quella che si ricalcolerebbe oggi con le costanti di adesso. */}
@@ -182,8 +232,8 @@ export function PlanOutcomeBlock({ plan }: { plan: PlanBrief | null | undefined 
         <span title="Quanto il prezzo è andato CONTRO la posizione prima che si chiudesse">
           escursione avversa {formatR(plan.mae_r)}
         </span>
-        <span title="Quanto il prezzo è andato a FAVORE prima che la posizione si chiudesse">
-          a favore {formatR(plan.mfe_r)}
+        <span title="Massimo favorevole osservato fino alla seduta di uscita inclusa">
+          a favore (intera barra finale inclusa) {formatR(plan.mfe_r)}
         </span>
       </div>
     </div>

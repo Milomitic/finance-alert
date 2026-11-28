@@ -16,13 +16,13 @@ Sola lettura, calcolato su richiesta.
 """
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, PlanOutcome, Stock
+from app.models import Alert, PlanOutcome, SignalOutcome, Stock
 from app.stats.media import mean_interval
 from app.stats.sizing import independent_blocks
 
@@ -290,6 +290,58 @@ ORDINAMENTI_ESITI: dict[str, Callable[[PlanOutcome, str], object]] = {
 }
 
 
+def raggiungimento_tp1(esiti: Sequence[PlanOutcome]) -> list[dict]:
+    gruppi: dict[int, list[PlanOutcome]] = defaultdict(list)
+    for r in esiti:
+        if _chiusa(r) and r.peak_fraction is not None and r.close_fraction is not None:
+            gruppi[r.horizon_days].append(r)
+    curve = []
+    for orizzonte, piani in sorted(gruppi.items()):
+        livelli = []
+        for soglia in (50, 75, 90, 100):
+            minimo = soglia / 100 - 1e-12
+            esiti_toccati: dict[str, int] = defaultdict(int)
+            for piano in piani:
+                if (piano.esito == "tp1" if soglia == 100 else piano.peak_fraction >= minimo):
+                    esiti_toccati[piano.esito] += 1
+            livelli.append(dict(threshold=soglia, touched=sum(esiti_toccati.values()),
+                                at_close=sum(p.close_fraction >= minimo for p in piani),
+                                outcomes=dict(esiti_toccati)))
+        quasi = sum(r.peak_fraction >= 0.90 - 1e-12 and r.esito != "tp1" for r in piani)
+        dopo = Counter(r.esito for r in piani if r.close_90_before_exit)
+        curve.append(dict(horizon=orizzonte, plans=len(piani), levels=livelli,
+                          after_close_90=dict(dopo), near_misses=quasi,
+                          blocks=independent_blocks([p.entry_date for p in piani], orizzonte)))
+    return curve
+
+
+def _direzione(db: Session, detector: str | None, tone: str | None,
+               ticker: str | None, esito: str | None) -> tuple[list[dict], set[str]]:
+    # Tutti i segnali emessi e maturi, anche quando manca la geometria del piano.
+    s = SignalOutcome
+    stmt = (select(s.detector, s.signal_date, s.horizon_days, s.abs_hit, s.mkt_neutral_hit,
+                   PlanOutcome.alert_id)
+            .outerjoin(PlanOutcome, PlanOutcome.alert_id == s.alert_id)
+            .where(s.source == "live", s.alert_id.is_not(None)))
+    if tone:
+        stmt = stmt.where(s.tone == tone)
+    if ticker:
+        stmt = stmt.join(Stock, Stock.id == s.stock_id).where(Stock.ticker == ticker.strip().upper())
+    if esito:
+        stmt = stmt.where(PlanOutcome.esito == esito)
+    gruppi = defaultdict(list)
+    detectors = set()
+    for row in db.execute(stmt):
+        detectors.add(row.detector)
+        if not detector or detector == row.detector:
+            gruppi[row.horizon_days].append(row)
+    return [dict(horizon=h, signals=len(rows), blocks=independent_blocks([r.signal_date for r in rows], h),
+                 hits=sum(r.abs_hit for r in rows), market_hits=sum(r.mkt_neutral_hit or 0 for r in rows),
+                 benchmarked=sum(r.mkt_neutral_hit is not None for r in rows),
+                 with_plan=sum(r.alert_id is not None for r in rows))
+            for h, rows in sorted(gruppi.items())], detectors
+
+
 def elenco_esiti_piano(
     db: Session,
     *,
@@ -362,9 +414,14 @@ def elenco_esiti_piano(
     riassunto = _cella("tutti", esiti, min_n) if len(esiti) > aperte else None
     if riassunto is not None:
         riassunto.pop("detector", None)
+        riassunto["reach"] = raggiungimento_tp1(esiti)
 
+    direzione, detectors_maturi = _direzione(db, detector, tone, ticker, esito)
+    for nome_detector in detectors_maturi:
+        per_detector.setdefault(nome_detector, 0)
     fetta = righe[offset: offset + limit] if limit > 0 else righe
     return {
+        "direction": direzione,
         "items": [_riga(e, tick, nome) for e, tick, nome in fetta],
         "total": len(righe),
         "has_more": offset + len(fetta) < len(righe),

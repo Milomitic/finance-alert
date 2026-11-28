@@ -165,6 +165,9 @@ export interface AlertPeer {
  * congelata qui vivrebbe in due posti il giorno che qualcuno la affina.
  * I lettori sono in `lib/planOutcome.ts`. */
 export interface PlanBrief {
+  peak_fraction?: number | null;
+  peak_date?: string | null;
+  close_fraction?: number | null;
   /** tp1 | stop | ambigua | scaduto */
   esito: string;
   resolved_date: string;

@@ -131,3 +131,16 @@ def test_la_join_non_moltiplica_le_righe(client: TestClient, db: Session) -> Non
 
     assert corpo["total"] == 1
     assert len(corpo["items"]) == 1
+
+
+def test_percorso_aperto_inizia_dopo_ingresso(db, client):
+    from tests.test_maturazione_piani import _alert as segnale
+    from tests.test_maturazione_piani import _barre, _titolo
+
+    stock = _titolo(db)
+    alert = segnale(db, stock)
+    _barre(db, stock, [("2026-03-02", 120, 80, 100), ("2026-03-03", 103, 99, 101.5)])
+    db.commit()
+    path = client.get(f"/api/alerts/{alert.id}/open-plan-path").json()
+    assert path["peak_fraction"] == .5 and path["current_fraction"] == .25
+    assert path["as_of"] == "2026-03-03"

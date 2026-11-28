@@ -322,6 +322,33 @@ export function OutcomesView() {
             </p>
           ) : null}
 
+          {q.data?.direction?.map((d) => (
+            <section key={d.horizon} className="space-y-1 rounded-lg border p-3 text-sm">
+              <h3 className="font-semibold">Direzione a {d.horizon} sedute</h3>
+              <p>Verso corretto {d.hits}/{d.signals} · sopra la mediana dell’universo nel verso previsto {d.benchmarked ? `${d.market_hits}/${d.benchmarked}` : "—"}</p>
+              <p className="text-xs text-muted-foreground">{d.blocks} finestre indipendenti · {d.with_plan}/{d.signals} segnali maturi con piano risolto. Filtri attivi applicati.</p>
+            </section>
+          ))}
+          {q.data?.summary?.reach?.map((g) => (
+            <section key={g.horizon} className="space-y-2 rounded-lg border p-3 text-sm">
+              <h3 className="font-semibold">Percorso verso TP1 · {g.horizon} sedute</h3>
+              <p className="text-xs">{g.plans} piani misurati con i filtri attivi · {g.blocks} finestre indipendenti</p>
+              <div className="overflow-x-auto"><table className="w-full text-left text-xs tabular-nums">
+                <thead><tr>{["Quota di TP1", "Tocco confermato", "In chiusura a piano aperto", "Esito dei piani arrivati alla soglia"].map(h => <th key={h} className="p-1">{h}</th>)}</tr></thead>
+                <tbody>{g.levels.map(l => (
+                  <tr key={l.threshold} className="border-t">
+                    <td className="p-1">{l.threshold}%</td>
+                    <td>{l.touched}/{g.plans} ({Math.round(100 * l.touched / g.plans)}%)</td>
+                    <td>{l.threshold === 100 ? "—" : `${l.at_close}/${g.plans}`}</td>
+                    <td>{Object.entries(l.outcomes).map(([k, n]) => `${ESITO_META[k]?.label ?? k} ${n}`).join(" · ") || "—"}</td>
+                  </tr>
+                ))}</tbody>
+              </table></div>
+              <p className="text-xs text-muted-foreground">Almeno il 90% di TP1 senza completarlo: {g.near_misses}/{g.plans}. I tocchi comprendono anche i piani arrivati a TP1 nella stessa seduta. La chiusura conta solo finché il piano è aperto, inclusa la scadenza.</p>
+              <p className="text-xs">Dopo una chiusura almeno al 90% con il piano ancora aperto per la seduta successiva: {Object.entries(g.after_close_90).map(([k, n]) => `${ESITO_META[k]?.label ?? k} ${n}`).join(" · ") || "nessun caso"}.</p>
+            </section>
+          ))}
+
           {/* I controlli, per dimensione. Vedi la nota sopra `Segmentato`. */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Segmentato
@@ -341,7 +368,7 @@ export function OutcomesView() {
               voci={VERSI}
             />
 
-            {detectors.length > 1 && (
+            {(detectors.length > 1 || detector) && (
               <label className="flex min-w-0 items-center gap-2">
                 <span className="shrink-0 text-[0.6765rem] uppercase tracking-[0.14em] text-muted-foreground">
                   Condizione
