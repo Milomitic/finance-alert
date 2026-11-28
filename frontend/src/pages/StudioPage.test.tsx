@@ -160,4 +160,44 @@ describe("StudioPage", () => {
     expect(screen.getByText(/Punto: media del mese; barra: intervallo al 95%/)).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Anno per anno" })).toBeInTheDocument();
   });
+
+  it("toccare prima: la barra divisa con gli intervalli (FA-196)", async () => {
+    risposte["/api/studio/primo_passaggio"] = {
+      simbolo: "AAPL", disponibile: true, finestre: 120, target: 48, stop: 42, nessuno: 30,
+      intervallo_target: [0.31, 0.49], intervallo_stop: [0.27, 0.44], intervallo_nessuno: [0.18, 0.33],
+      dal: "2016-05-05", al: "2026-11-26", verdetto: "descritto",
+    };
+    monta("/studio?simbolo=AAPL&modello=primo_passaggio&target=8&stop=5&orizzonte=21");
+    expect(await screen.findByText("prima l'obiettivo")).toBeInTheDocument();
+    expect(screen.getByText("40%")).toBeInTheDocument();
+    expect(screen.getByText(/48 su 120 · da 31% a 49%/)).toBeInTheDocument();
+    expect(screen.getByText(/non una probabilità per domani/)).toBeInTheDocument();
+  });
+
+  it("cali e recuperi: il calo di oggi fra quelli della storia (FA-198)", async () => {
+    risposte["/api/studio/cali"] = {
+      simbolo: "^GSPC", soglia_pct: 10, dal: "1927-12-30",
+      episodi: [{ picco: "2020-02-19", minimo: "2020-03-23", recupero: "2020-08-18", profondita: -0.339, sedute_discesa: 23, sedute_recupero: 103 }],
+      numero: 30, recuperati: 29, profondita_mediana: -0.19, sedute_recupero_mediane: 250, sedute_discesa_mediane: 60,
+      corrente: { profondita: -0.063, picco: "2026-10-06", sedute_dal_picco: 36 }, episodi_piu_profondi_del_corrente: 0,
+      sott_acqua: [{ data: "2020-01-02", valore: 0 }, { data: "2020-03-23", valore: -0.339 }, { data: "2026-11-26", valore: -0.063 }],
+    };
+    monta("/studio?simbolo=%5EGSPC&modello=cali&soglia_cali=10");
+    expect(await screen.findByText(/sotto il massimo del 6\/10\/2026/)).toBeInTheDocument();
+    expect(screen.getByText("−33,9%")).toBeInTheDocument();
+    expect(screen.getByText("103 sedute")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Distanza di \^GSPC dal massimo precedente/ })).toBeInTheDocument();
+  });
+
+  it("al netto di un riferimento lo dice nel titolo e nella frase (FA-197)", async () => {
+    risposte["/api/studio/dopo_movimento"] = {
+      simbolo: "AAPL", netto: "^GSPC", condizione: misura(0.01), base: misura(0.002), differenza: 0.008,
+      intervallo_differenza: [-0.01, 0.02], verdetto: "compatibile_con_zero",
+      parametri: { sedute: 5, soglia_pct: -10, orizzonte: 21 },
+    };
+    monta("/studio?simbolo=AAPL&modello=dopo_movimento&soglia=-10&sedute=5&orizzonte=21&netto=%5EGSPC");
+    expect(await screen.findByRole("heading", { name: /AAPL · Dopo un movimento · al netto di S&P 500/ })).toBeInTheDocument();
+    // Il titolo c'e' subito, la frase arriva con i dati.
+    expect(await screen.findByText(/misurate in eccesso su S&P 500/)).toBeInTheDocument();
+  });
 });

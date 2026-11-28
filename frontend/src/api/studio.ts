@@ -81,6 +81,44 @@ export type Evento = Confronto & {
   orizzonte: number;
 };
 
+/** FA-196 */
+export type PrimoPassaggio = {
+  simbolo: string;
+  disponibile: boolean;
+  motivo?: string;
+  finestre?: number;
+  target?: number;
+  stop?: number;
+  nessuno?: number;
+  intervallo_target?: [number, number];
+  intervallo_stop?: [number, number];
+  intervallo_nessuno?: [number, number];
+  dal?: string;
+  al?: string;
+  verdetto?: "non_concludente" | "descritto";
+};
+
+/** FA-198 */
+export type EpisodioCalo = {
+  picco: string; minimo: string; recupero: string | null; profondita: number;
+  sedute_discesa: number; sedute_recupero: number | null;
+};
+
+export type Cali = {
+  simbolo: string;
+  soglia_pct: number;
+  dal: string;
+  episodi: EpisodioCalo[];
+  numero: number;
+  recuperati: number;
+  profondita_mediana: number | null;
+  sedute_recupero_mediane: number | null;
+  sedute_discesa_mediane: number | null;
+  corrente: { profondita: number; picco: string; sedute_dal_picco: number } | null;
+  episodi_piu_profondi_del_corrente: number;
+  sott_acqua: { data: string; valore: number }[];
+};
+
 function q(p: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== "") sp.set(k, String(v));
@@ -88,10 +126,14 @@ function q(p: Record<string, string | number | undefined>): string {
 }
 
 export const studio = {
-  dopoMovimento: (p: { simbolo: string; sedute: number; soglia_pct: number; orizzonte: number }, signal?: AbortSignal) =>
+  dopoMovimento: (p: { simbolo: string; sedute: number; soglia_pct: number; orizzonte: number; netto?: string }, signal?: AbortSignal) =>
     api<DopoMovimento>(`/api/studio/dopo_movimento?${q(p)}`, { signal }),
-  stagionalita: (simbolo: string, signal?: AbortSignal) =>
-    api<Stagionalita>(`/api/studio/stagionalita?${q({ simbolo })}`, { signal }),
-  evento: (p: { simbolo: string; tipo: string; serie_macro?: string; orizzonte: number }, signal?: AbortSignal) =>
+  stagionalita: (simbolo: string, signal?: AbortSignal, netto?: string) =>
+    api<Stagionalita>(`/api/studio/stagionalita?${q({ simbolo, netto })}`, { signal }),
+  evento: (p: { simbolo: string; tipo: string; serie_macro?: string; orizzonte: number; netto?: string }, signal?: AbortSignal) =>
     api<Evento>(`/api/studio/evento?${q(p)}`, { signal }),
+  primoPassaggio: (p: { simbolo: string; lato: string; target_pct: number; stop_pct: number; orizzonte: number }, signal?: AbortSignal) =>
+    api<PrimoPassaggio>(`/api/studio/primo_passaggio?${q(p)}`, { signal }),
+  cali: (p: { simbolo: string; soglia_pct: number }, signal?: AbortSignal) =>
+    api<Cali>(`/api/studio/cali?${q(p)}`, { signal }),
 };

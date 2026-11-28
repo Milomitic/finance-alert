@@ -44,6 +44,9 @@ GIORNI = ("lun", "mar", "mer", "gio", "ven")
 class Serie:
     date: list[date]
     chiusure: list[float]
+    #: FA-196: massimi e minimi, per «toccare prima». None se la fonte non li ha.
+    alti: list[float] | None = None
+    bassi: list[float] | None = None
 
 
 def _percentile(ordinati: list[float], q: float) -> float:
@@ -242,17 +245,24 @@ def confronto(cond: dict, base: dict, stab: dict | None = None) -> dict:
     return {"differenza": diff, "intervallo_differenza": intervallo, "verdetto": verdetto}
 
 
-def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) -> dict:
+def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int,
+                   esiti: list[float] | None = None) -> dict:
     """Le H sedute dopo ogni giorno in cui la variazione delle N sedute
-    precedenti e' stata almeno `soglia_pct` (negativa = un calo almeno pari)."""
+    precedenti e' stata almeno `soglia_pct` (negativa = un calo almeno pari).
+
+    FA-197: con `esiti` (una serie allineata a `s`, per esempio il rapporto
+    col riferimento) la CONDIZIONE resta sul prezzo e l'ESITO si misura su
+    `esiti`: «dopo un calo del 10% di AAPL, quanto ha fatto meglio o peggio
+    dell'S&P 500». Mettere la condizione sull'eccesso cambierebbe la domanda."""
     c, d = s.chiusure, s.date
+    e = esiti if esiti is not None else c
     soglia = soglia_pct / 100.0
     casi, date_casi, base, date_base = [], [], [], []
     mosse, partenze, partenze_base = [], [], []
     for t in range(sedute, len(c) - orizzonte):
-        if c[t] <= 0 or c[t - sedute] <= 0:
+        if c[t] <= 0 or c[t - sedute] <= 0 or e[t] <= 0:
             continue
-        avanti = c[t + orizzonte] / c[t] - 1.0
+        avanti = e[t + orizzonte] / e[t] - 1.0
         base.append(avanti)
         date_base.append(d[t])
         partenze_base.append(t)
@@ -273,8 +283,8 @@ def dopo_movimento(s: Serie, *, sedute: int, soglia_pct: float, orizzonte: int) 
     # La base del percorso: un campione regolare delle finestre (al massimo
     # ~400), che per una media basta e tiene il calcolo sotto i millisecondi.
     passo = max(1, len(partenze_base) // 400)
-    out["percorso"] = percorso_cumulato(c, partenze, orizzonte, partenze_base[::passo])
-    out["escursioni"] = escursioni(c, partenze, orizzonte)
+    out["percorso"] = percorso_cumulato(e, partenze, orizzonte, partenze_base[::passo])
+    out["escursioni"] = escursioni(e, partenze, orizzonte)
     return out
 
 
@@ -337,11 +347,13 @@ def stagionalita(s: Serie) -> dict:
 PRIMA, DOPO = 5, 10
 
 
-def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
+def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5,
+           esiti: list[float] | None = None) -> dict:
     """Il percorso medio da PRIMA sedute prima a DOPO sedute dopo ogni evento,
     in rendimento dalla chiusura della seduta precedente all'evento; e la
-    misura a `orizzonte` sedute contro il caso base."""
-    c = s.chiusure
+    misura a `orizzonte` sedute contro il caso base. FA-197: con `esiti` si
+    misura sul rapporto col riferimento (l'eccesso)."""
+    c = esiti if esiti is not None else s.chiusure
     percorsi, a_h, date_h, date_ev = [], [], [], []
     for g in sorted(set(date_eventi)):
         # La seduta dell'evento: la prima in data g o dopo (un annuncio di
@@ -377,6 +389,87 @@ def evento(s: Serie, date_eventi: list[date], *, orizzonte: int = 5) -> dict:
             "istogramma": istogramma(a_h, base), "elenco_casi": elenco_casi(date_h, a_h, orizzonte)}
 
 
+# ─── FA-197: al netto di un riferimento ────────────────────────────────────
+
+def allinea_al_netto(s: Serie, rif: Serie) -> tuple[Serie, list[float]]:
+    """`s` ristretta alle date che ha in comune col riferimento, e la serie
+    del RAPPORTO s/rif sulle stesse date: un suo rendimento e' il rendimento
+    in eccesso sul riferimento (in forma moltiplicativa)."""
+    r = {g: c for g, c in zip(rif.date, rif.chiusure, strict=True) if c > 0}
+    idx = [i for i, g in enumerate(s.date) if g in r and s.chiusure[i] > 0]
+    sub = Serie([s.date[i] for i in idx], [s.chiusure[i] for i in idx],
+                [s.alti[i] for i in idx] if s.alti else None, [s.bassi[i] for i in idx] if s.bassi else None)
+    rapporto = [s.chiusure[i] / r[s.date[i]] for i in idx]
+    return sub, rapporto
+
+
+# ─── FA-196: toccare prima il target o lo stop ─────────────────────────────
+
+MIN_FINESTRE = 20
+
+
+def primo_passaggio(s: Serie, *, lato: str, target_pct: float, stop_pct: float, orizzonte: int) -> dict:
+    """Su finestre storiche DISGIUNTE: quante volte, entro `orizzonte`
+    sedute, il prezzo ha toccato prima il target, prima lo stop, o nessuno
+    dei due. Proprietario del calcolo: `rischio_posizioni_service`."""
+    from app.services import rischio_posizioni_service as rp  # noqa: PLC0415
+    from app.stats.sizing import wilson_interval  # noqa: PLC0415
+
+    if s.alti is None or s.bassi is None:
+        return {"disponibile": False, "motivo": "senza massimi e minimi non si sa cosa e' stato toccato"}
+    barre = [rp.Barra(g.isoformat(), a, b, c) for g, a, b, c in zip(s.date, s.alti, s.bassi, s.chiusure, strict=True)]
+    r = rp.primo_passaggio(barre, lato, stop_pct / 100.0, target_pct / 100.0, orizzonte)
+    if r is None:
+        return {"disponibile": False, "motivo": "storia troppo corta"}
+    n = r["finestre"]
+
+    def iv(k: int) -> list[float]:
+        lo, hi = wilson_interval(k, n)
+        return [lo, hi]
+
+    return {"disponibile": True, "finestre": n, "target": r["target"], "stop": r["stop"], "nessuno": r["nessuno"],
+            "intervallo_target": iv(r["target"]), "intervallo_stop": iv(r["stop"]),
+            "intervallo_nessuno": iv(r["nessuno"]), "dal": r["dal"], "al": r["al"],
+            "verdetto": "non_concludente" if n < MIN_FINESTRE else "descritto",
+            "parametri": {"lato": lato, "target_pct": target_pct, "stop_pct": stop_pct, "orizzonte": orizzonte}}
+
+
+# ─── FA-198: cali e recuperi ───────────────────────────────────────────────
+
+MAX_PUNTI_SOTT_ACQUA = 600
+
+
+def cali_e_recuperi(s: Serie, *, soglia_pct: float) -> dict:
+    """I cali oltre `soglia_pct` dal massimo, con i tempi di discesa e di
+    recupero; la curva «sott'acqua» (distanza dal massimo nel tempo); e dove
+    sta il calo di oggi fra quelli della storia."""
+    from app.stats import drawdown as dd  # noqa: PLC0415
+
+    c, d = s.chiusure, s.date
+    episodi = dd.episodi(d, c, soglia=soglia_pct / 100.0)
+    corrente = dd.calo_corrente(d, c)
+    picco, sotto = c[0], []
+    for g, v in zip(d, c, strict=True):
+        picco = max(picco, v)
+        sotto.append((g, v / picco - 1.0 if picco > 0 else 0.0))
+    passo = max(1, -(-len(sotto) // MAX_PUNTI_SOTT_ACQUA))
+    punti = sotto[::passo]
+    if punti[-1] != sotto[-1]:
+        punti.append(sotto[-1])
+    chiusi = [e for e in episodi if e["recupero"] is not None]
+    prof = sorted(e["profondita"] for e in episodi)
+    piu_profondi = sum(1 for e in episodi if corrente and e["profondita"] < corrente["profondita"])
+    return {
+        "soglia_pct": soglia_pct, "dal": d[0].isoformat(), "episodi": episodi,
+        "numero": len(episodi), "recuperati": len(chiusi),
+        "profondita_mediana": median(prof) if prof else None,
+        "sedute_recupero_mediane": median(e["sedute_recupero"] for e in chiusi) if chiusi else None,
+        "sedute_discesa_mediane": median(e["sedute_discesa"] for e in episodi) if episodi else None,
+        "corrente": corrente, "episodi_piu_profondi_del_corrente": piu_profondi,
+        "sott_acqua": [{"data": g.isoformat(), "valore": v} for g, v in punti],
+    }
+
+
 def _primo_da(date_: list[date], g: date) -> int:
     lo, hi = 0, len(date_)
     while lo < hi:
@@ -403,10 +496,11 @@ def serie_di(db: Session, simbolo: str) -> Serie | None:
     t = simbolo.strip().upper()
     s = db.execute(select(Stock).where(Stock.ticker == t).limit(1)).scalars().first()
     if s is not None:
-        righe = db.execute(select(OhlcvDaily.date, OhlcvDaily.close)
+        righe = db.execute(select(OhlcvDaily.date, OhlcvDaily.close, OhlcvDaily.high, OhlcvDaily.low)
                            .where(OhlcvDaily.stock_id == s.id).order_by(OhlcvDaily.date)).all()
-        d = [g if isinstance(g, date) else date.fromisoformat(str(g)[:10]) for g, _ in righe]
-        return Serie(d, [float(c) for _, c in righe]) if righe else None
+        d = [g if isinstance(g, date) else date.fromisoformat(str(g)[:10]) for g, *_ in righe]
+        return Serie(d, [float(c) for _, c, _h, _l in righe], [float(h) for *_x, h, _l in righe],
+                     [float(lo) for *_x, lo in righe]) if righe else None
     # F20: la serie di un mercato passa dal dettaglio completo (indicatori
     # compresi): 3,5 s a freddo per la stagionalita' di ^GSPC. Vale per il
     # giorno, quindi si tiene per il giorno.
@@ -419,7 +513,8 @@ def serie_di(db: Session, simbolo: str) -> Serie | None:
     barre = rp._barre_indice(t)
     if not barre:
         return None
-    serie = Serie([date.fromisoformat(b.data[:10]) for b in barre], [b.chiusura for b in barre])
+    serie = Serie([date.fromisoformat(b.data[:10]) for b in barre], [b.chiusura for b in barre],
+                  [b.alto for b in barre], [b.basso for b in barre])
     _SERIE_MERCATI[t] = (oggi, serie)
     return serie
 

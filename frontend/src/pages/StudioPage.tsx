@@ -3,19 +3,20 @@ import { FlaskConical } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { type Confronto, type DopoMovimento, type Evento, type Fascia, type Misura, type Stagionalita, studio } from "@/api/studio";
+import { type Cali, type Confronto, type DopoMovimento, type Evento, type Fascia, type Misura, type PrimoPassaggio, type Stagionalita, studio } from "@/api/studio";
 import { ApiError } from "@/api/client";
 import { useIsPhone } from "@/hooks/useMediaQuery";
 import { Card, CardContent } from "@/components/ui/card";
 import { GraficoSvg } from "@/components/ui/grafico-svg";
 import { QueryError } from "@/components/ui/query-error";
 import { SectionTitle } from "@/components/ui/section-title";
-import { intervallo, MODELLI, parametriDaUrl, pct, posizioneSulleFasce, sogliaInFrase } from "@/lib/studio";
+import { CON_NETTO, intervallo, MODELLI, parametriDaUrl, pct, posizioneSulleFasce, RIFERIMENTI, sogliaInFrase, urlDaParametri } from "@/lib/studio";
 import { cn } from "@/lib/utils";
 import { GIU, NEUTRO, SU } from "@/lib/coloriGrafico";
 import { Button } from "@/components/ui/button";
 import { ElencoCasi } from "@/components/studio/ElencoCasi";
 import { ModuloStudio } from "@/components/studio/ModuloStudio";
+import { RisultatoCali, RisultatoPrimoPassaggio } from "@/components/studio/RisultatiNuovi";
 import { FraseEscursioni, GraficoPercorso, LegendaPercorso } from "@/components/studio/GraficoPercorso";
 import { CalendarioRendimenti } from "@/components/stats/CalendarioRendimenti";
 
@@ -251,16 +252,23 @@ function Risultato({ p, onEsempio }: {
   onEsempio: (p: Record<string, string>) => void;
 }) {
   const orizzonteEvento = Math.min(p.orizzonte, DOPO_MAX);
-  const q = useQuery<DopoMovimento | Stagionalita | Evento>({
-    queryKey: ["studio", p.modello, p.simbolo, p.sedute, p.soglia, p.orizzonte, p.tipo, p.serie],
+  const q = useQuery<DopoMovimento | Stagionalita | Evento | PrimoPassaggio | Cali>({
+    queryKey: ["studio", p.modello, p.simbolo, p.sedute, p.soglia, p.orizzonte, p.tipo, p.serie,
+      p.lato, p.target, p.stop, p.netto, p.sogliaCali],
     queryFn: ({ signal }) => {
-      if (p.modello === "stagionalita") return studio.stagionalita(p.simbolo, signal);
+      const netto = p.netto || undefined;
+      if (p.modello === "stagionalita") return studio.stagionalita(p.simbolo, signal, netto);
       if (p.modello === "evento") {
         return studio.evento({ simbolo: p.simbolo, tipo: p.tipo, serie_macro: p.serie || undefined,
-          orizzonte: orizzonteEvento }, signal);
+          orizzonte: orizzonteEvento, netto }, signal);
       }
+      if (p.modello === "primo_passaggio") {
+        return studio.primoPassaggio({ simbolo: p.simbolo, lato: p.lato, target_pct: p.target,
+          stop_pct: p.stop, orizzonte: p.orizzonte }, signal);
+      }
+      if (p.modello === "cali") return studio.cali({ simbolo: p.simbolo, soglia_pct: p.sogliaCali }, signal);
       return studio.dopoMovimento({ simbolo: p.simbolo, sedute: p.sedute, soglia_pct: p.soglia,
-        orizzonte: p.orizzonte }, signal);
+        orizzonte: p.orizzonte, netto }, signal);
     },
     enabled: p.simbolo !== "" && (p.modello !== "evento" || p.tipo !== "macro" || p.serie !== ""),
     staleTime: 10 * 60_000,
@@ -268,10 +276,20 @@ function Risultato({ p, onEsempio }: {
   if (p.simbolo === "") return <Esempi onScegli={onEsempio} />;
   if (q.isError && q.error instanceof ApiError && q.error.status === 404) {
     // D-82: un simbolo sconosciuto non e' un guasto del server.
-    return <p className="text-sm text-muted-foreground">«{p.simbolo}» non è né nel catalogo né fra i mercati.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {p.netto && q.error.message.includes(p.netto)
+          ? `${q.error.message}: scegli un altro riferimento.`
+          : `«${p.simbolo}» non è né nel catalogo né fra i mercati.`}
+      </p>
+    );
   }
   if (q.isError) return <QueryError message="dello studio" errore={q.error} onRetry={q.refetch} isRetrying={q.isFetching} />;
   if (!q.data) return <div className="h-64 animate-pulse rounded-md bg-muted/40" aria-hidden />;
+
+  // FA-196, FA-198
+  if (p.modello === "primo_passaggio") return <RisultatoPrimoPassaggio r={q.data as PrimoPassaggio} orizzonte={p.orizzonte} />;
+  if (p.modello === "cali") return <RisultatoCali r={q.data as Cali} />;
 
   if (p.modello === "dopo_movimento") {
     const r = q.data as DopoMovimento;
@@ -279,7 +297,8 @@ function Risultato({ p, onEsempio }: {
       <div className="space-y-2">
         <p className="text-sm">
           {p.orizzonte} sedute dopo ogni giorno in cui {p.simbolo} si era mosso di {sogliaInFrase(p.soglia)}
-          {p.soglia < 0 ? " o peggio" : " o più"} in {p.sedute} sedute.
+          {p.soglia < 0 ? " o peggio" : " o più"} in {p.sedute} sedute
+          {p.netto ? `, misurate in eccesso su ${nomeRiferimento(p.netto)}` : ""}.
         </p>
         <RigaVerdetto c={r} finestre={r.condizione.finestre} />
         {r.percorso && r.percorso.length > 1 && r.condizione.casi > 0 && (
@@ -355,7 +374,7 @@ function Risultato({ p, onEsempio }: {
     <div className="space-y-3">
       <p className="text-sm">
         {r.eventi} {p.tipo === "macro" ? `rilasci di ${p.serie}` : "trimestrali passate"}; percorso medio di {p.simbolo}
-        {" "}dalla chiusura della seduta precedente.
+        {" "}dalla chiusura della seduta precedente{p.netto ? `, in eccesso su ${nomeRiferimento(p.netto)}` : ""}.
       </p>
       {r.percorso.length > 1 && (
         <div className="space-y-1">
@@ -381,8 +400,14 @@ function Risultato({ p, onEsempio }: {
 }
 
 /** La domanda in una riga, per il modulo chiuso su telefono. */
+function nomeRiferimento(s: string): string {
+  return RIFERIMENTI.find((r) => r.id === s)?.label ?? s;
+}
+
 function riassunto(p: ReturnType<typeof parametriDaUrl>): string {
   if (p.modello === "stagionalita") return `${p.simbolo} · stagionalità`;
+  if (p.modello === "primo_passaggio") return `${p.simbolo} · +${p.target}% / −${p.stop}% · ${p.orizzonte} sedute`;
+  if (p.modello === "cali") return `${p.simbolo} · cali oltre il ${p.sogliaCali}%`;
   if (p.modello === "evento") {
     return `${p.simbolo} · ${p.tipo === "macro" ? `rilasci ${p.serie}` : "trimestrali"} · ${Math.min(p.orizzonte, DOPO_MAX)} sedute`;
   }
@@ -409,20 +434,7 @@ export default function StudioPage() {
   }
 
   const calcola = () => {
-    const n = new URLSearchParams();
-    n.set("simbolo", bozza.simbolo.trim().toUpperCase());
-    n.set("modello", bozza.modello);
-    if (bozza.modello === "dopo_movimento") {
-      n.set("sedute", String(bozza.sedute));
-      n.set("soglia", String(bozza.soglia));
-      n.set("orizzonte", String(bozza.orizzonte));
-    }
-    if (bozza.modello === "evento") {
-      n.set("tipo", bozza.tipo);
-      n.set("orizzonte", String(Math.min(bozza.orizzonte, DOPO_MAX)));
-      if (bozza.tipo === "macro") n.set("serie", bozza.serie.trim().toUpperCase());
-    }
-    setSp(n);
+    setSp(urlDaParametri(bozza));
     setModuloAperto(false);
   };
 
@@ -456,6 +468,7 @@ export default function StudioPage() {
           {p.simbolo !== "" && (
             <h2 className="text-base font-semibold">
               {p.simbolo} · {MODELLI.find((m) => m.id === p.modello)?.label}
+              {p.netto && CON_NETTO.includes(p.modello) ? ` · al netto di ${nomeRiferimento(p.netto)}` : ""}
             </h2>
           )}
           <Risultato

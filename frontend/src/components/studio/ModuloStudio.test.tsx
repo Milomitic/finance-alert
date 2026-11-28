@@ -66,4 +66,16 @@ describe("ModuloStudio", () => {
     await waitFor(() => expect(document.querySelector('datalist option[value="AAPL"]')?.textContent).toBe("Apple"));
     expect(document.querySelector('datalist option[value="^GSPC"]')?.textContent).toBe("S&P 500");
   });
+
+  it("toccare prima, cali e recuperi, e al netto di (FA-196/197/198)", () => {
+    monta("simbolo=AAPL&modello=primo_passaggio");
+    expect(screen.getByLabelText("Verso dell'operazione")).toHaveValue("long");
+    expect(screen.getByLabelText(/Obiettivo in percentuale/)).toHaveValue(8);
+    expect(screen.queryByLabelText("Al netto di un riferimento")).toBeNull();     // non vale qui
+    fireEvent.click(screen.getByRole("button", { name: "Dopo un movimento" }));
+    fireEvent.change(screen.getByLabelText("Al netto di un riferimento"), { target: { value: "^GSPC" } });
+    expect(ultima?.netto).toBe("^GSPC");
+    fireEvent.click(screen.getByRole("button", { name: "Cali e recuperi" }));
+    expect(screen.getByLabelText(/Soglia del calo/)).toHaveValue(10);
+  });
 });

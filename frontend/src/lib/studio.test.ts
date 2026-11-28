@@ -35,3 +35,23 @@ describe("domandePronte (FA-199)", () => {
     expect(parametriDaUrl(new URLSearchParams(m[2].url.split("?")[1]))).toMatchObject({ simbolo: "^GSPC", tipo: "macro", serie: "CPIAUCSL" });
   });
 });
+
+describe("urlDaParametri (FA-196/197/198)", () => {
+  it("l'URL tiene solo cio' che la domanda usa, e torna uguale", async () => {
+    const { parametriDaUrl, urlDaParametri } = await import("./studio");
+    for (const q of [
+      "simbolo=AAPL&modello=dopo_movimento&sedute=5&soglia=-10&orizzonte=21&netto=%5EGSPC",
+      "simbolo=AAPL&modello=primo_passaggio&lato=short&target=8&stop=5&orizzonte=21",
+      "simbolo=%5EGSPC&modello=cali&soglia_cali=15",
+    ]) {
+      const p = parametriDaUrl(new URLSearchParams(q));
+      expect(urlDaParametri(p).toString()).toBe(new URLSearchParams(q).toString());
+    }
+  });
+
+  it("il netto si scrive solo dove la domanda lo accetta", async () => {
+    const { parametriDaUrl, urlDaParametri } = await import("./studio");
+    const p = parametriDaUrl(new URLSearchParams("simbolo=AAPL&modello=cali&netto=%5EGSPC"));
+    expect(urlDaParametri(p).has("netto")).toBe(false);
+  });
+});

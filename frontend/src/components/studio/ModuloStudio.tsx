@@ -6,7 +6,7 @@ import { stocks } from "@/api/stocks";
 import { Button } from "@/components/ui/button";
 import { useLiveAssets } from "@/hooks/useLiveAssets";
 import { useIsPhone } from "@/hooks/useMediaQuery";
-import { MODELLI, type Modello, type ParametriStudio } from "@/lib/studio";
+import { CON_NETTO, MODELLI, type Modello, type ParametriStudio, RIFERIMENTI } from "@/lib/studio";
 import { cn } from "@/lib/utils";
 
 /* ─── Il modulo dello Studio, scritto come la domanda (FA-199) ────────────
@@ -156,7 +156,49 @@ export function ModuloStudio({ bozza, onBozza, onCalcola }: {
             <span>?</span>
           </>
         )}
+        {bozza.modello === "primo_passaggio" && (
+          <>
+            {/* FA-196 */}
+            <span>Se</span>
+            <select aria-label="Verso dell'operazione" className={CAMPO} value={bozza.lato}
+              onChange={(e) => imposta({ lato: e.target.value as "long" | "short" })}>
+              <option value="long">comprassi</option>
+              <option value="short">vendessi allo scoperto</option>
+            </select>
+            {simbolo}
+            <span>con un obiettivo a</span>
+            <Numero etichetta="Obiettivo in percentuale" valore={bozza.target} min={0.5} max={200} onCambia={(v) => imposta({ target: v })} />
+            <span>% e uno stop a</span>
+            <Numero etichetta="Stop in percentuale" valore={bozza.stop} min={0.5} max={90} onCambia={(v) => imposta({ stop: v })} />
+            <span>%, cosa è stato toccato prima entro</span>
+            <Numero etichetta="Sedute" valore={bozza.orizzonte} min={1} max={252} onCambia={(v) => imposta({ orizzonte: v })} />
+            <span>sedute?</span>
+          </>
+        )}
+        {bozza.modello === "cali" && (
+          <>
+            {/* FA-198 */}
+            <span>Quali cali oltre il</span>
+            <Numero etichetta="Soglia del calo in percentuale" valore={bozza.sogliaCali} min={2} max={90}
+              onCambia={(v) => imposta({ sogliaCali: v })} />
+            <span>% ha avuto</span>{simbolo}<span>, e in quanto tempo ha recuperato?</span>
+          </>
+        )}
       </p>
+
+      {CON_NETTO.includes(bozza.modello) && (
+        // FA-197: l'esito al netto di un riferimento; la condizione resta sul prezzo.
+        <label className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="text-muted-foreground">Al netto di</span>
+          <select aria-label="Al netto di un riferimento" className={CAMPO} value={bozza.netto}
+            onChange={(e) => imposta({ netto: e.target.value })}>
+            <option value="">nessun riferimento</option>
+            {RIFERIMENTI.filter((r) => r.id !== bozza.simbolo.trim().toUpperCase()).map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <div className="flex items-center gap-2">
         <Button type="submit" variant="default" disabled={bozza.simbolo.trim() === "" || (bozza.modello === "evento" && bozza.tipo === "macro" && !bozza.serie)}>

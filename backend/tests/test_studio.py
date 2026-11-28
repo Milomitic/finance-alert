@@ -168,15 +168,13 @@ def test_la_stagionalita_dichiara_quanti_confronti_sopravvivono():
 def test_la_serie_di_un_mercato_si_tiene_per_il_giorno(monkeypatch):
     chiamate = []
 
-    class B:
-        def __init__(self, d, c):
-            self.data, self.chiusura = d, c
-
     from app.services import rischio_posizioni_service as rp
 
+    # La Barra vera (data, alto, basso, chiusura): un finto con meno campi
+    # si sarebbe staccato dal vero appena la serie ha preso i massimi (FA-196).
     def finte(simbolo):
         chiamate.append(simbolo)
-        return [B("2026-01-02", 1.0), B("2026-01-05", 2.0)]
+        return [rp.Barra("2026-01-02", 1.1, 0.9, 1.0), rp.Barra("2026-01-05", 2.1, 1.9, 2.0)]
 
     monkeypatch.setattr(rp, "_barre_indice", finte)
     ss._SERIE_MERCATI.clear()
@@ -284,3 +282,79 @@ def test_le_serie_macro_per_nome_solo_con_rilasci(client, db):
     db.add(vuota)
     db.commit()
     assert client.get("/api/studio/serie_macro").json() == [{"id": "CPIX", "nome": "CPI", "rilasci": 1}]
+
+
+# ── FA-196: toccare prima ───────────────────────────────────────────────────
+
+def _con_estremi(chiusure, alto=0.02, basso=0.02):
+    s = _serie(chiusure)
+    return ss.Serie(s.date, s.chiusure, [c * (1 + alto) for c in s.chiusure], [c * (1 - basso) for c in s.chiusure])
+
+
+def test_una_serie_che_sale_tocca_sempre_prima_il_target():
+    out = ss.primo_passaggio(_con_estremi([100.0 * 1.01 ** i for i in range(600)]),
+                             lato="long", target_pct=5, stop_pct=5, orizzonte=21)
+    assert out["disponibile"] and out["target"] == out["finestre"] and out["stop"] == 0
+    assert out["verdetto"] == "descritto"
+    assert 0 < out["intervallo_target"][0] <= 1
+
+
+def test_senza_massimi_e_minimi_lo_dice():
+    out = ss.primo_passaggio(_serie([100.0] * 600), lato="long", target_pct=5, stop_pct=5, orizzonte=21)
+    assert out == {"disponibile": False, "motivo": "senza massimi e minimi non si sa cosa e' stato toccato"}
+
+
+def test_poche_finestre_non_concludente():
+    out = ss.primo_passaggio(_con_estremi([100.0 * 1.01 ** i for i in range(260)]),
+                             lato="long", target_pct=5, stop_pct=5, orizzonte=21)
+    assert out["finestre"] < ss.MIN_FINESTRE and out["verdetto"] == "non_concludente"
+
+
+# ── FA-197: al netto di un riferimento ──────────────────────────────────────
+
+def test_al_netto_di_se_stesso_l_eccesso_e_zero_ma_la_condizione_resta_sul_prezzo():
+    c = []
+    for _ in range(8):
+        c += [100.0] * 40 + [96, 92, 88, 84, 80] + [85, 90, 95, 100, 100]
+    s = _serie(c)
+    sub, rapporto = ss.allinea_al_netto(s, s)
+    assert set(rapporto) == {1.0}
+    lordo = ss.dopo_movimento(s, sedute=5, soglia_pct=-15, orizzonte=5)
+    netto = ss.dopo_movimento(sub, sedute=5, soglia_pct=-15, orizzonte=5, esiti=rapporto)
+    assert netto["condizione"]["casi"] == lordo["condizione"]["casi"] > 0      # stessa condizione
+    assert netto["condizione"]["media"] == 0.0 and lordo["condizione"]["media"] > 0
+
+
+def test_allineamento_sulle_date_comuni():
+    a = ss.Serie([D0, D0 + timedelta(days=1), D0 + timedelta(days=2)], [10.0, 11.0, 12.0])
+    b = ss.Serie([D0 + timedelta(days=1), D0 + timedelta(days=2)], [5.0, 4.0])
+    sub, r = ss.allinea_al_netto(a, b)
+    assert sub.date == b.date and r == [11.0 / 5.0, 3.0]
+
+
+def test_gli_endpoint_al_netto_e_il_riferimento_sconosciuto(client):
+    r = client.get("/api/studio/dopo_movimento", params={"simbolo": "STU", "soglia_pct": 1, "sedute": 5,
+                                                        "orizzonte": 5, "netto": "STU"}).json()
+    assert r["netto"] == "STU" and r["condizione"]["media"] == 0.0
+    assert client.get("/api/studio/stagionalita", params={"simbolo": "STU", "netto": "STU"}).json()["netto"] == "STU"
+    assert client.get("/api/studio/evento", params={"simbolo": "STU", "netto": "NOPE"}).status_code == 404
+
+
+# ── FA-198: cali e recuperi ─────────────────────────────────────────────────
+
+def test_cali_e_recuperi_su_una_serie_nota():
+    c = [100.0, 80.0, 70.0, 90.0, 100.0, 105.0, 95.0, 84.0, 90.0]
+    out = ss.cali_e_recuperi(_serie(c), soglia_pct=10)
+    assert out["numero"] == 2 and out["recuperati"] == 1
+    assert out["profondita_mediana"] == pytest.approx(((84 / 105 - 1) + (-0.30)) / 2)
+    assert out["sedute_recupero_mediane"] == 2
+    assert out["corrente"]["profondita"] == pytest.approx(90 / 105 - 1)
+    assert out["episodi_piu_profondi_del_corrente"] == 2
+    assert out["sott_acqua"][0]["valore"] == 0.0 and len(out["sott_acqua"]) == len(c)
+
+
+def test_gli_endpoint_primo_passaggio_e_cali(client):
+    r = client.get("/api/studio/primo_passaggio", params={"simbolo": "STU"}).json()
+    assert r["simbolo"] == "STU" and "disponibile" in r
+    assert client.get("/api/studio/cali", params={"simbolo": "STU", "soglia_pct": 5}).json()["simbolo"] == "STU"
+    assert client.get("/api/studio/primo_passaggio", params={"simbolo": "STU", "lato": "boh"}).status_code == 422
