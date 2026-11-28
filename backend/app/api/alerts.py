@@ -30,7 +30,7 @@ from app.schemas.alert import (
     StockSignalScanOut,
 )
 from app.schemas.confluence import ConfluenceOut
-from app.schemas.plan_outcome import OpenPlanPathOut, PlanOutcomeListOut
+from app.schemas.plan_outcome import OpenPlanPathOut, PlanOutcomeListOut, ScalaStoricaOut
 from app.services import alert_service, confluence_service, plan_performance_service
 from app.services.notifier_service import send_daily_digest
 from app.services.ohlcv_service import fetch_and_upsert
@@ -918,6 +918,31 @@ def open_plan_path(alert_id: int, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="Alert not found")
     dati = percorso_piano_aperto(db, alert)
     return OpenPlanPathOut(**dati) if dati else None
+
+
+@router.get("/{alert_id}/scala-storica", response_model=ScalaStoricaOut | None)
+def scala_storica(alert_id: int, db: Session = Depends(get_db),
+                  _user: User = Depends(get_current_user)) -> ScalaStoricaOut | None:
+    """Fin dove arrivano di solito i piani dello stesso detector e verso (FA-206).
+
+    Per chi chiude a mano: accanto al piano di QUESTO segnale, quanti piani
+    simili sono arrivati a meta' strada, al 90%, a TP1, e quanti hanno
+    restituito il guadagno prima dello stop. None se l'alert non ha un verso.
+    """
+    import json  # noqa: PLC0415
+
+    from app.services.plan_performance_service import scala_storica as calcola  # noqa: PLC0415
+
+    alert = alert_service.get_alert(db, alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    try:
+        tono = (json.loads(alert.snapshot or "{}") or {}).get("tone")
+    except (ValueError, TypeError, AttributeError):
+        tono = None
+    if tono not in ("bull", "bear") or not alert.signal_name:
+        return None
+    return ScalaStoricaOut(**calcola(db, detector=alert.signal_name, tone=tono))
 
 
 @router.get("/{alert_id}/peers", response_model=list[AlertPeerOut])

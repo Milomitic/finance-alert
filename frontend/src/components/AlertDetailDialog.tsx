@@ -25,6 +25,7 @@ import { AlertSetupOrigin } from "@/components/alert/AlertSetupOrigin";
 import { SignalBreadthRow } from "@/components/alert/SignalBreadthRow";
 import { SignalSnapshotView } from "@/components/SignalSnapshotView";
 import { OpenPlanBlock, PlanOutcomeBlock } from "@/components/alert/PlanOutcomeBlock";
+import { ScalaStoricaBlock } from "@/components/alert/ScalaStoricaBlock";
 import { CostiEtoroPiano } from "@/components/CostiEtoroPiano";
 import { PlaybookView } from "@/components/PlaybookView";
 import { TrackTradeForm } from "@/components/TrackTradeForm";
@@ -649,6 +650,10 @@ export function AlertDetailDialog({ alert, onClose, chart }: Props) {
               Piano · stop contro target
             </div>
             {alert.plan ? <PlanOutcomeBlock plan={alert.plan} /> : <OpenPlanBlock id={alert.id} />}
+            {/* FA-206: fin dove arrivano i piani simili, per chi chiude a mano. */}
+            <div className="mt-2">
+              <ScalaStoricaBlock id={alert.id} piccoChiuso={alert.plan ? alert.plan.peak_fraction ?? null : undefined} />
+            </div>
           </div>
         )}
 

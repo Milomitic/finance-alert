@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Alert, PlanOutcome, SignalOutcome, Stock
 from app.stats.media import mean_interval
-from app.stats.sizing import independent_blocks
+from app.stats.sizing import independent_blocks, sized_interval
 
 #: Sotto questa soglia di righe la cella e' marcata `low_confidence`. Stesso
 #: pavimento del cubo dei detector e del monitor di deriva: tre numeri diversi
@@ -313,6 +313,93 @@ def raggiungimento_tp1(esiti: Sequence[PlanOutcome]) -> list[dict]:
                           after_close_90=dict(dopo), near_misses=quasi,
                           blocks=independent_blocks([p.entry_date for p in piani], orizzonte)))
     return curve
+
+
+#: Le soglie della scala storica, in percento del tragitto verso TP1. Il 100
+#: e' TP1 completato (esito), non un massimo al 100%: la gara si chiude li'.
+SOGLIE_SCALA = (25, 50, 75, 90, 100)
+#: Sotto questo numero di piani chiusi la scala non si mostra: «3 su 5» letto
+#: accanto a un segnale vivo e' un aneddoto vestito da statistica.
+_MIN_SCALA = 20
+
+
+def _frazione_finale(p: PlanOutcome) -> float | None:
+    """Dove ha chiuso il piano, in frazione del tragitto verso TP1."""
+    distanza = abs(p.tp1 - p.entry)
+    if not distanza:
+        return None
+    return p.r_multiple * p.r / distanza
+
+
+def scala_storica(db: Session, *, detector: str, tone: str) -> dict:
+    """Quanto vanno di solito i piani di questo detector, in questo verso,
+    prima di risolversi (FA-206).
+
+    La domanda e' quella di chi chiude a mano: un target mancato di poco va
+    bene lo stesso, quindi conta fin dove arriva il prezzo prima di girarsi,
+    non solo se tocca TP1. Tre letture, tutte sui piani a finestra CHIUSA
+    (`_chiusa`):
+
+    1. la scala: quanti piani hanno toccato il 25/50/75/90% del tragitto e
+       quanti hanno completato TP1, ciascuno con l'intervallo dimensionato
+       sulle finestre INDIPENDENTI, e per ogni gradino come sono finiti quelli
+       che lo hanno toccato;
+    2. i giorni dall'ingresso al massimo, cioe' quanto si aspetta di solito
+       prima del punto piu' favorevole;
+    3. la restituzione: fra gli stop, quanti erano passati da meta' strada;
+       fra gli scaduti, dove erano arrivati e dove hanno chiuso.
+
+    ⚠️ Il gradino 100 e' l'esito TP1, non `peak_fraction >= 1`: il massimo di
+    un piano che completa TP1 si ferma a TP1 per costruzione (`percorso_confermato`).
+    """
+    righe = db.execute(
+        select(PlanOutcome).where(PlanOutcome.detector == detector, PlanOutcome.tone == tone,
+                                  PlanOutcome.peak_fraction.is_not(None))
+    ).scalars().all()
+    piani = [p for p in righe if _chiusa(p)]
+    out: dict = {"detector": detector, "tone": tone, "piani": len(piani),
+                 "sufficiente": len(piani) >= _MIN_SCALA}
+    if not piani:
+        return out
+    orizzonte = Counter(p.horizon_days for p in piani).most_common(1)[0][0]
+    finestre = independent_blocks([p.entry_date for p in piani], orizzonte)
+    out.update(orizzonte=orizzonte, finestre=finestre,
+               dal=min(p.entry_date for p in piani), al=max(p.entry_date for p in piani))
+
+    gradini = []
+    for soglia in SOGLIE_SCALA:
+        minimo = soglia / 100 - 1e-12
+        toccati = [p for p in piani
+                   if (p.esito == "tp1" if soglia == 100 else p.peak_fraction >= minimo)]
+        quota = 100.0 * len(toccati) / len(piani)
+        gradini.append({
+            "soglia": soglia,
+            "toccati": len(toccati),
+            "quota": round(quota, 1),
+            "intervallo": sized_interval(rate_pct=quota, effective_n=finestre) if finestre else None,
+            "esiti": dict(Counter(p.esito for p in toccati)),
+        })
+    out["gradini"] = gradini
+
+    giorni = [(p.peak_date - p.entry_date).days for p in piani
+              if p.peak_date is not None and p.peak_fraction > 0]
+    out["giorni_al_picco"] = _mediana(giorni)
+
+    stop = [p for p in piani if p.esito in ("stop", "ambigua")]
+    out["stop"] = {
+        "numero": len(stop),
+        "passati_da_meta": sum(p.peak_fraction >= 0.5 - 1e-12 for p in stop),
+        "passati_da_un_quarto": sum(p.peak_fraction >= 0.25 - 1e-12 for p in stop),
+        "picco_mediano": _mediana([p.peak_fraction for p in stop]),
+    }
+    scaduti = [p for p in piani if p.esito == "scaduto"]
+    finali = [f for f in (_frazione_finale(p) for p in scaduti) if f is not None]
+    out["scaduti"] = {
+        "numero": len(scaduti),
+        "picco_mediano": _mediana([p.peak_fraction for p in scaduti]),
+        "chiusura_mediana": _mediana(finali),
+    }
+    return out
 
 
 def _direzione(db: Session, detector: str | None, tone: str | None,

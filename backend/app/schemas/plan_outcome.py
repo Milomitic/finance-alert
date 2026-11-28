@@ -133,3 +133,41 @@ class PlanOutcomeListOut(BaseModel):
     #: riassunto. Fuori da `summary` perche' serve anche quando il riassunto
     #: manca: sole finestre aperte si dice «in corso», non «vuoto».
     open_excluded: int = 0
+
+
+
+class GradinoScalaOut(BaseModel):
+    soglia: int
+    toccati: int
+    quota: float
+    intervallo: tuple[float, float] | None = None
+    esiti: dict[str, int]
+
+
+class StopScalaOut(BaseModel):
+    numero: int
+    passati_da_meta: int
+    passati_da_un_quarto: int
+    picco_mediano: float | None = None
+
+
+class ScadutiScalaOut(BaseModel):
+    numero: int
+    picco_mediano: float | None = None
+    chiusura_mediana: float | None = None
+
+
+class ScalaStoricaOut(BaseModel):
+    """Fin dove arrivano di solito i piani di un detector in un verso (FA-206)."""
+    detector: str
+    tone: str
+    piani: int
+    sufficiente: bool
+    orizzonte: int | None = None
+    finestre: int | None = None
+    dal: date | None = None
+    al: date | None = None
+    gradini: list[GradinoScalaOut] = []
+    giorni_al_picco: float | None = None
+    stop: StopScalaOut | None = None
+    scaduti: ScadutiScalaOut | None = None

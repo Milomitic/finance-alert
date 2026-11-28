@@ -949,6 +949,14 @@ export interface GiornataMercatoOut {
   soglia: number;
 }
 
+export interface GradinoScalaOut {
+  soglia: number;
+  toccati: number;
+  quota: number;
+  intervallo?: [number, number] | null;
+  esiti: Record<string, number>;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }
@@ -1960,6 +1968,27 @@ export interface RsiDistributionOut {
   by_index: Record<string, number[]>;
 }
 
+export interface ScadutiScalaOut {
+  numero: number;
+  picco_mediano?: number | null;
+  chiusura_mediana?: number | null;
+}
+
+export interface ScalaStoricaOut {
+  detector: string;
+  tone: string;
+  piani: number;
+  sufficiente: boolean;
+  orizzonte?: number | null;
+  finestre?: number | null;
+  dal?: string | null;
+  al?: string | null;
+  gradini?: GradinoScalaOut[];
+  giorni_al_picco?: number | null;
+  stop?: StopScalaOut | null;
+  scaduti?: ScadutiScalaOut | null;
+}
+
 export interface ScanAccepted {
   accepted?: boolean;
 }
@@ -2413,6 +2442,13 @@ export interface StockSearchOut {
 export interface StockSignalScanOut {
   added: number;
   total: number;
+}
+
+export interface StopScalaOut {
+  numero: number;
+  passati_da_meta: number;
+  passati_da_un_quarto: number;
+  picco_mediano?: number | null;
 }
 
 export interface SubScoresOut {
