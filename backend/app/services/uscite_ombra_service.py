@@ -61,6 +61,15 @@ class Variante:
     #: Esiste solo per gli alert che il fattore ce l'hanno.
     vol_modello: bool = False
     frazione_target_parziale: float | None = None
+    #: FA-206: dopo che il massimo favorevole ha coperto almeno questa
+    #: frazione del tragitto verso TP1, si esce alla CHIUSURA se il prezzo ha
+    #: restituito `restituzione_quota` del guadagno massimo. E' la regola di
+    #: chi chiude a mano «prima dell'inversione», scritta in modo misurabile.
+    restituzione_dopo_frazione: float | None = None
+    restituzione_quota: float = 0.5
+    #: FA-206: si esce alla chiusura appena questa supera la frazione data del
+    #: tragitto verso TP1 — «se ci arriva vicino, va bene lo stesso».
+    presa_frazione: float | None = None
 
 
 VARIANTI: tuple[Variante, ...] = (
@@ -70,6 +79,9 @@ VARIANTI: tuple[Variante, ...] = (
     Variante("pareggio_05r", pareggio_dopo_r=0.5),
     Variante("uscita_meta", uscita_meta_sotto_r=0.25),
     Variante("vol_modello", vol_modello=True),
+    Variante("restituz_50", restituzione_dopo_frazione=0.50),
+    Variante("restituz_75", restituzione_dopo_frazione=0.75),
+    Variante("presa_75", presa_frazione=0.75),
 )
 
 #: Le varianti che ogni piano chiuso ha. `vol_modello` no: il modello di
@@ -106,6 +118,8 @@ def corri_variante(
     rr1 = (tp1 - ingresso) * segno / r
     stop_ora = stop
     a_pareggio = False
+    tragitto = (tp1 - ingresso) * segno
+    picco = 0.0
     meta = orizzonte // 2 if variante.uscita_meta_sotto_r is not None else None
     finestra = barre[:orizzonte]
     for i, b in enumerate(finestra, 1):
@@ -122,6 +136,17 @@ def corri_variante(
             return EsitoVariante("pareggio" if a_pareggio else "stop", r_stop, i)
         if colpo_tp1:
             return EsitoVariante("tp1", rr1, i)
+        # FA-206: entrambe decidono alla CHIUSURA, dopo stop e target della
+        # barra. Il massimo della barra e' noto alla chiusura, quindi entra nel
+        # picco prima della decisione: nessuna informazione dal futuro.
+        picco = max(picco, favorevole * r)
+        guadagno = (b.chiusura - ingresso) * segno
+        if variante.presa_frazione is not None and guadagno >= variante.presa_frazione * tragitto:
+            return EsitoVariante("presa", guadagno / r, i)
+        if (variante.restituzione_dopo_frazione is not None
+                and picco >= variante.restituzione_dopo_frazione * tragitto
+                and guadagno <= (1 - variante.restituzione_quota) * picco):
+            return EsitoVariante("restituzione", guadagno / r, i)
         if meta and i == meta:
             valore = (b.chiusura - ingresso) * segno / r
             if valore < variante.uscita_meta_sotto_r:

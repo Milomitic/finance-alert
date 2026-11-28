@@ -93,3 +93,64 @@ strutturale e quella di volatilità sono separate.
 Il criterio è quello delle altre varianti, più il vincolo già scritto per
 FA-155: niente prima di marzo 2027, e solo se la lettura dal vivo di
 `rapporto_modelli_ombra` conferma R² > 0 contro l'ATR.
+
+## Le uscite di chi chiude a mano (FA-206, aggiunte il 2026-11-28, prima dei dati)
+
+Le posizioni non sono automatiche: l'utente le può chiudere prima. Un target
+mancato di poco va bene comunque, e conta il profitto raggiunto prima
+dell'inversione. Le tre varianti sotto traducono quel modo di operare in
+regole misurabili. Sono scritte qui prima di eseguire il replay.
+
+| Variante | Regola |
+|---|---|
+| `restituz_50` | dopo che il massimo favorevole ha coperto il 50% del tragitto verso TP1, si esce alla chiusura se il prezzo ha restituito metà del guadagno massimo |
+| `restituz_75` | lo stesso, attivata dal 75% del tragitto |
+| `presa_75` | si esce alla chiusura appena questa supera il 75% del tragitto verso TP1 |
+
+Convenzioni: stop e target della barra si guardano per primi, quindi lo stop
+vince ancora nella stessa barra e il target vince sulla presa. Il massimo
+della barra entra nel picco prima della decisione, perché alla chiusura è già
+noto. L'uscita avviene alla chiusura, senza attrito; il replay riporta anche
+5 punti base sul nozionale della chiusura anticipata.
+
+Il criterio d'adozione è quello sopra, senza sconti. Si aggiunge una cosa:
+le tre varianti nuove sono tre ipotesi in più sulla stessa storia. Con le
+cinque precedenti fanno otto, e una sola che passi a t 2,6 va letta con quel
+numero davanti. Il replay riporta per ciascuna anche **da dove viene** la
+differenza: quanto si guadagna sugli stop evitati e quanto si perde sui
+target accorciati.
+
+### Replay del 28 novembre 2026: nessuna delle tre batte il piano fisso
+
+`python -m scripts.studio_taratura.uscite_discrezionali` (da `backend`), sugli
+stessi 108.138 piani del replay del percorso (450 titoli, ingressi dal
+2017-05-10 al 2026-10-15). La parità con la gara ordinaria è verificata su
+ogni piano.
+
+| Variante | Uscite anticipate | Δ R a 21 sedute (t blocchi) | Δ R a 63 sedute (t) | Anni positivi | Dev. std di R |
+|---|---:|---:|---:|---:|---:|
+| piano fisso | — | — | — | — | 1,181 |
+| `restituz_50` | 23.485 | −0,0034 (−1,07) | −0,0124 (−0,97) | 2 su 10 | 1,052 |
+| `restituz_75` | 7.790 | −0,0011 (−0,78) | −0,0046 (−0,96) | 2 su 10 | 1,136 |
+| `presa_75` | 18.090 | +0,0039 (+2,34) | +0,0016 (+0,84) | 5 su 10 | 1,141 |
+
+**Da dove viene la differenza.** `restituz_50` guadagna in media +0,16 R su
+ciascuno dei 45.524 stop, e perde −0,45 R su ciascuno dei 17.863 TP1
+completati. Le due somme quasi si annullano: +7.419 R contro −8.100 R. Vale
+anche per le altre due, in proporzione minore. La regola che salva gli stop è
+la stessa che accorcia i target, perché le barre giornaliere non sanno quale
+dei due ritracciamenti è quello buono.
+
+**Verdetto.** Nessuna passa il criterio. `presa_75` è la più vicina: positiva
+a 21 sedute, ma con t 2,34 sotto la banda del caso di 2,6, un gruppo di titoli
+a 1,51, e 5 anni positivi su 10 invece di 6 su 8. Con l'attrito di 5 punti
+base scende a +0,0026 e +0,0000.
+
+**Che cosa vuol dire per chi chiude a mano.** Chiudere prima non costa in
+media, ma non rende nemmeno. L'attesa resta la stessa entro pochi millesimi
+di R, mentre si scambia varianza con frequenza di vincita: `restituz_50` porta
+la quota di trade in utile dal 42,5% al 48,8% e la deviazione standard da
+1,18 a 1,05 R. È una scelta di comodità e di rischio, non di rendimento.
+
+Le tre varianti restano in prova silenziosa nel magazzino vivo, insieme alle
+altre, fino al confronto dal vivo previsto dal punto 2 del criterio.

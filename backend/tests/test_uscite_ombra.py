@@ -110,9 +110,10 @@ def test_matura_scrive_le_quattro_varianti_solo_a_finestra_chiusa(db):
             matured_at=datetime.now(UTC)))
         ids.append(a.id)
     db.commit()
-    assert uo.matura(db) == 5
+    assert uo.matura(db) == len(uo.SEMPRE)
     righe = {r.variante: r for r in db.query(PlanOutcomeOmbra).all()}
-    assert set(righe) == {"attuale", "pareggio_1r", "pareggio_05r", "uscita_meta", "meta_al_90"}
+    assert set(righe) == {"attuale", "pareggio_1r", "pareggio_05r", "uscita_meta", "meta_al_90",
+                          "restituz_50", "restituz_75", "presa_75"}
     assert {r.alert_id for r in righe.values()} == {ids[0]}
     assert righe["attuale"].r_multiple == -1.0 and righe["pareggio_1r"].esito == "pareggio"
     assert uo.matura(db) == 0          # idempotente
@@ -143,7 +144,7 @@ def test_la_variante_del_modello_scala_la_geometria_col_suo_fattore(db):
         method_version=PLAN_METHOD_VERSION, legs_window_complete=True,
         matured_at=datetime.now(UTC)))
     db.commit()
-    assert uo.matura(db) == 6
+    assert uo.matura(db) == len(uo.VARIANTI)
     righe = {r.variante: r for r in db.query(PlanOutcomeOmbra).all()}
     assert righe["attuale"].esito == "stop"
     # Stop a 80, target a 160, R = 20: scade alla chiusura dell'ultima barra (95).
@@ -156,3 +157,47 @@ def test_la_variante_del_modello_scala_la_geometria_col_suo_fattore(db):
 def test_meta_al_novanta(massimo, minimo, atteso):
     barre = [_b(1, massimo, minimo, 110), _b(2, 110, 89, 95)]
     assert _corri(barre, "meta_al_90", orizzonte=2).r_multiplo == pytest.approx(atteso)
+
+
+# FA-206: le uscite di chi chiude a mano. Tragitto verso TP1 = 30.
+SALITA = [_b(1, 118, 100, 117), _b(2, 116, 105, 108), _b(3, 104, 89, 92),
+          _b(4, 95, 91, 93), _b(5, 96, 92, 94), _b(6, 97, 93, 95)]
+
+
+def test_restituisce_meta_del_guadagno_esce_alla_chiusura():
+    # Picco +18 (60% del tragitto); la chiusura a 108 ne tiene 8, meno della meta'.
+    assert _corri(SALITA, "restituz_50") == uo.EsitoVariante("restituzione", pytest.approx(0.8), 2)
+    # Dal 75% la regola non si accende (18 < 22,5) e il trade va a stop.
+    assert _corri(SALITA, "restituz_75") == uo.EsitoVariante("stop", -1.0, 3)
+    assert _corri(SALITA, "attuale") == uo.EsitoVariante("stop", -1.0, 3)
+
+
+def test_restituzione_non_scatta_sotto_la_soglia_di_attivazione():
+    # RITORNO arriva a +12 (40%): sotto il 50% la regola resta spenta.
+    assert _corri(RITORNO, "restituz_50") == uo.EsitoVariante("stop", -1.0, 3)
+
+
+def test_restituzione_e_presa_nello_short_sono_lo_specchio():
+    specchio = [_b(i, 200 - b.basso, 200 - b.alto, 200 - b.chiusura) for i, b in enumerate(SALITA, 1)]
+    assert _corri(specchio, "restituz_50", lato="short") == uo.EsitoVariante(
+        "restituzione", pytest.approx(0.8), 2)
+    vicino = [_b(1, 200 - 100, 200 - 124, 200 - 123)] + specchio[1:]
+    assert _corri(vicino, "presa_75", lato="short") == uo.EsitoVariante("presa", pytest.approx(2.3), 1)
+
+
+def test_presa_al_75_alla_chiusura_e_non_sul_massimo():
+    assert _corri([_b(1, 124, 100, 123)] + SALITA[1:], "presa_75") == uo.EsitoVariante(
+        "presa", pytest.approx(2.3), 1)
+    # Il massimo passa il 75% ma la chiusura no: si resta dentro.
+    assert _corri([_b(1, 124, 100, 120)] + SALITA[1:], "presa_75").esito == "stop"
+
+
+def test_il_target_vince_sulla_presa_nella_stessa_barra():
+    assert _corri([_b(1, 131, 100, 129)] + SALITA[1:], "presa_75").esito == "tp1"
+
+
+def test_i_nomi_entrano_nelle_colonne():
+    from app.models import PlanOutcomeOmbra as M
+    lv, le = M.__table__.c["variante"].type.length, M.__table__.c["esito"].type.length
+    assert all(len(v.nome) <= lv for v in uo.VARIANTI)
+    assert all(len(e) <= le for e in ("restituzione", "presa", "uscita_meta", "pareggio", "ambigua"))
