@@ -64,7 +64,7 @@ describe("le statistiche dicono su che base sono calcolate", () => {
     /* Senza, «ultimo trimestre: 30/06/26» lascia credere che la fotografia sia
      * completa, mentre i 13F arrivano scaglionati per 45 giorni. */
     monta();
-    expect(screen.getByText("30/06/26")).toBeInTheDocument();
+    expect(screen.getAllByText("30/06/26")[0]).toBeInTheDocument();
     expect(screen.getByText("1 fondi su 3 ci sono arrivati")).toBeInTheDocument();
   });
 
@@ -90,7 +90,7 @@ describe("le mosse", () => {
   it("ordinate per valore della posizione, la piu' grossa in cima", () => {
     monta();
     const comprato = screen.getByRole("region", { name: /Comprato/ });
-    const righe = within(comprato).getAllByRole("listitem");
+    const righe = within(comprato).getAllByRole("row").slice(1);
     expect(within(righe[0]).getByText("NVDA")).toBeInTheDocument();
     expect(within(righe[1]).getByText("MSFT")).toBeInTheDocument();
   });

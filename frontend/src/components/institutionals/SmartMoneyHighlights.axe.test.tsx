@@ -69,7 +69,7 @@ describe("SmartMoneyHighlights — accessibilita' strutturale", () => {
       expect(r.tagName).toBe("DIV");
       expect(r).toHaveAttribute("tabindex", "0");
       expect(r.getAttribute("aria-label")).toBeTruthy();
-      expect(r.querySelector("ul")).not.toBeNull();
+      expect(r.querySelector("table")).not.toBeNull();
     }
   });
 

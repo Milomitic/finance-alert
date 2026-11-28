@@ -308,10 +308,12 @@ export default function InstitutionalsPage() {
   const TETTO_FONDI = 1000;
   const list = useInstitutionalsList({ type: typeFilter, limit: TETTO_FONDI });
   const [cerca, setCerca] = useState("");
+  const [trimestri, setTrimestri] = useState(0);
   const agg = useInstitutionalsAggregate({
     type: typeFilter,
     most_picked_limit: 25,
     recent_actions_limit: 15,
+    action_quarters: trimestri || undefined,
   });
 
   function toggleFundSort(key: FundSortKey) {
@@ -502,7 +504,7 @@ export default function InstitutionalsPage() {
           piu' rilevante (richiesta del 2026-11-22). Fuori dallo scheletro
           della pagina: ha la sua query e il suo caricamento alto quanto i
           dati. */}
-      <PannelloOperazioniFondi />
+      <PannelloOperazioniFondi tipo={typeFilter} />
 
       {/* La fascia iniziale: le mosse piu' pesanti dei fondi, con le
           statistiche che dicono su che base sono calcolate. Ha ASSORBITO le
@@ -524,7 +526,7 @@ export default function InstitutionalsPage() {
         </div>
       ) : (
       <div key="contenuto" className="flex flex-col gap-4">
-      <SmartMoneyHighlights agg={agg.data} fondi={list.data} />
+      <SmartMoneyHighlights agg={agg.data} fondi={list.data} trimestri={trimestri} onTrimestri={setTrimestri} />
 
       {/* Chi e' posseduto da piu' fondi, e come si distribuisce il capitale. */}
       <div className="grid gap-3 lg:grid-cols-[2fr_1fr] [&>*]:min-w-0">

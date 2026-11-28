@@ -78,10 +78,10 @@ export function variazione(h: TickerHolder): Variazione | null {
 }
 
 /** Le ultime operazioni: la dichiarazione piu' recente prima, e a parita' di
- *  data la posizione piu' grande. */
+ *  data il valore dell’operazione più grande. */
 export function ordinaPerData(fondi: readonly TickerHolder[]): TickerHolder[] {
   return [...fondi].sort(
-    (a, b) => b.period_end_date.localeCompare(a.period_end_date) || (b.value_usd ?? -1) - (a.value_usd ?? -1),
+    (a, b) => b.period_end_date.localeCompare(a.period_end_date) || (b.valore_operazione ?? -1) - (a.valore_operazione ?? -1),
   );
 }
 
@@ -89,16 +89,15 @@ export function ordinaPerData(fondi: readonly TickerHolder[]): TickerHolder[] {
  *  richiesta. */
 export const SOGLIA_PRINCIPALI_USD = 10e6;
 
-/** Le posizioni da mostrare subito e quelle a richiesta. Se nessuna arriva
- *  alla soglia si mostrano tutte: una lista vuota con «mostra altri» sotto
- *  nasconderebbe proprio quello che c'e'. */
+/** Fino a dieci posizioni iniziali, privilegiando quelle sopra soglia. */
 export function separaPerValore(
   fondi: readonly TickerHolder[],
   soglia = SOGLIA_PRINCIPALI_USD,
 ): { principali: TickerHolder[]; altri: TickerHolder[] } {
-  const principali = fondi.filter((h) => (h.value_usd ?? 0) >= soglia);
-  if (principali.length === 0) return { principali: [...fondi], altri: [] };
-  return { principali, altri: fondi.filter((h) => (h.value_usd ?? 0) < soglia) };
+  const sopraSoglia = fondi.filter((h) => (h.value_usd ?? 0) >= soglia);
+  const principali = (sopraSoglia.length ? sopraSoglia : fondi).slice(0, 10);
+  const visibili = new Set(principali);
+  return { principali, altri: fondi.filter((h) => !visibili.has(h)) };
 }
 
 /** Lo spostamento di peso di un'OPERAZIONE (aumento, riduzione). «=» resta

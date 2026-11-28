@@ -256,3 +256,21 @@ def test_upsert_filing_rejects_null_period(db: Session) -> None:
     broken = ScrapedFiling(code="DC", period_end_date=None, total_value_usd=None)
     with pytest.raises(ValueError, match="period_end_date"):
         institutional_service.upsert_filing(db, inst, broken)
+
+
+def test_mosse_su_trimestri_storici_prima_del_limite(db, monkeypatch):
+    monkeypatch.setattr(institutional_service, "_freshness_cutoff", lambda: date(2025, 1, 1))
+    f = _inst(db, "attivo")
+    for mese, anno, titolo, valore in [(9, 2025, "OLD", 500), (12, 2025, "PREV", 300), (3, 2026, "LAST", 100)]:
+        _holding(db, _filing(db, f, date(anno, mese, 28)), titolo, action="add", value_usd=valore)
+    altro = _inst(db, "altro")
+    altro.type = "hedge_fund"
+    _holding(db, _filing(db, altro, date(2026, 6, 30)), "OTHER", action="add", value_usd=700)
+    def stats(q):
+        return institutional_service.get_aggregate_stats(
+            db, type_="superinvestor", action_quarters=q, recent_actions_limit=2)
+    assert [r.ticker for r in stats(1).recent_buys] == ["LAST"]
+    due = stats(2)
+    assert [r.ticker for r in due.recent_buys] == ["PREV"]
+    assert [r.ticker for r in due.most_picked] == ["LAST"]
+    assert [r.ticker for r in stats(4).recent_buys] == ["OLD"]

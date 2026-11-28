@@ -936,12 +936,12 @@ def get_aggregate_stats(
     type_: str | None = None,
     most_picked_limit: int = 25,
     recent_actions_limit: int = 20,
+    action_quarters: int | None = None,
 ) -> AggregateStats:
     """Cross-portfolio rollups for the InstitutionalsPage overview.
 
-    All metrics are computed on the LATEST filing per institutional —
-    we never mix data across quarters in the same aggregate (would
-    double-count a Q4 + Q1 pair for the same fund).
+    Holdings and sector weights use the latest filing per fund. Actions can
+    span a calendar-quarter window ending at the latest period of the cohort.
 
     Honesty guards (audit 2026-07-07):
     - latest filings older than `MAX_FILING_AGE_MONTHS` are excluded
@@ -960,7 +960,7 @@ def get_aggregate_stats(
     # they have nothing current to contribute, so they exit the
     # aggregate entirely rather than falling back to stale data.
     latest_ids_q = (
-        select(InstitutionalFiling.id, Institutional.id, Institutional.name)
+        select(InstitutionalFiling.id, Institutional.id, InstitutionalFiling.period_end_date)
         .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
         .join(
             latest,
@@ -973,7 +973,6 @@ def get_aggregate_stats(
         latest_ids_q = latest_ids_q.where(Institutional.type == type_)
     latest_rows = db.execute(latest_ids_q).all()
     latest_filing_ids = [r[0] for r in latest_rows]
-    {r[1]: r[2] for r in latest_rows}
 
     if not latest_filing_ids:
         return AggregateStats(
@@ -1074,6 +1073,17 @@ def get_aggregate_stats(
     # and concatenating the results — half "new" + half "add" for buys,
     # similar for sells. Within each action type the same value-DESC
     # ordering applies.
+    action_filing_ids = latest_filing_ids
+    if action_quarters is not None:
+        ultimo = max(r.period_end_date for r in latest_rows)
+        indice = ultimo.year * 4 + (ultimo.month - 1) // 3 - action_quarters + 1
+        anno, trimestre = divmod(indice, 4)
+        dal = date(anno, trimestre * 3 + 1, 1)
+        action_filing_ids = select(InstitutionalFiling.id).where(
+            InstitutionalFiling.institutional_id.in_([r[1] for r in latest_rows]),
+            InstitutionalFiling.period_end_date.between(dal, ultimo),
+        )
+
     def _per_action(action: str, limit: int) -> list[ActionAggregate]:
         stmt = (
             select(
@@ -1097,7 +1107,7 @@ def get_aggregate_stats(
             .join(Institutional, Institutional.id == InstitutionalFiling.institutional_id)
             .outerjoin(Stock, Stock.ticker == InstitutionalHolding.ticker)
             .where(
-                InstitutionalHolding.filing_id.in_(latest_filing_ids),
+                InstitutionalHolding.filing_id.in_(action_filing_ids),
                 InstitutionalHolding.action == action,
             )
             .group_by(

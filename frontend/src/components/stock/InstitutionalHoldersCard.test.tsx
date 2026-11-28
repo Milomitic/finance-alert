@@ -96,7 +96,7 @@ describe("la scheda dei fondi che detengono il titolo", () => {
     expect(nomi()).toEqual(["Grande", "Medio"]);
     // Niente piu' scelta dell'ordinamento.
     expect(screen.queryByRole("button", { name: "Peso" })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Mostra altri 2 (sotto $10M)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Mostra altri 2" }));
     expect(nomi()).toEqual(["Grande", "Medio", "Piccolo", "Minimo"]);
     // Il riepilogo conta tutti, mostrati o no.
     expect(screen.getByText("Fondi").nextSibling?.textContent).toBe("4");

@@ -293,8 +293,8 @@ export function InstitutionalHoldersCard({ ticker }: { ticker: string }) {
         {vista === "detentori" && altri.length > 0 && (
           <AltriBottone
             aperto={tutti}
-            apri={`Mostra altri ${altri.length} (sotto $10M)`}
-            chiudi="Mostra solo da $10M in su"
+            apri={`Mostra altri ${altri.length}`}
+            chiudi="Mostra meno"
             onClick={() => setTutti((t) => !t)}
           />
         )}

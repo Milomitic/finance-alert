@@ -163,8 +163,8 @@ export function OperazioniFondiCard({ limit = 12, className }: { limit?: number;
   );
 }
 
-function Colonna({ azione, label, limit }: { azione: Azione; label: string; limit: number }) {
-  const q = useOperazioniFondi({ limit, azione });
+function Colonna({ azione, label, limit, tipo }: { azione: Azione; label: string; limit: number; tipo?: string }) {
+  const q = useOperazioniFondi({ limit, azione, type: tipo });
   return (
     <section aria-label={label} className="min-w-0">
       {/* Un paragrafo, non un h3: sopra non c'e' un h2 (il titolo della
@@ -180,11 +180,11 @@ function Colonna({ azione, label, limit }: { azione: Azione; label: string; limi
  *  quattro sugli schermi larghi e due sui medi. Su telefono una alla volta,
  *  scelta con un selettore: quattro elenchi impilati sarebbero quattro
  *  schermate prima del resto della pagina. */
-export function PannelloOperazioniFondi({ limit = 12 }: { limit?: number }) {
+export function PannelloOperazioniFondi({ limit = 12, tipo }: { limit?: number; tipo?: string }) {
   const isPhone = useIsPhone();
   const [scelta, setScelta] = useState<Azione>("new");
   // La stessa chiave della colonna «Nuove»: una richiesta sola, dalla cache.
-  const riepilogo = useOperazioniFondi({ limit, azione: "new" });
+  const riepilogo = useOperazioniFondi({ limit, azione: "new", type: tipo });
   const attiva = COLONNE.find((c) => c.id === scelta) ?? COLONNE[0];
   return (
     <Card>
@@ -199,11 +199,11 @@ export function PannelloOperazioniFondi({ limit = 12 }: { limit?: number }) {
               onCambia={(id) => setScelta(id as Azione)}
               voci={COLONNE.map((c) => ({ id: c.id, label: c.breve }))}
             />
-            <Colonna key={scelta} azione={attiva.id} label={attiva.label} limit={limit} />
+            <Colonna key={scelta} azione={attiva.id} label={attiva.label} limit={limit} tipo={tipo} />
           </>
         ) : (
           <div className="grid gap-x-6 gap-y-3 md:grid-cols-2 2xl:grid-cols-4 [&>*]:min-w-0">
-            {COLONNE.map((c) => <Colonna key={c.id} azione={c.id} label={c.label} limit={limit} />)}
+            {COLONNE.map((c) => <Colonna key={c.id} azione={c.id} label={c.label} limit={limit} tipo={tipo} />)}
           </div>
         )}
       </CardContent>

@@ -59,11 +59,12 @@ def aggregate(
     type: Annotated[str | None, Query()] = None,
     most_picked_limit: int = 25,
     recent_actions_limit: int = 20,
+    action_quarters: Annotated[int | None, Query(ge=1, le=4)] = None,
     db: Session = Depends(get_db),
     _user: User = Depends(get_current_user),
 ) -> AggregateStatsOut:
     """Cross-portfolio overview: most-picked tickers, recent buys/sells,
-    sector tilt. Computed only on each fund's LATEST filing.
+    sector tilt. action_quarters scopes only the buys and sells.
 
     Note: `/aggregate` is declared BEFORE `/{slug}` so FastAPI's path
     routing doesn't capture "aggregate" as a slug.
@@ -73,6 +74,7 @@ def aggregate(
         type_=type,
         most_picked_limit=most_picked_limit,
         recent_actions_limit=recent_actions_limit,
+        action_quarters=action_quarters,
     )
     return AggregateStatsOut.model_validate(stats)
 

@@ -51,8 +51,8 @@ describe("le ultime operazioni", () => {
   it("la dichiarazione piu' recente prima, a parita' di data la posizione piu' grande", () => {
     const f = [
       fondo(1, "A", { period_end_date: "2026-03-31", value_usd: 9e9 }),
-      fondo(2, "B", { period_end_date: "2026-06-30", value_usd: 1e6 }),
-      fondo(3, "C", { period_end_date: "2026-06-30", value_usd: 5e6 }),
+      fondo(2, "B", { period_end_date: "2026-06-30", value_usd: 9e9, valore_operazione: 1e6 }),
+      fondo(3, "C", { period_end_date: "2026-06-30", value_usd: 5e6, valore_operazione: 5e6 }),
     ];
     expect(ordinaPerData(f).map((h) => h.institutional_id)).toEqual([3, 2, 1]);
   });
@@ -64,6 +64,15 @@ describe("le posizioni principali", () => {
     const { principali, altri } = separaPerValore(f);
     expect(principali.map((h) => h.institutional_id)).toEqual([1, 2]);
     expect(altri.map((h) => h.institutional_id)).toEqual([3, 4]);
+  });
+
+  it("limita a dieci anche quando tutte le posizioni hanno la stessa dimensione", () => {
+    for (const value_usd of [2e6, 20e6]) {
+      const fondi = Array.from({ length: 12 }, (_, i) => fondo(i, String(i), { value_usd }));
+      const { principali, altri } = separaPerValore(fondi);
+      expect(principali).toEqual(fondi.slice(0, 10));
+      expect(altri).toEqual(fondi.slice(10));
+    }
   });
 
   it("se nessuna arriva alla soglia, tutte", () => {

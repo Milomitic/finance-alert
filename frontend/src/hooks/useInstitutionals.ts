@@ -22,6 +22,7 @@ export function useInstitutionalsAggregate(params?: {
   type?: string;
   most_picked_limit?: number;
   recent_actions_limit?: number;
+  action_quarters?: number;
 }) {
   return useQuery({
     queryKey: ["institutionals", "aggregate", params],

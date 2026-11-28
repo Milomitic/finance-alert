@@ -36,6 +36,8 @@ interface Props {
   fondi: InstitutionalSummary[] | undefined;
   /** Quante righe per colonna restano a schermo prima dello scorrimento. */
   righeVisibili?: number;
+  trimestri?: number;
+  onTrimestri?: (valore: number) => void;
 }
 
 function trimestreBreve(s: string | null | undefined): string {
@@ -45,8 +47,7 @@ function trimestreBreve(s: string | null | undefined): string {
   return `${d}/${m}/${y.slice(2)}`;
 }
 
-/** Una mossa. Due righe strette: sopra CHI e QUANTO, sotto il contesto — il
- *  fondo che l'ha fatta, il peso in portafoglio e il trimestre. */
+/** Una riga della tabella delle mosse dichiarate. */
 function Mossa({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }) {
   const decisiva = azioneDecisiva(row.action);
   const etichetta = AZIONE_LABEL[row.action ?? ""] ?? row.action ?? "—";
@@ -61,53 +62,24 @@ function Mossa({ row, kind }: { row: ActionAggregate; kind: "buy" | "sell" }) {
       ? "border border-emerald-300 text-emerald-800 dark:border-emerald-800 dark:text-emerald-300"
       : "border border-rose-300 text-rose-700 dark:border-rose-800 dark:text-rose-300";
   return (
-    <li className="border-b border-border/40 py-1 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2">
-        <StockLogo ticker={row.ticker} size="xs" />
-        <Link
-          to={`/stocks/${encodeURIComponent(row.ticker)}`}
-          className="shrink-0 text-sm font-bold tabular-nums hover:underline"
-        >
-          {row.ticker}
-        </Link>
-        <span
-          className={cn(
-            "shrink-0 rounded px-1 text-[0.6471rem] font-bold uppercase tracking-wide",
-            pastiglia,
-          )}
-        >
-          {etichetta}
-        </span>
-        <span className="min-w-0 flex-1 truncate text-[0.7059rem] text-muted-foreground">
-          {row.company_name}
-        </span>
-        <span
-          className="shrink-0 text-sm font-semibold tabular-nums"
-          title={
-            row.qoq_change_pct != null
-              ? `Variazione della posizione sul trimestre: ${row.qoq_change_pct.toFixed(1)}%`
-              : "Variazione sul trimestre non disponibile"
-          }
-        >
-          {fmtBig(row.value_usd)}
-        </span>
-      </div>
-      <div className="flex min-w-0 items-baseline gap-1.5 pl-7 text-[0.7059rem] text-muted-foreground">
-        <Link
-          to={`/institutionals/${row.institutional_slug}`}
-          className="min-w-0 truncate hover:underline"
-          title={row.institutional_name}
-        >
-          {row.institutional_name}
-        </Link>
-        {row.portfolio_pct != null && (
-          <span className="shrink-0 tabular-nums" title="Peso della posizione nel portafoglio del fondo">
-            · {row.portfolio_pct.toFixed(1)}% ptf
-          </span>
-        )}
-        <span className="shrink-0 tabular-nums">· {trimestreBreve(row.period_end_date)}</span>
-      </div>
-    </li>
+    <tr className="border-b border-border/40 last:border-0">
+      <td className="py-1 pr-2">
+        <div className="flex items-center gap-1.5">
+          <StockLogo ticker={row.ticker} size="xs" />
+          <div className="min-w-0">
+            <Link to={`/stocks/${encodeURIComponent(row.ticker)}`} className="font-bold hover:underline">{row.ticker}</Link>
+            <span className="block truncate text-muted-foreground" title={row.company_name ?? undefined}>{row.company_name}</span>
+          </div>
+        </div>
+      </td>
+      <td className="pr-2"><Link to={`/institutionals/${row.institutional_slug}`}
+        className="block truncate hover:underline" title={row.institutional_name}>{row.institutional_name}</Link></td>
+      <td><span className={cn("rounded px-1 text-[0.6471rem] font-bold uppercase", pastiglia)}>{etichetta}</span></td>
+      <td className="text-right font-semibold tabular-nums" title={row.qoq_change_pct != null
+        ? `Variazione trimestrale: ${row.qoq_change_pct.toFixed(1)}%` : undefined}>{fmtBig(row.value_usd)}</td>
+      <td className="text-right tabular-nums">{row.portfolio_pct != null ? `${row.portfolio_pct.toFixed(1)}%` : "—"}</td>
+      <td className="pl-2 text-right tabular-nums">{trimestreBreve(row.period_end_date)}</td>
+    </tr>
   );
 }
 
@@ -134,34 +106,34 @@ function ColonnaMosse({
           Nessuna mossa di questo tipo nelle ultime dichiarazioni.
         </p>
       ) : (
-        /* ⚠️ role + tabIndex + aria-label: un contenitore che scorre e non puo'
-           ricevere il fuoco non e' raggiungibile da tastiera, e cio' che sta
-           oltre il taglio non esiste per chi non usa il mouse. Il gate UI
-           l'aveva gia' trovato sulle schede che questa fascia sostituisce.
-           ⚠️ E il ruolo sta su un DIV che avvolge la lista, non sulla lista:
-           messo sull'`<ul>` sostituisce il ruolo `list`, quindi ogni `<li>`
-           resta orfano del genitore che la specifica ARIA gli richiede. Il
-           gate l'ha misurato: `aria-allowed-role` 0 -> 2 e `listitem` 0 -> 30,
-           cioe' due attributi sbagliati e trenta righe senza lista. */
         <div
           role="region"
           aria-label={`${titolo} piu' rilevanti dei fondi tracciati`}
           tabIndex={0}
-          className="overflow-y-auto"
+          className="max-w-full overflow-auto"
           style={{ maxHeight: `${righeVisibili * 2.9}rem` }}
         >
-          <ul>
-            {righe.map((row, i) => (
-              <Mossa key={`${row.ticker}-${row.institutional_slug}-${i}`} row={row} kind={kind} />
-            ))}
-          </ul>
+          <table aria-label={titolo} className="w-full min-w-[34rem] table-fixed text-left text-xs">
+            <colgroup>
+              <col className="w-[17%]" /><col className="w-[25%]" /><col className="w-[14%]" />
+              <col className="w-[18%]" /><col className="w-[11%]" /><col className="w-[15%]" />
+            </colgroup>
+            <thead className="sticky top-0 bg-card text-muted-foreground">
+              <tr><th scope="col">Titolo</th><th scope="col">Fondo</th><th scope="col">Azione</th>
+                <th scope="col" className="text-right">Valore pos.</th><th scope="col" className="text-right">Peso</th>
+                <th scope="col" className="text-right">Data 13F</th></tr>
+            </thead>
+            <tbody>{righe.map((row, i) => (
+              <Mossa key={`${row.ticker}-${row.institutional_slug}-${row.period_end_date}-${i}`} row={row} kind={kind} />
+            ))}</tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-export function SmartMoneyHighlights({ agg, fondi, righeVisibili = 6 }: Props) {
+export function SmartMoneyHighlights({ agg, fondi, righeVisibili = 6, trimestri = 0, onTrimestri }: Props) {
   const stat = statisticheFondi(fondi);
   const settore = settoreDominante(agg?.sector_tilt);
   const piuPosseduto = agg?.most_picked?.[0] ?? null;
@@ -175,11 +147,7 @@ export function SmartMoneyHighlights({ agg, fondi, righeVisibili = 6 }: Props) {
           icon={TrendingUp}
           label="Le mosse che contano"
           className="mb-2"
-          right={
-            <span className="text-[0.7059rem] text-muted-foreground">
-              dall'ultima dichiarazione di ogni fondo
-            </span>
-          }
+
         />
 
         <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 [&>*]:min-w-0">
@@ -214,7 +182,19 @@ export function SmartMoneyHighlights({ agg, fondi, righeVisibili = 6 }: Props) {
           />
         </div>
 
-        <div className="grid gap-x-4 gap-y-3 md:grid-cols-2 [&>*]:min-w-0">
+        {onTrimestri && (
+          <label className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+            Periodo delle mosse
+            <select className="rounded border bg-background px-2 py-1.5" value={trimestri}
+              onChange={(e) => onTrimestri(Number(e.target.value))}>
+              <option value={0}>Ultima dichiarazione di ogni fondo</option>
+              <option value={1}>Ultimo trimestre disponibile</option>
+              <option value={2}>Ultimi 2 trimestri</option>
+              <option value={4}>Ultimi 4 trimestri</option>
+            </select>
+          </label>
+        )}
+        <div className="grid gap-x-4 gap-y-3 xl:grid-cols-2 [&>*]:min-w-0">
           <ColonnaMosse titolo="Comprato" righe={acquisti} kind="buy" righeVisibili={righeVisibili} />
           <ColonnaMosse titolo="Venduto" righe={vendite} kind="sell" righeVisibili={righeVisibili} />
         </div>

@@ -15,16 +15,24 @@ const fondo = (id: number, name: string, manager: string | null): InstitutionalS
   total_value_usd: 1e9, total_positions: 10,
 });
 
+const richieste = vi.hoisted(() => ({ operazioni: vi.fn(), aggregato: vi.fn() }));
+
 vi.mock("@/hooks/useInstitutionals", () => ({
   useInstitutionalsList: () => ({
     data: [fondo(1, "Berkshire Hathaway", "Warren Buffett"), fondo(2, "Scion Asset Management", "Michael Burry"), fondo(3, "Pershing Square", "Bill Ackman")],
     isLoading: false, isError: false,
   }),
-  useInstitutionalsAggregate: () => ({
+  useInstitutionalsAggregate: (params: unknown) => {
+    richieste.aggregato(params);
+    return {
     data: { most_picked: [], recent_buys: [], recent_sells: [], sector_tilt: {} },
     isLoading: false, isError: false,
-  }),
-  useOperazioniFondi: () => ({ data: { trimestre: null, fondi: 0, operazioni: [] }, isLoading: false, isError: false }),
+    };
+  },
+  useOperazioniFondi: (params: unknown) => {
+    richieste.operazioni(params);
+    return { data: { trimestre: null, fondi: 0, operazioni: [] }, isLoading: false, isError: false };
+  },
 }));
 
 const { default: InstitutionalsPage } = await import("./InstitutionalsPage");
@@ -39,6 +47,18 @@ function monta() {
 }
 
 describe("ricerca dei fondi", () => {
+  it("applica la scheda alle operazioni e il periodo alle mosse", async () => {
+    monta();
+    richieste.operazioni.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "Superinvestor" }));
+    expect(richieste.operazioni.mock.calls.length).toBeGreaterThan(0);
+    expect(richieste.operazioni.mock.calls.every(([p]) => p.type === "superinvestor")).toBe(true);
+    await userEvent.selectOptions(screen.getByLabelText("Periodo delle mosse"), "4");
+    expect(richieste.aggregato).toHaveBeenLastCalledWith(expect.objectContaining({ type: "superinvestor", action_quarters: 4 }));
+    await userEvent.click(screen.getByRole("button", { name: "Tutti" }));
+    expect(richieste.operazioni).toHaveBeenLastCalledWith(expect.objectContaining({ type: undefined }));
+  });
+
   it("filtra per manager, senza maiuscole, e dice quanti su quanti", async () => {
     monta();
     await userEvent.type(screen.getByLabelText("Cerca un fondo o un manager"), "burry");

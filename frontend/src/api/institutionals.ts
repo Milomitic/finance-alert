@@ -25,6 +25,7 @@ export const institutionals = {
       type?: string;
       most_picked_limit?: number;
       recent_actions_limit?: number;
+      action_quarters?: number;
     },
     signal?: AbortSignal,
   ) => {
@@ -32,6 +33,7 @@ export const institutionals = {
     if (params?.type) qs.set("type", params.type);
     if (params?.most_picked_limit)
       qs.set("most_picked_limit", String(params.most_picked_limit));
+    if (params?.action_quarters) qs.set("action_quarters", String(params.action_quarters));
     if (params?.recent_actions_limit)
       qs.set("recent_actions_limit", String(params.recent_actions_limit));
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
