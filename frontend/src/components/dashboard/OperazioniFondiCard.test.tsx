@@ -86,6 +86,9 @@ describe("OperazioniFondiCard", () => {
     for (const nome of ["Nuove posizioni", "Aumenti", "Riduzioni", "Uscite"]) {
       expect(screen.getByRole("region", { name: nome })).toBeInTheDocument();
     }
+    // 28/11: le colonne dicono che cosa misurano (peso, valore dell'operazione).
+    expect(screen.getAllByText("Peso ±").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByTitle(/non della posizione intera/).length).toBeGreaterThanOrEqual(4);
     await screen.findAllByText("KO");
     const azioni = fetchMock.mock.calls.map((c) => (c[0] as { azione?: string }).azione).filter(Boolean);
     expect(new Set(azioni)).toEqual(new Set(["new", "add", "reduce", "sold_out"]));

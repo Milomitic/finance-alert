@@ -96,7 +96,8 @@ function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
       >
         {su ? "+" : "−"}{PESO.format(Math.abs(o.delta_pp))}%
       </span>
-      <span className="w-14 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
+      <span className="w-14 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground"
+        title="Valore delle azioni comprate o vendute nel trimestre">
         {o.valore_operazione != null ? fmtBig(o.valore_operazione) : "—"}
       </span>
     </li>
@@ -105,10 +106,32 @@ function Riga({ o, primo }: { o: OperazioneFondo; primo: boolean }) {
 
 type Interrogazione = ReturnType<typeof useOperazioniFondi>;
 
+/** Le intestazioni delle colonne, allineate alle righe (28/11): senza, «+0,4%»
+ *  accanto a «$1,53B» si leggeva come «la posizione e' salita dello 0,4%»,
+ *  mentre e' lo spostamento del PESO, e il valore e' quello delle sole azioni
+ *  comprate o vendute nel trimestre, non della posizione. Presente anche
+ *  mentre carica: alta uguale, niente salto. */
+function Intestazioni() {
+  return (
+    <div aria-hidden className="flex h-5 items-end gap-2 text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+      <span className="flex-1">Titolo · fondo</span>
+      <span className="w-[4.5rem] shrink-0 text-center">Azione</span>
+      <span className="w-12 shrink-0 text-right" title="Di quanto e' cambiato il peso della posizione nel portafoglio del fondo">
+        Peso ±
+      </span>
+      <span className="w-14 shrink-0 text-right" title="Il valore delle azioni comprate o vendute nel trimestre, non della posizione intera">
+        Valore op.
+      </span>
+    </div>
+  );
+}
+
 /** Lo scheletro e' fatto delle stesse righe: alto quanto i dati, niente salto. */
 function Righe({ q, n, vuoto }: { q: Interrogazione; n: number; vuoto: string }) {
   if (q.isLoading) {
     return (
+      <>
+      <Intestazioni />
       <ul aria-hidden>
         {Array.from({ length: n }).map((_, i) => (
           <li key={i} className={cn("flex h-7 items-center", i > 0 && "border-t border-border/40")}>
@@ -116,6 +139,7 @@ function Righe({ q, n, vuoto }: { q: Interrogazione; n: number; vuoto: string })
           </li>
         ))}
       </ul>
+      </>
     );
   }
   if (q.isError) {
@@ -124,11 +148,14 @@ function Righe({ q, n, vuoto }: { q: Interrogazione; n: number; vuoto: string })
   const righe = q.data?.operazioni ?? [];
   if (righe.length === 0) return <p className="py-2 text-sm text-muted-foreground">{vuoto}</p>;
   return (
-    <ul>
-      {righe.map((o, i) => (
-        <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} />
-      ))}
-    </ul>
+    <>
+      <Intestazioni />
+      <ul>
+        {righe.map((o, i) => (
+          <Riga key={`${o.institutional_slug}-${o.ticker}-${o.action}`} o={o} primo={i === 0} />
+        ))}
+      </ul>
+    </>
   );
 }
 
