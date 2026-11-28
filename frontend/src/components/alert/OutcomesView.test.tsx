@@ -51,8 +51,9 @@ function Posizione() {
   return <output data-testid="url">{useLocation().search}</output>;
 }
 
-function monta(url = "/alerts?vista=esiti") {
-  mockGet.mockResolvedValue(RISPOSTA);
+function monta(url = "/alerts?vista=esiti", finto?: (u: string) => unknown) {
+  if (finto) mockGet.mockImplementation(async (u: unknown) => finto(String(u ?? "")));
+  else mockGet.mockResolvedValue(RISPOSTA);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -257,5 +258,39 @@ describe("OutcomesView — l'ordinamento", () => {
     monta();
     await screen.findByText("AAA");
     expect(screen.getByRole("button", { name: /colonne/i })).toBeInTheDocument();
+  });
+});
+
+
+describe("OutcomesView — la scala storica della condizione (FA-206)", () => {
+  const scala = (tone: string) => ({
+    detector: "sr_flip", tone, piani: tone === "bull" ? 40 : 3, sufficiente: tone === "bull",
+    orizzonte: 21, finestre: 5, dal: "2026-05-22", al: "2026-10-29", giorni_al_picco: 6,
+    gradini: [{ soglia: 50, toccati: 16, quota: 40, intervallo: [12, 75], esiti: { tp1: 8, stop: 5, scaduto: 3 } }],
+    stop: { numero: 20, passati_da_meta: 5, passati_da_un_quarto: 9, picco_mediano: 0.2 },
+    scaduti: { numero: 10, picco_mediano: 0.4, chiusura_mediana: 0.1 },
+  });
+
+  const rispondi = (url: string) => (url.startsWith("/api/alerts/plan-outcomes/scala")
+    ? scala(new URL(url, "http://x").searchParams.get("tone") ?? "")
+    : RISPOSTA);
+
+  it("senza condizione non c'è", async () => {
+    monta();
+    await screen.findByText("AAA");
+    expect(screen.queryByLabelText("Scala storica della condizione")).toBeNull();
+  });
+
+  it("con una condizione mostra i due versi; col verso scelto solo quello", async () => {
+    monta("/alerts?vista=esiti&condizione=sr_flip", rispondi);
+    expect(await screen.findByText("poi stop 5 su 16")).toBeInTheDocument();
+    expect(screen.getByText(/Solo 3 piani chiusi/)).toBeInTheDocument();      // ribassisti
+    expect(mockGet.mock.calls.some(([u]) => String(u).includes("scala?detector=sr_flip&tone=bear"))).toBe(true);
+  });
+
+  it("col verso nel filtro chiede solo quello", async () => {
+    monta("/alerts?vista=esiti&condizione=sr_flip&tono=ribassisti", rispondi);
+    expect(await screen.findByText(/Solo 3 piani chiusi/)).toBeInTheDocument();
+    expect(mockGet.mock.calls.some(([u]) => String(u).includes("tone=bull"))).toBe(false);
   });
 });

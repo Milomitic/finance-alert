@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 
 import type { PlanOutcomeSummary } from "@/api/planOutcomes";
 import { AlertDetailDialog } from "@/components/AlertDetailDialog";
+import { ScalaCondizione } from "@/components/alert/ScalaStoricaBlock";
 import { SignalOutcomeList } from "@/components/alert/SignalOutcomeList";
 import { SetupsView } from "@/components/setups/SetupsView";
 import { CardSkeleton } from "@/components/ui/card-skeleton";
@@ -329,6 +330,15 @@ export function OutcomesView() {
               <p className="text-xs text-muted-foreground">{d.blocks} finestre indipendenti · {d.with_plan}/{d.signals} segnali maturi con piano risolto. Filtri attivi applicati.</p>
             </section>
           ))}
+          {/* FA-206: la scala storica della condizione scelta, per verso. */}
+          {detector && (
+            <section aria-label="Scala storica della condizione" className="grid gap-3 lg:grid-cols-2">
+              {(tone ? [tone] : (["bull", "bear"] as const)).map((t) => (
+                <ScalaCondizione key={t} detector={detector} tone={t}
+                  titolo={`${detectorLabel(detector)} · ${t === "bull" ? "rialzisti" : "ribassisti"}: fin dove arrivano`} />
+              ))}
+            </section>
+          )}
           {q.data?.summary?.reach?.map((g) => (
             <section key={g.horizon} className="space-y-2 rounded-lg border p-3 text-sm">
               <h3 className="font-semibold">Percorso verso TP1 · {g.horizon} sedute</h3>

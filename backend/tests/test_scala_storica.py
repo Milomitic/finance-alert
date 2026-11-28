@@ -122,3 +122,16 @@ def test_endpoint_none_senza_verso(client: TestClient, db: Session) -> None:
     db.commit()
     r = client.get(f"/api/alerts/{a.id}/scala-storica")
     assert r.status_code == 200 and r.json() is None
+
+
+def test_endpoint_per_condizione_della_scheda_esiti(client: TestClient, db: Session) -> None:
+    s = _stock(db)
+    _piano(db, s, esito="tp1", picco=1.0, r_mult=2.0)
+    _piano(db, s, esito="stop", picco=0.6, r_mult=-1.0)
+    _piano(db, s, esito="tp1", picco=1.0, tono="bear")
+    db.commit()
+    r = client.get("/api/alerts/plan-outcomes/scala", params={"detector": "sr_flip", "tone": "bull"})
+    assert r.status_code == 200 and r.json()["piani"] == 2
+    assert r.json()["stop"]["passati_da_meta"] == 1
+    assert client.get("/api/alerts/plan-outcomes/scala",
+                      params={"detector": "sr_flip", "tone": "x"}).status_code == 400

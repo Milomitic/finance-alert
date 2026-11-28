@@ -821,6 +821,25 @@ def export_csv(
     )
 
 
+@router.get("/plan-outcomes/scala", response_model=ScalaStoricaOut)
+def plan_outcomes_scala(
+    detector: str,
+    tone: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+) -> ScalaStoricaOut:
+    """La scala storica di un detector in un verso, per la scheda Esiti (FA-206).
+
+    La stessa di `/{alert_id}/scala-storica`, chiesta per condizione invece
+    che a partire da un segnale. Sta prima del segnaposto per la ragione
+    scritta sopra `plan_outcomes`.
+    """
+    if tone not in ("bull", "bear"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="tone must be 'bull' or 'bear'")
+    return ScalaStoricaOut(**plan_performance_service.scala_storica(db, detector=detector, tone=tone))
+
+
 @router.get("/plan-outcomes", response_model=PlanOutcomeListOut)
 def plan_outcomes(
     esito: str | None = None,

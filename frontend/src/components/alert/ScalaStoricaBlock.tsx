@@ -85,6 +85,16 @@ export function ScalaStoricaBlock({ id, piccoChiuso }: {
   });
   const picco = piccoChiuso ?? aperto.data?.peak_fraction ?? null;
 
+  return <Stato q={q} picco={picco} />;
+}
+
+type InterrogazioneScala = {
+  isLoading: boolean; isError: boolean; data: ScalaStoricaOut | null | undefined; refetch: () => unknown;
+};
+
+function Stato({ q, picco, titolo, nota }: {
+  q: InterrogazioneScala; picco?: number | null; titolo?: string; nota?: string;
+}) {
   if (q.isLoading) return <div className="h-24 animate-pulse rounded-lg bg-muted/40" aria-hidden />;
   if (q.isError) {
     return (
@@ -93,11 +103,30 @@ export function ScalaStoricaBlock({ id, piccoChiuso }: {
       </button>
     );
   }
-  const d = q.data;
-  if (!d) return null;
+  return q.data ? <Scala d={q.data} picco={picco ?? null} titolo={titolo} nota={nota} /> : null;
+}
+
+/** La scala di un detector in un verso, per la scheda Esiti (FA-206). */
+export function ScalaCondizione({ detector, tone, titolo }: { detector: string; tone: "bull" | "bear"; titolo: string }) {
+  const q = useQuery({
+    queryKey: ["scala-storica", "condizione", detector, tone],
+    queryFn: ({ signal }) => api<ScalaStoricaOut>(
+      `/api/alerts/plan-outcomes/scala?detector=${encodeURIComponent(detector)}&tone=${tone}`, { signal }),
+    staleTime: 10 * 60_000,
+  });
+  return (
+    <Stato q={q} titolo={titolo}
+      nota="Su tutti i piani chiusi di questa condizione e verso: i filtri per esito e titolo non si applicano, perché condizionerebbero la scala al suo stesso risultato." />
+  );
+}
+
+function Scala({ d, picco, titolo = "Fin dove arrivano i piani di questo tipo", nota }: {
+  d: ScalaStoricaOut; picco: number | null; titolo?: string; nota?: string;
+}) {
   if (!d.sufficiente) {
     return (
       <p className="rounded-lg border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
+        {titolo !== "Fin dove arrivano i piani di questo tipo" && <strong className="mr-1">{titolo}.</strong>}
         Solo {d.piani} piani chiusi di questo tipo: troppo pochi per dire fin dove arrivano di solito.
       </p>
     );
@@ -108,7 +137,7 @@ export function ScalaStoricaBlock({ id, piccoChiuso }: {
   return (
     <div className="space-y-3 rounded-lg border p-3">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className="text-sm font-semibold">Fin dove arrivano i piani di questo tipo</span>
+        <span className="text-sm font-semibold">{titolo}</span>
         <InfoHint
           label="Scala storica"
           text={
@@ -158,6 +187,7 @@ export function ScalaStoricaBlock({ id, piccoChiuso }: {
         )}
       </dl>
 
+      {nota && <p className="text-[0.7rem] text-muted-foreground">{nota}</p>}
       <p className="text-[0.7rem] text-muted-foreground">
         Descrive i piani passati dal {d.dal} al {d.al}, non prevede questo. Nel replay di dieci anni, chiudere prima
         (sul ritracciamento o vicino al target) ha lasciato l'attesa in R quasi invariata: cambia il rischio, non il
